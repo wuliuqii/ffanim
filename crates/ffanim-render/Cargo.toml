@@ -11,3 +11,14 @@ workspace = true
 
 [dependencies]
 ffanim-core = { workspace = true }
+image = { version = "0.25", default-features = false, features = ["png"] }
+kurbo = "0.13"
+vello_cpu = "0.3"
+# GPU 后端（可选，无 GPU 环境由 CI 的 no-gpu 任务覆盖编译）
+vello = { version = "0.11", optional = true }
+wgpu = { version = "30", optional = true, default-features = false, features = ["wgsl", "dx12", "metal", "vulkan", "gles"] }
+pollster = { version = "0.4", optional = true }
+
+[features]
+default = []
+gpu = ["dep:vello", "dep:wgpu", "dep:pollster"]

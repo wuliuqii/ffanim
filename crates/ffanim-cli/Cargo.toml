@@ -15,4 +15,9 @@ workspace = true
 
 [dependencies]
 ffanim = { path = "../ffanim" }
+ffanim-core = { workspace = true }
+ffanim-render = { path = "../ffanim-render" }
 clap = { workspace = true }
+
+[features]
+gpu = ["ffanim-render/gpu"]
