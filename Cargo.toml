@@ -1,0 +1,34 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/ffanim-core",
+    "crates/ffanim-typst",
+    "crates/ffanim-render",
+    "crates/ffanim-encode",
+    "crates/ffanim-audio",
+    "crates/ffanim-preview",
+    "crates/ffanim-cli",
+    "crates/ffanim",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/gallon/ffanim"
+
+[workspace.dependencies]
+# 内部 crate
+ffanim-core = { path = "crates/ffanim-core" }
+
+# 通用
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+clap = { version = "4", features = ["derive"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

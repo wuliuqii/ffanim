@@ -1,0 +1,13 @@
+[package]
+name = "ffanim"
+description = "ffanim：Rust + Typst + Vello 的数学动画引擎（门面 crate）"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ffanim-core = { workspace = true }
