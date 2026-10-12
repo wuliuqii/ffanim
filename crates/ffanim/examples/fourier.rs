@@ -8,6 +8,9 @@
 //! `cargo run -p ffanim --release --example fourier`（需 PATH 有 ffmpeg）
 //! 产物：out/fourier.mp4 + strip/onion 诊断 PNG。
 //! 配音：`BGM=路径.wav cargo run ...` 自动混流并延伸片长（FromAudio 语义）。
+//! 示例 BGM：Erik Satie《Gymnopédie No.1》开头主题（Wikimedia Commons，
+//! https://upload.wikimedia.org/wikipedia/commons/9/90/Erik_Satie_-_gymnopedies_-_la_1_ere._lent_et_douloureux.ogg
+//! 许可：Public domain，可自由分发）——裁剪 18s + 响度归一 -18 LUFS + 淡入淡出。
 
 use ffanim::kurbo::{Affine, BezPath};
 use ffanim::typst::{FormulaOptions, TypstEngine};
