@@ -34,7 +34,9 @@ impl TextOptions {
 }
 
 /// 查找系统中文字体文件（首个存在者）：环境变量 `FFANIM_CJK_FONT`
-/// → `fc-list :lang=zh`（fontconfig 按语言能力查询）→ 常见发行版路径扫描。
+/// → `fc-list :lang=zh`（fontconfig 按语言能力查询）→ fontdb 系统枚举
+/// （CoreText/DirectWrite 等无 fontconfig 平台，与 core 共用同一实现）
+/// → 常见发行版路径扫描。
 pub fn find_cjk_font() -> Option<PathBuf> {
     if let Ok(p) = std::env::var("FFANIM_CJK_FONT") {
         let p = PathBuf::from(p);
@@ -45,11 +47,26 @@ pub fn find_cjk_font() -> Option<PathBuf> {
     if let Some(p) = fc_list_cjk() {
         return Some(p);
     }
+    // fontdb 按 family 名精确匹配；face 序号丢弃——TypstEngine::add_font 按
+    // face 0 加载，与 fc-list / 路径兜底语义一致
+    if let Some((p, _)) = ffanim_core::find_system_font(CJK_FAMILIES) {
+        return Some(p);
+    }
     CJK_CANDIDATES
         .iter()
         .map(PathBuf::from)
         .find(|p| p.exists())
 }
+
+/// fontdb family 匹配用：常见中文字体的 en-US 名（按序优先）。
+const CJK_FAMILIES: &[&str] = &[
+    "Noto Sans CJK SC",
+    "Noto Sans SC",
+    "Source Han Sans SC",
+    "Source Han Sans CN",
+    "PingFang SC",
+    "Microsoft YaHei",
+];
 
 /// fontconfig 语言查询：列出所有支持中文的字体文件，取常规体优先的第一个。
 fn fc_list_cjk() -> Option<PathBuf> {
@@ -85,3 +102,17 @@ const CJK_CANDIDATES: &[&str] = &[
     "/System/Library/Fonts/PingFang.ttc",
     "C:\\Windows\\Fonts\\msyh.ttc",
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn find_cjk_font_冒烟() {
+        // 有中文环境命中路径；无字体环境 None 合法（打点跳过）
+        match find_cjk_font() {
+            Some(p) => assert!(p.exists(), "报告的 CJK 字体应存在: {p:?}"),
+            None => eprintln!("跳过：未发现系统中文字体"),
+        }
+    }
+}

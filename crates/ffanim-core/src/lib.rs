@@ -26,7 +26,7 @@ pub use path_util::{lerp_affine, lerp_path, partial_path};
 pub use rate::RateFunc;
 pub use style::{Color, Style, Theme};
 pub use svg::{from_svg_file, from_svg_str};
-pub use text::{Font, outline_glyph};
+pub use text::{Font, LATIN_FAMILIES, find_system_font, outline_glyph};
 pub use timeline::{ScheduledAnim, Timeline};
 pub use tracker::{TrackerId, Updater};
 

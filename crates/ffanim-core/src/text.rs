@@ -18,33 +18,44 @@ pub struct Font {
 impl Font {
     /// 从文件加载字体（.ttf / .otf）。
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self> {
-        let path = path.as_ref();
-        let data = std::fs::read(path).map_err(|e| Error::FontIo(e, path.to_path_buf()))?;
-        Self::from_data(data)
+        Self::from_index(path, 0)
     }
 
-    /// 系统字体加载：显式路径优先，否则搜索常见系统位置（Linux/macOS）。
+    /// 从字体集合（.ttc）加载指定 face。
+    pub fn from_index(path: impl AsRef<Path>, index: u32) -> Result<Self> {
+        let path = path.as_ref();
+        let data = std::fs::read(path).map_err(|e| Error::FontIo(e, path.to_path_buf()))?;
+        Self::validate(&data, index)?;
+        Ok(Self { data, index })
+    }
+
+    /// 系统字体加载：显式路径优先，否则按 family 名走 fontdb 系统枚举
+    /// （fontconfig/CoreText/DirectWrite），再退到常见安装路径扫描兜底。
     pub fn from_system(explicit: Option<impl AsRef<Path>>) -> Result<Self> {
         match explicit {
             Some(p) => Self::from_path(p),
-            None => {
-                const CANDIDATES: &[&str] = &[
-                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-                    "/usr/share/fonts/TTF/DejaVuSans.ttf",
-                    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-                    "/System/Library/Fonts/Helvetica.ttc",
-                    // CJK：中文标题/字幕需要（ttc 集合，face 0 含常用汉字）
-                    "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-                    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-                ];
-                CANDIDATES
-                    .iter()
-                    .map(PathBuf::from)
-                    .find(|p| p.exists())
-                    .ok_or(Error::NoFontFound)
-                    .and_then(Self::from_path)
-            }
+            None => match find_system_font(LATIN_FAMILIES) {
+                Some((path, index)) => Self::from_index(path, index),
+                None => {
+                    // fontdb 不可用（极旧系统/容器无字体目录）时的最后兜底
+                    const CANDIDATES: &[&str] = &[
+                        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+                        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+                        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                        "/System/Library/Fonts/Helvetica.ttc",
+                        // CJK：中文标题/字幕需要（ttc 集合，face 0 含常用汉字）
+                        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+                        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                    ];
+                    CANDIDATES
+                        .iter()
+                        .map(PathBuf::from)
+                        .find(|p| p.exists())
+                        .ok_or(Error::NoFontFound)
+                        .and_then(Self::from_path)
+                }
+            },
         }
     }
 
@@ -116,6 +127,44 @@ impl Font {
     }
 }
 
+/// 拉丁正文字体的系统 family 名（按序优先，首个命中者胜出）。
+pub const LATIN_FAMILIES: &[&str] = &[
+    "DejaVu Sans",
+    "Liberation Sans",
+    "Noto Sans",
+    "Helvetica",
+    "Arial",
+];
+
+/// 系统字体文件发现：fontdb 全平台枚举（fontconfig/CoreText/DirectWrite），
+/// 按 family 名（en-US 名）精确匹配，常规体（Normal 样式、weight 400）优先。
+///
+/// 返回 (字体文件路径, face 序号)——.ttc 集合的 face 序号由 fontdb 给出，
+/// 供 [`Font::from_index`] 精确加载；无匹配返回 None（调用方决定兜底策略）。
+pub fn find_system_font(families: &[&str]) -> Option<(PathBuf, u32)> {
+    let mut db = fontdb::Database::new();
+    db.load_system_fonts();
+    let hit = db
+        .faces()
+        .filter_map(|f| match &f.source {
+            fontdb::Source::File(path) => Some((path, f)),
+            _ => None,
+        })
+        .filter(|(_, f)| {
+            f.families
+                .iter()
+                .any(|(name, _)| families.contains(&name.as_str()))
+        })
+        .min_by_key(|(_, f)| {
+            (
+                !matches!(f.style, fontdb::Style::Normal),
+                f.weight.0.abs_diff(400),
+            )
+        })?;
+    log::debug!("系统字体: {families:?} → {:?} face {}", hit.0, hit.1.index);
+    Some((hit.0.clone(), hit.1.index))
+}
+
 /// 提取单个字形轮廓为贝塞尔路径（字体单位，y-up 坐标系，不做缩放/翻转）。
 ///
 /// 公共 API：供 ffanim-typst 的 Typst 字形与本项目文本走同一轮廓提取实现。
@@ -177,6 +226,32 @@ mod tests {
             .iter()
             .map(std::path::PathBuf::from)
             .find(|p| p.exists())
+    }
+
+    #[test]
+    fn find_system_font_命中() {
+        // DejaVu Sans 是 CI/容器最常见的拉丁字体；无字体环境返回 None 合法（打点跳过）
+        match find_system_font(LATIN_FAMILIES) {
+            Some((path, index)) => {
+                assert!(path.exists(), "fontdb 报告的字体文件应存在: {path:?}");
+                // 加载冒烟：face 序号（ttc 集合）来自 fontdb，应可直接加载
+                Font::from_index(&path, index).expect("应可加载 fontdb 报告的 face");
+            }
+            None => eprintln!("跳过：fontdb 未发现系统字体"),
+        }
+    }
+
+    #[test]
+    fn from_system_兜底链() {
+        // 无显式路径：fontdb 枚举 → 硬编码路径兜底；两者皆空（极简容器）才报错
+        match Font::from_system(Option::<&str>::None) {
+            Ok(font) => {
+                let path = font.outline_text("A", 24.0).expect("轮廓提取");
+                assert!(!path.elements().is_empty());
+            }
+            Err(Error::NoFontFound) => eprintln!("跳过：环境无系统字体"),
+            Err(e) => panic!("意外错误: {e}"),
+        }
     }
 
     #[test]

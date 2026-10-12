@@ -17,6 +17,9 @@ thiserror = { workspace = true }
 kurbo = "0.13"
 ttf-parser = { version = "0.25", default-features = false }
 rustybuzz = "0.20"
+# 系统字体发现（M8.7）：fontdb 走 fontconfig/CoreText/DirectWrite 全平台正规通道，
+# 硬编码路径列表仅作其失效时的最后兜底
+fontdb = "0.23"
 # SVG 导入（M8.4）：usvg 解析 + tiny-skia-path 段 → kurbo；不启用 text（跳过文本节点）
 usvg = { version = "0.45", default-features = false }
 tiny-skia-path = "0.11"
