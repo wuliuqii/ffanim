@@ -27,6 +27,7 @@ use ffanim_core::{Color, Error, Result};
 // ---------------------------------------------------------------------------
 
 use crate::formula::{Formula, FormulaOptions, FormulaPiece};
+use crate::text::TextOptions;
 
 /// 主源文件 id（全局 intern，稳定不变）。
 static MAIN_FILE: LazyLock<FileId> = LazyLock::new(|| {
@@ -56,15 +57,19 @@ static LIBRARY: LazyLock<LazyHash<Library>> =
 // World 实现
 // ---------------------------------------------------------------------------
 
-/// 进程内数学排版 World：无文件系统，主源为内存字符串。
+/// 进程内排版 World：无文件系统，主源为内存字符串，字体集可注入。
 struct MathWorld {
     text: String,
+    /// 基础字体（typst-assets）+ 用户注入字体（`add_font`）。
+    fonts: Arc<Vec<Font>>,
+    /// 与 `fonts` 一一对应的字体簿。
+    book: Arc<LazyHash<FontBook>>,
 }
 
 impl MathWorld {
-    /// 以公式源码构造 World。
-    fn new(text: String) -> Self {
-        Self { text }
+    /// 以源码与字体集构造 World。
+    fn new(text: String, fonts: Arc<Vec<Font>>, book: Arc<LazyHash<FontBook>>) -> Self {
+        Self { text, fonts, book }
     }
 }
 
@@ -74,7 +79,7 @@ impl World for MathWorld {
     }
 
     fn book(&self) -> &LazyHash<FontBook> {
-        &FONT_BOOK
+        &self.book
     }
 
     fn main(&self) -> FileId {
@@ -98,7 +103,7 @@ impl World for MathWorld {
     }
 
     fn font(&self, index: usize) -> Option<Font> {
-        FONTS.get(index).cloned()
+        self.fonts.get(index).cloned()
     }
 
     fn today(&self, _offset: Option<typst::foundations::Duration>) -> Option<Datetime> {
@@ -107,16 +112,27 @@ impl World for MathWorld {
     }
 }
 
-/// 公式排版引擎。缓存键 = (公式体, 字号, 颜色)。
+/// 公式/文本排版引擎。缓存键 = (模式, 源码体, 字号, 颜色, 字体集代号, 版面参数)。
 pub struct TypstEngine {
     cache: lru::LruCache<CacheKey, Arc<Formula>>,
+    /// 排版字体集（基础 + 注入）。
+    fonts: Arc<Vec<Font>>,
+    /// 与 `fonts` 一一对应的字体簿。
+    book: Arc<LazyHash<FontBook>>,
+    /// 字体集代号：`add_font` 后递增，进缓存键（换字体不串缓存）。
+    fonts_gen: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct CacheKey {
+    /// 排版模式（0 = math 公式，1 = markup 文本），防同文互串。
+    mode: u8,
     body: String,
     font_size_pt: u32, // f64 不可哈希，以 0.01pt 粒度量化
     text_color: String,
+    fonts_gen: u64,
+    wrap_pt: u32,      // 限宽（0.01pt 量化）；公式恒 0
+    leading_x100: u32, // 行距（0.01em 量化）；公式恒 0
 }
 
 impl TypstEngine {
@@ -124,7 +140,36 @@ impl TypstEngine {
     pub fn new(capacity: usize) -> Self {
         Self {
             cache: lru::LruCache::new(NonZeroUsize::new(capacity.max(1)).expect("capacity > 0")),
+            fonts: Arc::new(FONTS.clone()),
+            book: Arc::new(FONT_BOOK.clone()),
+            fonts_gen: 0,
         }
+    }
+
+    /// 加载字体文件（.ttf / .otf / .ttc，集合文件加载全部 face）到排版字体集，
+    /// 返回新增 face 数。之后 `formula` / `text` 排版即可选用该字体。
+    ///
+    /// 缓存键含字体集代号：注入字体不会与之前的结果串缓存。
+    pub fn add_font(&mut self, path: impl AsRef<std::path::Path>) -> Result<usize> {
+        let path = path.as_ref();
+        let data = std::fs::read(path).map_err(|e| Error::FontIo(e, path.to_path_buf()))?;
+        let bytes = Bytes::new(data);
+        let mut fonts = (*self.fonts).clone();
+        let mut added = 0;
+        let mut index = 0;
+        while let Some(font) = Font::new(bytes.clone(), index) {
+            fonts.push(font);
+            added += 1;
+            index += 1;
+        }
+        if added == 0 {
+            return Err(Error::Other(format!("字体解析失败: {}", path.display())));
+        }
+        self.fonts = Arc::new(fonts);
+        self.book = Arc::new(LazyHash::new(FontBook::from_fonts(self.fonts.iter())));
+        self.fonts_gen += 1;
+        log::debug!("字体注入: {}（+{added} face）", path.display());
+        Ok(added)
     }
 
     /// 排版公式（Typst 数学语法，如 `x^2 + y^2 = z^2`）。
@@ -133,9 +178,13 @@ impl TypstEngine {
     pub fn formula(&mut self, body: &str, opts: &FormulaOptions) -> Result<Arc<Formula>> {
         let c = opts.text_color;
         let key = CacheKey {
+            mode: 0,
             body: body.into(),
             font_size_pt: (opts.font_size_pt * 100.0).round() as u32,
             text_color: format!("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a),
+            fonts_gen: self.fonts_gen,
+            wrap_pt: 0,
+            leading_x100: 0,
         };
         if let Some(hit) = self.cache.get(&key) {
             log::debug!("公式缓存命中: {body:?}");
@@ -143,7 +192,7 @@ impl TypstEngine {
         }
 
         let t0 = std::time::Instant::now();
-        let formula = Arc::new(compile_formula(body, opts)?);
+        let formula = Arc::new(compile_formula(body, opts, &self.fonts, &self.book)?);
         log::debug!(
             "公式排版完成: {body:?}（{:.1}ms）",
             t0.elapsed().as_secs_f64() * 1000.0
@@ -151,10 +200,45 @@ impl TypstEngine {
         self.cache.put(key, Arc::clone(&formula));
         Ok(formula)
     }
+
+    /// 排版富文本（Typst markup 语法：`*粗体*` `_斜体_` `` `代码` `` 均可用），
+    /// 产物与公式同为 [`Formula`]（走同一条 Frame→Item 管线）。
+    ///
+    /// `wrap_width_pt` 限宽时自动换行（中英混排由 Typst 断行），不限宽为单行。
+    pub fn text(&mut self, body: &str, opts: &TextOptions) -> Result<Arc<Formula>> {
+        let c = opts.text_color;
+        let key = CacheKey {
+            mode: 1,
+            body: body.into(),
+            font_size_pt: (opts.font_size_pt * 100.0).round() as u32,
+            text_color: format!("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a),
+            fonts_gen: self.fonts_gen,
+            wrap_pt: (opts.wrap_width_pt.unwrap_or(f64::INFINITY) * 100.0).round() as u32,
+            leading_x100: (opts.leading_em * 100.0).round() as u32,
+        };
+        if let Some(hit) = self.cache.get(&key) {
+            log::debug!("文本缓存命中: {body:?}");
+            return Ok(Arc::clone(hit));
+        }
+
+        let t0 = std::time::Instant::now();
+        let formula = Arc::new(compile_text(body, opts, &self.fonts, &self.book)?);
+        log::debug!(
+            "文本排版完成: {body:?}（{:.1}ms）",
+            t0.elapsed().as_secs_f64() * 1000.0
+        );
+        self.cache.put(key, Arc::clone(&formula));
+        Ok(formula)
+    }
 }
 
-/// 包一层页面/样式设置后编译，取第一页 Frame 转换为 [`Formula`]。
-fn compile_formula(body: &str, opts: &FormulaOptions) -> Result<Formula> {
+/// 包一层页面/样式设置后编译 math 公式，取第一页 Frame 转换为 [`Formula`]。
+fn compile_formula(
+    body: &str,
+    opts: &FormulaOptions,
+    fonts: &Arc<Vec<Font>>,
+    book: &Arc<LazyHash<FontBook>>,
+) -> Result<Formula> {
     let hex = format!(
         "#{:02x}{:02x}{:02x}",
         opts.text_color.r, opts.text_color.g, opts.text_color.b
@@ -165,8 +249,41 @@ fn compile_formula(body: &str, opts: &FormulaOptions) -> Result<Formula> {
          $ {body} $",
         opts.font_size_pt
     );
+    compile_source(source, fonts, book)
+}
 
-    let world = MathWorld::new(source);
+/// 编译 markup 富文本（限宽时页面宽度 = 内容宽 + 左右 margin，恰好换行）。
+fn compile_text(
+    body: &str,
+    opts: &TextOptions,
+    fonts: &Arc<Vec<Font>>,
+    book: &Arc<LazyHash<FontBook>>,
+) -> Result<Formula> {
+    let hex = format!(
+        "#{:02x}{:02x}{:02x}",
+        opts.text_color.r, opts.text_color.g, opts.text_color.b
+    );
+    // margin 2pt 左右各一，页宽 = 限宽 + 4pt，正文内容宽恰为 wrap_width_pt
+    let page_w = opts
+        .wrap_width_pt
+        .map_or_else(|| "auto".to_string(), |w| format!("{:.2}pt", w + 4.0));
+    let source = format!(
+        "#set page(width: {page_w}, height: auto, margin: 2pt, fill: none)\n\
+         #set text(size: {}pt, fill: rgb(\"{hex}\"))\n\
+         #set par(leading: {}em)\n\
+         {body}",
+        opts.font_size_pt, opts.leading_em
+    );
+    compile_source(source, fonts, book)
+}
+
+/// 编译 Typst 源码为 [`Formula`]（页宽/字号/颜色/行距由调用方拼入源码）。
+fn compile_source(
+    source: String,
+    fonts: &Arc<Vec<Font>>,
+    book: &Arc<LazyHash<FontBook>>,
+) -> Result<Formula> {
+    let world = MathWorld::new(source, fonts.clone(), book.clone());
     let warned = typst::compile::<typst_layout::PagedDocument>(&world);
     // 警告不致命，记日志；错误才是编译失败
     for w in &warned.warnings {

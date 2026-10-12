@@ -9,7 +9,7 @@ use ffanim_core::kurbo::{Affine, Circle, Rect};
 use ffanim_core::{Anim, Font, Item, Timeline};
 
 /// 场景清单（M5 起支持外部场景文件）。
-pub const SCENES: &[&str] = &["demo_anim", "formula_demo", "sine_demo"];
+pub const SCENES: &[&str] = &["demo_anim", "formula_demo", "sine_demo", "text_demo"];
 
 /// 构建场景时间轴。
 pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
@@ -20,6 +20,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         }
         "formula_demo" => formula_demo(theme, fps),
         "sine_demo" => sine_demo(theme, fps),
+        "text_demo" => text_demo(theme, fps),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -194,5 +195,62 @@ fn sine_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     tl.play(Anim::set_value(amp, 0.2).during(1.2));
     tl.play(Anim::set_value(amp, 1.0).during(1.2));
     tl.wait(0.6);
+    Ok(tl)
+}
+
+/// M8.2 验收场景：Text 富文本——中英混排限宽不出框 + 粗细混排 + 行距。
+///
+/// 系统中文字体经 `find_cjk_font` 数据查找注入引擎（无硬编码路径），
+/// 文本走 Typst markup 管线（与公式共用 Formula 产物）。
+fn text_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
+    use ffanim_typst::{TextOptions, TypstEngine, find_cjk_font};
+
+    let fg = theme.foreground().unwrap();
+    let accent = theme.accent().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // 引擎 + 系统中文字体（env FFANIM_CJK_FONT → fc-list → 常见路径）
+    let mut engine = TypstEngine::new(16);
+    if let Some(font) = find_cjk_font() {
+        engine.add_font(&font)?;
+    }
+
+    // 排版产物落位 + 整组同时淡入（group 步长 0 = 同窗）
+    let show = |tl: &mut Timeline, f: &ffanim_typst::Formula, cy: f64, dur: f64| {
+        let place = f.fit_transform(f64::from(w) / 2.0, cy, 2.0); // pt → px
+        let ids: Vec<_> = f
+            .to_items()
+            .into_iter()
+            .map(|item| tl.add(item.with_transform(place)))
+            .collect();
+        tl.group(ids.iter().map(|&id| Anim::fade_in(id).during(dur)), 0.0);
+    };
+
+    // 标题：中英混排 + `*…*` 粗体混排（拉丁粗体来自 typst-assets 内置 Bold）
+    let title = engine.text("ffanim *富文本* Text 排版", &TextOptions::new(28.0, fg))?;
+    show(&mut tl, &title, 100.0, 0.8);
+    tl.wait(0.4);
+
+    // 段落：限宽 220pt（缩放后 440px）→ 中英混排自动换行不出框，行距 1.1
+    let para = engine.text(
+        "数学动画引擎支持中英混排 mixed Chinese-English text，限宽后自动换行 \
+         line wrapping，行距可调 adjustable leading。",
+        &TextOptions {
+            wrap_width_pt: Some(220.0),
+            leading_em: 1.1,
+            ..TextOptions::new(15.0, fg)
+        },
+    )?;
+    show(&mut tl, &para, 280.0, 0.8);
+    tl.wait(0.6);
+
+    // 结论行：强调色
+    let cap = engine.text(
+        "字号 · 行距 · 限宽 · 粗细 全部选项驱动",
+        &TextOptions::new(18.0, accent),
+    )?;
+    show(&mut tl, &cap, 460.0, 0.8);
+    tl.wait(0.8);
     Ok(tl)
 }

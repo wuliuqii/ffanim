@@ -9,9 +9,11 @@ pub use ffanim_core::{
     Result, Style, Theme, Timeline, render_frame,
 };
 
-/// 公式排版子系统（Typst 嵌入）：TypstEngine / FormulaOptions / match_formulas。
+/// 公式/富文本排版子系统（Typst 嵌入）：TypstEngine / Formula / Text / match_formulas。
 pub mod typst {
-    pub use ffanim_typst::{Formula, FormulaOptions, TypstEngine, match_formulas};
+    pub use ffanim_typst::{
+        Formula, FormulaOptions, TextOptions, TypstEngine, find_cjk_font, match_formulas,
+    };
 }
 
 /// 音频子系统：analyze 诊断 / mux 音轨混流。

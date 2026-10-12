@@ -1,7 +1,7 @@
 //! ffanim-typst：Typst 库嵌入（唯一接触面）。
 //!
 //! - `MathWorld`：进程内 World 实现（字体来自 typst-assets，主源为内存字符串）；
-//! - [`TypstEngine`]：公式排版入口 + LRU 缓存（同公式二次排版 0 开销）；
+//! - [`TypstEngine`]：公式/富文本排版入口 + LRU 缓存（同源码二次排版 0 开销）；
 //! - [`Formula`]：排版产物 → ffanim `Item` 适配层（字形/形状 → 贝塞尔路径）。
 //!
 //! 坐标约定：Formula 内部为 pt 单位、y 向下（与 Typst Frame 一致），
@@ -9,10 +9,12 @@
 mod engine;
 mod formula;
 mod matching;
+mod text;
 
 pub use engine::TypstEngine;
 pub use formula::{Formula, FormulaOptions, FormulaPiece};
 pub use matching::{MatchPlan, match_formulas};
+pub use text::{TextOptions, find_cjk_font};
 
 #[cfg(test)]
 mod tests {
@@ -146,5 +148,108 @@ mod tests {
             std::fs::create_dir_all(dir).unwrap();
         }
         ffanim_render::save_png(out, w, h, &rgba).unwrap();
+    }
+
+    // -----------------------------------------------------------------------
+    // 富文本 Text（M8.2）
+    // -----------------------------------------------------------------------
+
+    fn text_opts(size: f64) -> TextOptions {
+        TextOptions::new(size, Color::new(240, 240, 240, 255))
+    }
+
+    /// 文本缓存命中：同参数二次排版返回同一 Arc。
+    #[test]
+    fn text_缓存命中() {
+        let mut engine = TypstEngine::new(8);
+        let o = text_opts(24.0);
+        let a = engine.text("ffanim", &o).unwrap();
+        let b = engine.text("ffanim", &o).unwrap();
+        assert!(Arc::ptr_eq(&a, &b), "缓存命中应返回同一 Arc");
+    }
+
+    /// 同源码的 formula 与 text 缓存互不串扰（模式在缓存键中）。
+    #[test]
+    fn text与公式缓存不串() {
+        let mut engine = TypstEngine::new(8);
+        let o = text_opts(24.0);
+        let f = engine.formula("x^2", &opts()).unwrap();
+        let t = engine.text("x^2", &o).unwrap();
+        assert!(!Arc::ptr_eq(&f, &t), "math/markup 模式不同，产物应不同");
+    }
+
+    /// 粗细混排 markup 编译成功且产物非空（`*…*` 走 LibertinusSerif-Bold）。
+    #[test]
+    fn text_粗体混排() {
+        let mut engine = TypstEngine::new(8);
+        let o = text_opts(24.0);
+        let f = engine.text("普通 *bold* 普通", &o).unwrap();
+        assert!(!f.pieces.is_empty());
+        assert!(f.width_pt > 0.0 && f.height_pt > 0.0);
+    }
+
+    /// 行距选项生效：同文本行距大者整体更高（拉丁字体即可，不依赖系统 CJK）。
+    #[test]
+    fn text_行距影响高度() {
+        let mut engine = TypstEngine::new(8);
+        let loose = TextOptions {
+            leading_em: 1.5,
+            ..text_opts(20.0)
+        };
+        let tight = TextOptions {
+            leading_em: 0.65,
+            ..text_opts(20.0)
+        };
+        let a = engine.text("Hello\\\nWorld", &loose).unwrap();
+        let b = engine.text("Hello\\\nWorld", &tight).unwrap();
+        assert!(
+            a.height_pt > b.height_pt,
+            "{} vs {}",
+            a.height_pt,
+            b.height_pt
+        );
+    }
+
+    /// 中英混排限宽换行：产物宽度不超过限宽 + margin（验收核心断言）。
+    /// 需要系统中文字体，缺失时跳过。
+    #[test]
+    fn text_中英混排限宽不出框() {
+        let Some(font) = find_cjk_font() else {
+            eprintln!("跳过：未找到系统中文字体");
+            return;
+        };
+        let mut engine = TypstEngine::new(8);
+        engine.add_font(&font).unwrap();
+        let o = TextOptions {
+            wrap_width_pt: Some(220.0),
+            ..text_opts(18.0)
+        };
+        let f = engine
+            .text(
+                "数学动画引擎 ffanim 支持中英混排 mixed text，限宽后自动换行 \
+                 line wrapping，绝不溢出画布。",
+                &o,
+            )
+            .unwrap();
+        // margin 左右各 2pt，页面宽 = 内容宽 + 4pt
+        assert!(
+            f.width_pt <= 224.1,
+            "排版宽度 {} 超出限宽 220pt",
+            f.width_pt
+        );
+        assert!(
+            f.height_pt > 36.0,
+            "多行文本高度应超过两行: {}",
+            f.height_pt
+        );
+        assert!(!f.pieces.is_empty());
+        // 片段含中文字形（text 字段有源文本）
+        assert!(
+            f.pieces.iter().any(|p| p
+                .text
+                .as_deref()
+                .is_some_and(|t| t.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)))),
+            "应有中文字形片段"
+        );
     }
 }

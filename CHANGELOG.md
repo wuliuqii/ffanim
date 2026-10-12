@@ -17,6 +17,13 @@
   （间隔 = ratio × 前段时长，manim lagged_start 语义），与 play 共享构建期推演；
   fourier / formula_demo 的 Write 重写为 group，调度逐帧等价（快照 PASS），
   消除 `overlap(dur-step)` 手工对齐（M3 踩坑根源）
+- feat(typst): M8.2 富文本 Text——`TypstEngine::text`（markup 模式，`*粗体*` 混排）
+  + `TextOptions`（字号/行距/限宽换行），产物复用 Formula 管线（to_items/fit_transform
+  原样可用）；`TypstEngine::add_font`（ttc 全 face 注入，缓存键含字体代号防串）+
+  `find_cjk_font` 系统中文字体查找（env FFANIM_CJK_FONT → fc-list :lang=zh →
+  路径扫描），fourier 的 CJK_FONT 硬编码与 text_item 助手删除；新增 text_demo
+  场景（中英混排限宽不出框：末帧内容 bbox 距画布边缘 ≥165px，0 触碰实证）+
+  测试 5 项；MathWorld 字体集动态化（基础 typst-assets + 注入）
 
 ## [v0.2.0] - 2026-10-12
 

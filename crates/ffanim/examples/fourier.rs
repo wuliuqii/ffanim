@@ -12,16 +12,13 @@
 //! https://upload.wikimedia.org/wikipedia/commons/9/90/Erik_Satie_-_gymnopedies_-_la_1_ere._lent_et_douloureux.ogg
 //! 许可：Public domain，可自由分发）——裁剪 18s + 响度归一 -18 LUFS + 淡入淡出。
 
-use ffanim::kurbo::{Affine, BezPath, Vec2};
-use ffanim::typst::{FormulaOptions, TypstEngine};
+use ffanim::kurbo::{BezPath, Vec2};
+use ffanim::typst::{FormulaOptions, TextOptions, TypstEngine};
 use ffanim::{Anim, Axes, Camera, Color, Font, Item, RateFunc, Theme, Timeline};
 
 const W: u32 = 960;
 const H: u32 = 540;
 const FPS: u32 = 30;
-
-/// 中文标题字体（Noto CJK 集合，face 0）；缺失时兜底系统拉丁字体。
-const CJK_FONT: &str = "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc";
 
 fn main() -> ffanim::Result<()> {
     // 数据驱动：颜色与描边宽度来自主题 JSON（仓库根 themes/）
@@ -31,23 +28,30 @@ fn main() -> ffanim::Result<()> {
     let fg = theme.foreground()?;
     let mut tl = Timeline::new(W, H, FPS, theme.background()?);
 
-    // 标题文字：优先 CJK 字体（渲染中文），兜底系统字体
-    let font = Font::from_path(CJK_FONT).or_else(|_| Font::from_system(None::<&str>))?;
+    // 排版引擎 + 系统中文字体（env FFANIM_CJK_FONT → fc-list :lang=zh → 常见路径，
+    // 无硬编码路径；缺失时 Typst 退回内置拉丁字体）
+    let mut engine = TypstEngine::new(16);
+    if let Some(font) = ffanim::typst::find_cjk_font() {
+        engine.add_font(&font)?;
+    }
+    // strip 时间轴标注用拉丁字体（与文本排版无关）
+    let font = Font::from_system(None::<&str>)?;
 
     // —— 幕 1：标题淡入 ——
-    let title = tl.add(text_item(
-        &font,
-        "傅里叶级数与方波",
-        52.0,
-        f64::from(W) / 2.0,
-        48.0,
-        fg,
-    )?);
-    tl.play(Anim::fade_in(title).during(1.0));
+    let title = engine.text("傅里叶级数与方波", &TextOptions::new(52.0, fg))?;
+    let title_place = title.fit_transform(f64::from(W) / 2.0, 48.0 + title.height_pt / 2.0, 1.0);
+    let title_ids: Vec<_> = title
+        .to_items()
+        .into_iter()
+        .map(|item| tl.add(item.with_transform(title_place)))
+        .collect();
+    tl.group(
+        title_ids.iter().map(|&id| Anim::fade_in(id).during(1.0)),
+        0.0,
+    );
     tl.wait(0.3);
 
     // —— 幕 2：级数公式逐字形写出 ——
-    let mut engine = TypstEngine::new(16);
     let fopts = FormulaOptions {
         font_size_pt: 30.0,
         text_color: fg,
@@ -130,15 +134,17 @@ fn main() -> ffanim::Result<()> {
     );
 
     // —— 幕 5：结论 ——
-    let caption = tl.add(text_item(
-        &font,
+    let caption = engine.text(
         "N → ∞ 时逼近方波，跳变处残留 ≈ 9% 过冲（吉布斯现象）",
-        26.0,
-        f64::from(W) / 2.0,
-        495.0,
-        fg,
-    )?);
-    tl.play(Anim::fade_in(caption).during(0.8));
+        &TextOptions::new(26.0, fg),
+    )?;
+    let cap_place = caption.fit_transform(f64::from(W) / 2.0, 495.0 + caption.height_pt / 2.0, 1.0);
+    let cap_ids: Vec<_> = caption
+        .to_items()
+        .into_iter()
+        .map(|item| tl.add(item.with_transform(cap_place)))
+        .collect();
+    tl.group(cap_ids.iter().map(|&id| Anim::fade_in(id).during(0.8)), 0.0);
     tl.wait(1.2);
 
     let mut tl = tl.compile();
@@ -194,23 +200,6 @@ fn main() -> ffanim::Result<()> {
     println!("onion: 基准帧 {} → {:?}", report.frame, report.out);
 
     Ok(())
-}
-
-/// 文字 Item：轮廓提取 + 水平居中（y 为文字顶部）。
-fn text_item(
-    font: &Font,
-    text: &str,
-    size: f64,
-    cx: f64,
-    top: f64,
-    color: Color,
-) -> ffanim::Result<Item> {
-    use ffanim::kurbo::Shape as _;
-    let path = font.outline_text(text, size)?;
-    let b = path.bounding_box();
-    Ok(Item::from_path(path)
-        .with_fill(color)
-        .with_transform(Affine::translate((cx - (b.x0 + b.x1) / 2.0, top - b.y0))))
 }
 
 /// 方波目标曲线：sign(sin(πx/2))，断点 x = -2, 0, 2（数据坐标 → 像素）。
