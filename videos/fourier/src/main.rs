@@ -112,11 +112,39 @@ fn main() -> ffanim::Result<()> {
     tl.play(Anim::fade_in(caption).during(0.8));
     tl.wait(1.2);
 
-    let tl = tl.compile();
+    let mut tl = tl.compile();
 
     // —— 出片 + 无看片诊断（agent 验证循环的库式用法）——
-    ffanim::render_to_mp4(&tl, "out/fourier.mp4")?;
-    println!("已输出 out/fourier.mp4（{:.2}s）", tl.duration_frames as f64 / f64::from(FPS));
+    // BGM 环境变量指向音频文件时：analyze → 片长延伸到音频长度（FromAudio 语义）
+    // → 渲染临时文件 → 混流为成品
+    let bgm_path = std::env::var("BGM").ok();
+    let encode_out: std::path::PathBuf = match &bgm_path {
+        Some(bgm) => {
+            let report = ffanim::audio::analyze(std::path::Path::new(bgm))?;
+            let frames = (report.duration * f64::from(FPS)).ceil() as usize;
+            println!(
+                "BGM {bgm}: {:.2}s（RMS {:.1}dBFS）→ 片长延伸到 {frames} 帧",
+                report.duration, report.rms_db
+            );
+            tl = tl.with_min_duration(frames);
+            "out/fourier_tmp.mp4".into()
+        }
+        None => "out/fourier.mp4".into(),
+    };
+    ffanim::render_to_mp4(&tl, &encode_out)?;
+    println!(
+        "已输出 {encode_out:?}（{:.2}s）",
+        tl.duration_frames as f64 / f64::from(FPS)
+    );
+    if let Some(bgm) = &bgm_path {
+        ffanim::audio::mux(
+            std::path::Path::new(&encode_out),
+            std::path::Path::new(bgm),
+            std::path::Path::new("out/fourier.mp4"),
+        )?;
+        std::fs::remove_file(&encode_out).ok();
+        println!("音轨已混入 out/fourier.mp4");
+    }
 
     let report = ffanim::tools::strip(
         &tl,
