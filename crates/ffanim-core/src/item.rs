@@ -31,6 +31,23 @@ impl Default for Paint {
     }
 }
 
+impl Paint {
+    /// 整体透明度缩放（alpha 分量相乘）。
+    pub fn with_opacity(&self, opacity: f64) -> Self {
+        let scale = |c: Option<Color>| {
+            c.map(|mut c| {
+                c.a = ((c.a as f64 * opacity).round() as i64).clamp(0, 255) as u8;
+                c
+            })
+        };
+        Self {
+            fill: scale(self.fill),
+            stroke: scale(self.stroke),
+            stroke_width: self.stroke_width,
+        }
+    }
+}
+
 /// 形状来源：路径或组合。
 #[derive(Debug, Clone)]
 pub enum Shape {

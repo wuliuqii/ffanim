@@ -46,6 +46,14 @@ impl Color {
             self.a as f32 / 255.0,
         ]
     }
+
+    /// 颜色线性插值（用于 Transform 形变）。
+    pub fn lerp(a: Self, b: Self, t: f64) -> Self {
+        let ch = |x: u8, y: u8| {
+            ((x as f64 + (y as f64 - x as f64) * t).round() as i64).clamp(0, 255) as u8
+        };
+        Self::new(ch(a.r, b.r), ch(a.g, b.g), ch(a.b, b.b), ch(a.a, b.a))
+    }
 }
 
 /// 描述符：JSON 中以十六进制字符串书写，加载时解析为 [`Color`]。
