@@ -81,9 +81,11 @@ impl GpuBackend {
                 let paint = &item.paint;
                 match &item.shape {
                     ffanim_core::Shape::Image(img) => {
-                        // Arc<[u8]> 零拷贝入 Blob（AsRef<[u8]> dyn 装箱）
+                        // Blob::new 需要 Arc<dyn AsRef<[u8]>>：unsize 强转要求源类型
+                        // Sized，Arc<[u8]> 无法直接转，故拷贝进 Arc<Vec<u8>>
+                        // （GPU 纹理上传本身也要拷贝，此处一次性 memcpy 可接受）
                         let data = vello::peniko::ImageData {
-                            data: vello::peniko::Blob::new(std::sync::Arc::clone(&img.rgba)),
+                            data: vello::peniko::Blob::new(std::sync::Arc::new(img.rgba.to_vec())),
                             format: vello::peniko::ImageFormat::Rgba8,
                             alpha_type: vello::peniko::ImageAlphaType::AlphaPremultiplied,
                             width: img.width,

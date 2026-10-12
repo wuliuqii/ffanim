@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use ffanim::kurbo::Circle;
 use ffanim::tools::{OnionReport, StripReport, downsample, onion, sample_frames, strip};
 use ffanim::typst::{FormulaOptions, TextOptions, TypstEngine, find_cjk_font, match_formulas};
-use ffanim::{Anim, Color, Item, Theme, Timeline, VERSION, render_to_mp4};
+use ffanim::{Anim, Color, Item, Theme, Timeline, VERSION, render_to_mp4, render_to_mp4_frames};
 use ffanim_audio::analyze_pcm;
 
 const BG: Color = Color::new(14, 17, 22, 255);
@@ -216,6 +216,25 @@ fn render_to_mp4_出片与音频混流冒烟() {
     let av = dir.join("api_smoke_av.mp4");
     ffanim::audio::mux(&mp4, &wav, &av).expect("混流应成功");
     assert!(av.is_file(), "混流产物应落盘");
+}
+
+#[test]
+fn render_to_mp4_frames_片段导出冒烟() {
+    if !has_ffmpeg() {
+        eprintln!("跳过：环境无 ffmpeg");
+        return;
+    }
+    let dir = out_dir("section");
+    let mp4 = dir.join("section_10_25.mp4");
+    // 30 帧全片只导出 [10, 25) = 15 帧（0.5s）
+    render_to_mp4_frames(&small_timeline().compile(), &mp4, 10..25).expect("片段导出应成功");
+    assert!(
+        mp4.metadata().map(|m| m.len() > 0).unwrap_or(false),
+        "片段 mp4 应非空"
+    );
+    // 越界区间报错（全片 30 帧，25..40 越界）
+    let err = render_to_mp4_frames(&small_timeline().compile(), dir.join("bad.mp4"), 25..40);
+    assert!(err.is_err(), "越界区间应报错: {err:?}");
 }
 
 #[test]

@@ -44,18 +44,54 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4").unwrap();
 /// ```
 pub fn render_to_mp4(tl: &CompiledTimeline, out: impl AsRef<std::path::Path>) -> Result<()> {
+    render_to_mp4_frames(tl, out, 0..tl.duration_frames)
+}
+
+/// 一键出片（片段导出）：只编码 `frames` 帧区间（半开），帧内容取自全片时间轴。
+///
+/// 帧号平移：区间内第 f 帧 = 全片第 `frames.start + f` 帧（渲染是纯函数查表），
+/// 复用同一条 ffmpeg 管道。用于 `--section` 片段导出与分段出片。
+///
+/// # 示例
+///
+/// ```no_run
+/// use ffanim::{Anim, Color, Item, Timeline};
+///
+/// let mut tl = Timeline::new(960, 540, 30, Color::new(14, 17, 22, 255));
+/// let cir = tl.add(Item::circle(ffanim::kurbo::Circle::new((480.0, 270.0), 80.0)));
+/// tl.play(Anim::create(cir).during(1.0));
+/// // 只导出第 15..45 帧（[0.5s, 1.5s)）
+/// ffanim::render_to_mp4_frames(&tl.compile(), "out/clip.mp4", 15..45).unwrap();
+/// ```
+///
+/// # Errors
+/// 区间为空或越界（`end > 全片帧数`）时返回 [`Error::Other`]。
+pub fn render_to_mp4_frames(
+    tl: &CompiledTimeline,
+    out: impl AsRef<std::path::Path>,
+    frames: std::ops::Range<usize>,
+) -> Result<()> {
+    if frames.is_empty() || frames.end > tl.duration_frames {
+        return Err(Error::Other(format!(
+            "帧区间 {frames:?} 越界：全片共 {} 帧（{:.2}s）",
+            tl.duration_frames,
+            tl.duration_frames as f64 / f64::from(tl.fps),
+        )));
+    }
     use ffanim_render::RenderBackend;
     let out = out.as_ref();
+    let first = frames.start;
+    let total = frames.len();
     // CpuBackend 无状态，每帧独立实例（闭包 Send+Sync，分段并行无需加锁）
-    let frame_of = |f: usize| -> Vec<u8> {
-        let draw = ffanim_core::render_frame(tl, f);
+    let frame_of = move |f: usize| -> Vec<u8> {
+        let draw = ffanim_core::render_frame(tl, first + f);
         ffanim_render::CpuBackend::new().render(&draw)
     };
     ffanim_encode::encode_video(
         tl.width,
         tl.height,
         tl.fps,
-        tl.duration_frames,
+        total,
         out,
         &ffanim_encode::EncodeOptions::default(),
         &frame_of,

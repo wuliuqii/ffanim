@@ -28,6 +28,10 @@ pub struct RenderArgs {
     #[arg(long)]
     pub audio: Option<PathBuf>,
 
+    /// 片段导出：只渲染该时间段（秒，半开区间，如 "0..3.5"）
+    #[arg(long)]
+    pub section: Option<String>,
+
     /// 主题 JSON 路径
     #[arg(long, default_value = "themes/default.json")]
     pub theme: PathBuf,
@@ -85,6 +89,7 @@ pub fn render(args: RenderArgs) -> ffanim::Result<()> {
         fps,
         segments,
         audio,
+        section,
         theme,
     } = args;
     let theme = ffanim::Theme::from_path(&theme)?;
@@ -114,12 +119,30 @@ pub fn render(args: RenderArgs) -> ffanim::Result<()> {
     );
 
     use ffanim_render::RenderBackend;
-    let (w, h, fps, total) = (tl.width, tl.height, tl.fps, tl.duration_frames);
-    let video = total as f64 / f64::from(fps);
+    let (w, h, fps) = (tl.width, tl.height, tl.fps);
     let tl = std::sync::Arc::new(tl);
+    // --section：秒区间 → 帧区间（clamp 到全片），帧号平移走同一 encode 管道
+    let (start_f, total) = match &section {
+        Some(spec) => {
+            if audio.is_some() {
+                println!("注意：--section 与 --audio 同用时混入的是完整音轨，长度可能与片段不符");
+            }
+            let r = parse_section(spec, fps, tl.duration_frames)?;
+            println!(
+                "片段导出 {spec:?}: 帧 {}..{}（{} 帧 / {:.2}s）",
+                r.start,
+                r.end,
+                r.end - r.start,
+                (r.end - r.start) as f64 / f64::from(fps),
+            );
+            (r.start, r.end - r.start)
+        }
+        None => (0, tl.duration_frames),
+    };
+    let video = total as f64 / f64::from(fps);
     // 取帧闭包：渲染是纯函数，多线程调用安全（每帧独立 CPU 上下文）
     let frame_of = move |f: usize| -> Vec<u8> {
-        let draw = ffanim_core::render_frame(&tl, f);
+        let draw = ffanim_core::render_frame(&tl, start_f + f);
         ffanim_render::CpuBackend::new().render(&draw)
     };
 
@@ -218,4 +241,53 @@ pub fn frame(args: FrameArgs) -> ffanim::Result<()> {
         .map_err(|e| ffanim::Error::ThemeIo(e, out.clone()))?;
     println!("已输出 {out:?}（{width}x{height}，{backend} 后端）");
     Ok(())
+}
+
+/// 解析 `--section "起..止"`（秒，半开）为帧区间，clamp 到全片 [0, total]。
+fn parse_section(spec: &str, fps: u32, total: usize) -> ffanim::Result<std::ops::Range<usize>> {
+    let (a, b) = spec.split_once("..").ok_or_else(|| {
+        ffanim::Error::Other(format!(
+            "--section 需形如 \"起..止\"（秒），如 \"0..3.5\"，得 {spec:?}"
+        ))
+    })?;
+    let bad = |v: &str| ffanim::Error::Other(format!("--section 数值非法: {v:?}（{spec:?}）"));
+    let start: f64 = a.trim().parse().map_err(|_| bad(a))?;
+    let end: f64 = b.trim().parse().map_err(|_| bad(b))?;
+    if start < 0.0 || end < 0.0 {
+        return Err(bad(spec));
+    }
+    let f = f64::from(fps);
+    let s = ((start * f).round() as usize).min(total);
+    let e = ((end * f).round() as usize).min(total);
+    if s >= e {
+        return Err(ffanim::Error::Other(format!(
+            "--section 区间为空或越界: {spec:?}（全片 {total} 帧）"
+        )));
+    }
+    Ok(s..e)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_section;
+
+    #[test]
+    fn section_秒转帧四舍五入() {
+        assert_eq!(parse_section("0..3.5", 30, 105).unwrap(), 0..105);
+        assert_eq!(parse_section("0.5..1.5", 30, 200).unwrap(), 15..45);
+    }
+
+    #[test]
+    fn section_clamp到全片() {
+        assert_eq!(parse_section("1..99", 30, 60).unwrap(), 30..60);
+    }
+
+    #[test]
+    fn section_非法输入报错() {
+        assert!(parse_section("3.5", 30, 100).is_err(), "缺 '..'");
+        assert!(parse_section("a..b", 30, 100).is_err(), "非数字");
+        assert!(parse_section("2..1", 30, 100).is_err(), "区间为空");
+        assert!(parse_section("1..1", 30, 100).is_err(), "零长区间");
+        assert!(parse_section("2..2", 30, 1).is_err(), "clamp 后为空");
+    }
 }

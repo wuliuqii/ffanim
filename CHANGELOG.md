@@ -39,6 +39,13 @@
 - 形状片段（无源文本）用侧别唯一占位符，恒不跨配对
 - 新增 `ffanim diff <a> <b>` CLI 子命令：预检 TransformMatchingTex 调度计划（配对/淡出/淡入）
 - 3 单测（交换 move / 原位替换 / 形状恒不配对），门禁全绿
+
+### M9.2 片段导出（2026-10-12）
+
+- 门面新增 `render_to_mp4_frames(tl, out, frames)`：帧区间半开裁剪，帧号平移复用同一条 ffmpeg 管道（encode 零改动）；越界区间报 `Error::Other`
+- CLI `render --section "起..止秒"`：秒→帧四舍五入 + clamp 到全片；与 `--audio` 同用时提示音轨为完整音轨
+- 验收：demo_anim 5.8s 全片导出 1..3s 片段，ffprobe 实测 2.0s；3 解析单测 + 1 集成测试
+- 顺手修复 ci-gpu 配方存量编译损坏（peniko `Blob::new` 需 `Arc<dyn AsRef<[u8]>>`，改拷贝进 `Arc<Vec<u8>>`）
 ## [v0.2.0] - 2026-10-12
 
 M7 地基与拆分 + 1080p 性能基线。semver 0.x 规则自本版本起生效。
