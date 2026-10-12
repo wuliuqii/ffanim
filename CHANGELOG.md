@@ -47,6 +47,17 @@
 - 验收：demo_anim 5.8s 全片导出 1..3s 片段，ffprobe 实测 2.0s；3 解析单测 + 1 集成测试
 - 顺手修复 ci-gpu 配方存量编译损坏（peniko `Blob::new` 需 `Arc<dyn AsRef<[u8]>>`，改拷贝进 `Arc<Vec<u8>>`）
 
+### M9.6 修复：encode 临时目录按 pid+调用序号隔离，根除同进程并发编码竞态（2026-10-12）
+
+- fix(encode): 编码临时目录原只按进程 id 命名（`ffanim-encode-<pid>`）——同进程内并发
+  `encode_video`（典型：cargo test 并行跑两个编码冒烟用例）共享 `seg_XXXX.mp4` 与
+  `concat.txt`，先结束一方 `remove_dir_all` 删掉另一方正在写的段文件 → 并发偶发
+  `concat 失败: No such file or directory`（ci-gpu 复发两次的根因）
+- 修复：目录名追加进程内原子调用序号（`ffanim-encode-<pid>-<seq>`），pid 区分进程、
+  序号区分同进程并发调用；属产品缺陷修复（用户多线程同时出片同样触发），非仅测试问题
+- test: 新增 `并发编码互不干扰` 回归测试（双线程同时 encode_video 各自产物合法）；
+  post-fix 循环 30 次全过（修复前第 2 次即复现）
+
 ### M9.5 manim 对齐第三批：强调动画四件套 indicate / circumscribe / flash / show_passing_flash（2026-10-12）
 
 - feat(core): `Timeline::indicate(id, factor, dur)`——绕 bbox 中心放大 factor 再复原

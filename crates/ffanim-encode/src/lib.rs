@@ -9,6 +9,10 @@ use ffanim_core::{Error, Result};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// 进程内编码调用序号（临时目录唯一性用：同进程并发编码各用独立目录）。
+static ENCODE_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// 编码选项。
 #[derive(Debug, Clone)]
@@ -79,7 +83,11 @@ pub fn encode_video(
         .max(1)
         .min(total_frames.max(1));
 
-    let tmp = std::env::temp_dir().join(format!("ffanim-encode-{}", std::process::id()));
+    // 临时目录 = pid + 调用序号：pid 区分进程，序号区分同进程内的并发编码
+    //（此前只按 pid 命名，同进程两个并发 encode 共享 seg_XXXX.mp4/concat.txt，
+    //  一方结束 remove_dir_all 会删掉另一方正在写的段文件 → concat ENOENT）
+    let seq = ENCODE_SEQ.fetch_add(1, Ordering::Relaxed);
+    let tmp = std::env::temp_dir().join(format!("ffanim-encode-{}-{seq}", std::process::id()));
     std::fs::create_dir_all(&tmp).map_err(|e| Error::Encode(format!("创建临时目录失败: {e}")))?;
     // 埋点：编码总览（info）
     log::info!(
@@ -290,5 +298,43 @@ mod tests {
         assert!(bytes.len() > 1000, "产物过小: {}", bytes.len());
         assert_eq!(&bytes[4..8], b"ftyp", "应为合法 mp4 容器");
         let _ = std::fs::remove_file(&out);
+    }
+
+    /// 回归：同进程并发编码互不干扰（临时目录须按调用隔离，见 encode_video 内注释）。
+    #[test]
+    fn 并发编码互不干扰() {
+        if check_ffmpeg().is_err() {
+            eprintln!("跳过：无 ffmpeg");
+            return;
+        }
+        let (w, h, fps, n) = (64u32, 64u32, 30u32, 60usize);
+        let frames = move |f: usize| -> Vec<u8> {
+            // 纯色帧，亮度随帧号变化（内容无关紧要，能撑起码流即可）
+            let v = (40 + f * 3) as u8;
+            vec![v; w as usize * h as usize * 4]
+        };
+
+        // 两个线程同时 encode（修复前共享 pid 临时目录，段文件互相覆写/被删）
+        let outs: Vec<_> = (0..2)
+            .map(|i| std::env::temp_dir().join(format!("ffanim-concurrent-test-{i}.mp4")))
+            .collect();
+        std::thread::scope(|s| {
+            for out in &outs {
+                let frames = &frames;
+                s.spawn(move || {
+                    let opts = EncodeOptions {
+                        segments: Some(4),
+                        ..Default::default()
+                    };
+                    encode_video(w, h, fps, n, out, &opts, frames).unwrap();
+                });
+            }
+        });
+        for out in &outs {
+            let bytes = std::fs::read(out).unwrap();
+            assert!(bytes.len() > 1000, "产物过小: {out:?} = {}", bytes.len());
+            assert_eq!(&bytes[4..8], b"ftyp");
+            let _ = std::fs::remove_file(out);
+        }
     }
 }
