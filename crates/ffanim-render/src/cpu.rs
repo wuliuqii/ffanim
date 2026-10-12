@@ -15,6 +15,13 @@ impl CpuBackend {
 
 impl RenderBackend for CpuBackend {
     fn render(&mut self, draw: &DrawList) -> Vec<u8> {
+        // 埋点：逐帧渲染入口（trace，排查丢帧/空白帧用）
+        log::trace!(
+            "CpuBackend::render: {}x{}，{} 项",
+            draw.width,
+            draw.height,
+            draw.items.len()
+        );
         // vello_cpu 尺寸上限为 u16
         assert!(draw.width <= u16::MAX as u32 && draw.height <= u16::MAX as u32);
         let (w, h) = (draw.width as u16, draw.height as u16);

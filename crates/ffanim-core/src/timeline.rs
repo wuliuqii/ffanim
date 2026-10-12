@@ -191,6 +191,15 @@ impl Timeline {
             height,
             background,
         } = self._canvas;
+        // 埋点：编译摘要（info）+ 逐动画调度表（debug）
+        log::info!(
+            "时间轴编译完成: {} 个对象 / {} 个动画 / {duration_frames} 帧 / 画布 {width}x{height}",
+            self.items.len(),
+            anims.len()
+        );
+        for a in &anims {
+            log::debug!("调度: [{:>4}..{:<4}] {}", a.start, a.end, a.kind.describe());
+        }
         CompiledTimeline {
             fps: self.fps,
             width,
@@ -306,6 +315,11 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
             }
         }
     }
+    // 埋点：逐帧求值结果（trace 级，动画同步排查用）
+    log::trace!(
+        "render_frame 求值: frame={frame}, visible={}",
+        draw.items.len()
+    );
     draw
 }
 

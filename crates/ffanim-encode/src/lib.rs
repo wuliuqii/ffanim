@@ -76,6 +76,12 @@ pub fn encode_video(
 
     let tmp = std::env::temp_dir().join(format!("ffanim-encode-{}", std::process::id()));
     std::fs::create_dir_all(&tmp).map_err(|e| Error::Encode(format!("创建临时目录失败: {e}")))?;
+    // 埋点：编码总览（info）
+    log::info!(
+        "编码开始: {total_frames} 帧 {width}x{height}@{fps} → {out:?}（{segments} 段并行，{} crf={}）",
+        opts.codec,
+        opts.crf
+    );
 
     let result = run_segments(
         &tmp,
@@ -113,6 +119,8 @@ fn run_segments(
         })
         .filter(|(s, e)| e > s)
         .collect();
+    // 埋点：帧段划分（debug）
+    log::debug!("帧段划分: {bounds:?}");
 
     // 每段一个 worker（scoped threads：借用 frames，无需 'static）
     std::thread::scope(|s| {
@@ -144,6 +152,8 @@ fn encode_segment(
     opts: &EncodeOptions,
     frames: &(impl Fn(usize) -> Vec<u8> + Sync),
 ) -> Result<()> {
+    // 埋点：段编码耗时（debug，定位慢段/卡顿帧段用）
+    let t0 = std::time::Instant::now();
     let mut child = Command::new("ffmpeg")
         .args([
             "-y",
@@ -196,11 +206,17 @@ fn encode_segment(
             stderr.lines().last().unwrap_or_default()
         )));
     }
+    log::debug!(
+        "段 {start}..{end} 编码完成（{:.2}s）",
+        t0.elapsed().as_secs_f64()
+    );
     Ok(())
 }
 
 /// concat demuxer 流复制拼接（分段参数一致时无需重编码）。
 fn concat_segments(tmp: &Path, out: &Path, n: usize) -> Result<()> {
+    // 埋点：concat 拼接（info）
+    log::info!("concat 拼接 {n} 段（流复制，无重编码）");
     let list = tmp.join("concat.txt");
     let body: String = (0..n).map(|i| format!("file 'seg_{i:04}.mp4'\n")).collect();
     std::fs::write(&list, body).map_err(|e| Error::Encode(e.to_string()))?;

@@ -50,6 +50,11 @@ impl Font {
         // rustybuzz 的 Face 是 ttf_parser::Face 的包装（附带 GSUB/GPOS 缓存）
         let hb_face = rustybuzz::Face::from_face(face);
         let output = rustybuzz::shape(&hb_face, &[], buffer);
+        // 埋点：整形结果（debug，M3 Typst 公式字形共用此路径，排查缺字/对齐用）
+        log::debug!(
+            "文本整形: {text:?}（font_size={font_size}，glyphs={}）",
+            output.glyph_infos().len()
+        );
 
         let mut path = BezPath::new();
         let mut cursor = 0.0_f64;

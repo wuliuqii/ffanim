@@ -10,6 +10,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+log = { workspace = true }
 ffanim-core = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["png"] }
 kurbo = "0.13"

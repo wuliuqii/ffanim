@@ -25,6 +25,14 @@ impl GpuBackend {
             apply_limit_buckets: false,
         }))
         .map_err(|e| format!("未找到可用的 GPU 适配器: {e}"))?;
+        // 埋点：适配器信息（info，排查驱动/后端选择问题用）
+        let adapter_info = adapter.get_info();
+        log::info!(
+            "GPU 适配器: {}（{:?}，{:?}）",
+            adapter_info.name,
+            adapter_info.backend,
+            adapter_info.device_type
+        );
 
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("ffanim-gpu"),

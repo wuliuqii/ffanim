@@ -95,6 +95,10 @@ enum Command {
 }
 
 fn main() -> ffanim::Result<()> {
+    // 日志埋点开关：默认静默（warn），调试时用 RUST_LOG 开启
+    // 例：RUST_LOG=info 全部摘要；RUST_LOG=ffanim_core=trace 只看逐帧求值
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
+
     let cli = Cli::parse();
     match cli.command {
         Command::Info { theme } => {
