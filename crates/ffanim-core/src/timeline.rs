@@ -13,10 +13,65 @@ use crate::rate::{RateFunc, lerp};
 use crate::{Color, DrawList, Item, ItemId, Paint, Shape};
 use kurbo::Shape as _;
 use kurbo::{Affine, Vec2}; // bounding_box
+use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
 // 构建期 API
 // ---------------------------------------------------------------------------
+
+/// 值跟踪器句柄（[`Timeline::add_tracker`] 返回，隐形对象，仅供 updater 依赖）。
+pub type TrackerId = usize;
+
+/// 值→对象 映射函数类型（updater 信号核心）。
+pub type ValueFn = Arc<dyn Fn(&[f64]) -> Item + Send + Sync>;
+
+/// 求值期信号：把若干 tracker 值映射为一个对象（构建期注册的纯函数）。
+///
+/// 渲染期每帧以依赖 tracker 的当前值调用 [`Updater::eval`] 重建形状，
+/// 无可变状态（Send + Sync），与两阶段模型的并行求值兼容。
+pub struct Updater {
+    pub item_id: ItemId,
+    pub deps: Vec<TrackerId>,
+    f: ValueFn,
+}
+
+impl Updater {
+    pub fn new(
+        item_id: ItemId,
+        deps: Vec<TrackerId>,
+        f: impl Fn(&[f64]) -> Item + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            item_id,
+            deps,
+            f: Arc::new(f),
+        }
+    }
+
+    /// 以当前帧 tracker 值重建对象。
+    pub fn eval(&self, values: &[f64]) -> Item {
+        (self.f)(values)
+    }
+}
+
+impl Clone for Updater {
+    fn clone(&self) -> Self {
+        Self {
+            item_id: self.item_id,
+            deps: self.deps.clone(),
+            f: Arc::clone(&self.f),
+        }
+    }
+}
+
+impl std::fmt::Debug for Updater {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Updater")
+            .field("item_id", &self.item_id)
+            .field("deps", &self.deps)
+            .finish_non_exhaustive()
+    }
+}
 
 /// 动画类型。
 #[derive(Debug, Clone)]
@@ -29,6 +84,12 @@ pub enum AnimKind {
     FadeOut(ItemId),
     /// 形变：`from` 形变为 `to`（几何/颜色/变换插值；元素序列不一致时退化为交叉淡化）。
     Transform { from: ItemId, to: ItemId },
+    /// 值跟踪器动画：`from` → `to`（updater 求值期信号的数据来源，本身不产生绘制）。
+    SetValue {
+        tracker: TrackerId,
+        from: f64,
+        to: f64,
+    },
 }
 
 impl AnimKind {
@@ -45,6 +106,9 @@ impl AnimKind {
             }
             AnimKind::FadeOut(id) => format!("FadeOut(item#{id})"),
             AnimKind::Transform { from, to } => format!("Transform(item#{from}→item#{to})"),
+            AnimKind::SetValue { tracker, from, to } => {
+                format!("SetValue(tracker#{tracker}: {from:.3}→{to:.3})")
+            }
         }
     }
 }
@@ -75,6 +139,15 @@ impl Anim {
 
     pub fn transform(from: ItemId, to: ItemId) -> Self {
         Self::of(AnimKind::Transform { from, to })
+    }
+
+    /// 值跟踪器动画（from 取构建期该 tracker 的当前值）。
+    pub fn set_value(tracker: TrackerId, to: f64) -> Self {
+        Self::of(AnimKind::SetValue {
+            tracker,
+            from: f64::NAN, // 由 Timeline::play 填充（构建期当前值）
+            to,
+        })
     }
 
     fn of(kind: AnimKind) -> Self {
@@ -116,6 +189,12 @@ pub struct Timeline {
     pending_overlap_s: Option<f64>,
     items: Vec<Item>,
     anims: Vec<(f64, Anim)>, // (start_s, anim)
+    /// 值跟踪器初始值（下标即 [`TrackerId`]）。
+    trackers: Vec<f64>,
+    /// 值跟踪器构建期当前值（随 [`Anim::set_value`] 推演，作为下一段的 from）。
+    tracker_cur: Vec<f64>,
+    /// 求值期信号（渲染期按帧重建形状）。
+    updaters: Vec<Updater>,
     _canvas: CanvasArgs,
 }
 
@@ -128,6 +207,9 @@ impl Timeline {
             pending_overlap_s: None,
             items: Vec::new(),
             anims: Vec::new(),
+            trackers: Vec::new(),
+            tracker_cur: Vec::new(),
+            updaters: Vec::new(),
             _canvas: CanvasArgs {
                 width,
                 height,
@@ -144,9 +226,36 @@ impl Timeline {
         id
     }
 
+    /// 注册值跟踪器（隐形，仅作为 updater 的信号源），返回句柄。
+    pub fn add_tracker(&mut self, initial: f64) -> TrackerId {
+        self.trackers.push(initial);
+        self.tracker_cur.push(initial);
+        self.trackers.len() - 1
+    }
+
+    /// 注册求值期信号：`f` 把依赖 tracker 的值映射为对象形状，每帧重建。
+    ///
+    /// 基准对象以 tracker 初始值生成（因此 [`Anim::create`] 的生长、
+    /// [`Anim::fade_in`] 等常规动画词汇照常作用于重建后的形状）。
+    pub fn add_updater(
+        &mut self,
+        deps: &[TrackerId],
+        f: impl Fn(&[f64]) -> Item + Send + Sync + 'static,
+    ) -> ItemId {
+        let initial: Vec<f64> = deps.iter().map(|&t| self.trackers[t]).collect();
+        let item = self.add(f(&initial));
+        self.updaters.push(Updater::new(item, deps.to_vec(), f));
+        item
+    }
+
     /// 在当前游标处排入一个动画，游标推进其时长。
-    pub fn play(&mut self, anim: Anim) -> &mut Self {
+    pub fn play(&mut self, mut anim: Anim) -> &mut Self {
         let overlap = self.pending_overlap_s.take().unwrap_or(0.0);
+        // SetValue 的 from 推演：取构建期 tracker 当前值（顺序语义，并行段需留意）
+        if let AnimKind::SetValue { tracker, from, to } = &mut anim.kind {
+            *from = self.tracker_cur[*tracker];
+            self.tracker_cur[*tracker] = *to;
+        }
         let start_s = (self.cursor_s - overlap).max(0.0);
         self.anims.push((start_s, anim.clone()));
         self.cursor_s = start_s + anim.duration_s;
@@ -207,6 +316,8 @@ impl Timeline {
             background,
             items: self.items,
             anims,
+            trackers: self.trackers,
+            updaters: self.updaters,
             duration_frames,
         }
     }
@@ -224,7 +335,6 @@ struct CanvasArgs {
 // ---------------------------------------------------------------------------
 
 /// 编译后的不可变时间轴（渲染期唯一输入）。
-#[derive(Debug, Clone)]
 pub struct CompiledTimeline {
     pub fps: u32,
     pub width: u32,
@@ -233,7 +343,42 @@ pub struct CompiledTimeline {
     /// 全部对象的基准状态，下标即 [`ItemId`]。
     pub items: Vec<Item>,
     pub anims: Vec<ScheduledAnim>,
+    /// 值跟踪器初始值，下标即 [`TrackerId`]。
+    pub trackers: Vec<f64>,
+    /// 求值期信号（渲染期按帧重建形状）。
+    pub updaters: Vec<Updater>,
     pub duration_frames: usize,
+}
+
+// Updater 含 Arc<dyn Fn>，Debug/Clone 手动实现（Arc 语义下克隆共享函数）
+impl Clone for CompiledTimeline {
+    fn clone(&self) -> Self {
+        Self {
+            fps: self.fps,
+            width: self.width,
+            height: self.height,
+            background: self.background,
+            items: self.items.clone(),
+            anims: self.anims.clone(),
+            trackers: self.trackers.clone(),
+            updaters: self.updaters.clone(),
+            duration_frames: self.duration_frames,
+        }
+    }
+}
+
+impl std::fmt::Debug for CompiledTimeline {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CompiledTimeline")
+            .field("fps", &self.fps)
+            .field("size", &(self.width, self.height))
+            .field("items", &self.items.len())
+            .field("anims", &self.anims.len())
+            .field("trackers", &self.trackers)
+            .field("updaters", &self.updaters)
+            .field("duration_frames", &self.duration_frames)
+            .finish()
+    }
 }
 
 /// 已调度的动画（帧为单位）。
@@ -280,6 +425,16 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
             continue;
         }
         let mut state = item.clone();
+        // 求值期信号先于动画：updater 按依赖 tracker 值重建基准形状，
+        // Create 生长 / FadeIn 等动画词汇照常作用在重建结果上
+        if let Some(up) = tl.updaters.iter().find(|u| u.item_id == id) {
+            let values: Vec<f64> = up
+                .deps
+                .iter()
+                .map(|&t| tracker_value(tl, t, frame))
+                .collect();
+            state.shape = up.eval(&values).shape;
+        }
         let mut opacity = 1.0;
         for anim in &tl.anims {
             let Some(alpha) = anim.alpha_at(frame) else {
@@ -321,6 +476,31 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
         draw.items.len()
     );
     draw
+}
+
+/// 值跟踪器在帧 f 的值：活跃段插值，历史段取终值（确定性纯函数；段间不重叠）。
+fn tracker_value(tl: &CompiledTimeline, tracker: TrackerId, f: usize) -> f64 {
+    let mut v = tl.trackers[tracker];
+    for anim in &tl.anims {
+        let AnimKind::SetValue {
+            tracker: t,
+            from,
+            to,
+        } = &anim.kind
+        else {
+            continue;
+        };
+        if *t != tracker {
+            continue;
+        }
+        if let Some(a) = anim.alpha_at(f) {
+            return lerp(*from, *to, a);
+        }
+        if f >= anim.end {
+            v = *to;
+        }
+    }
+    v
 }
 
 /// 对象在帧 f 是否可见（出场/退场/形变交换语义）。
@@ -573,5 +753,106 @@ mod tests {
                 .elements()
                 .is_empty()
         );
+    }
+
+    // ---- M4-2：ValueTracker 值动画 + 求值期 updater ----
+
+    fn vline(height: f64) -> Item {
+        let mut p = kurbo::BezPath::new();
+        p.move_to((10.0, 90.0));
+        p.line_to((10.0, 90.0 - height));
+        Item::from_path(p)
+    }
+
+    #[test]
+    fn tracker值动画与from推演() {
+        let mut tl = make_tl();
+        let t = tl.add_tracker(1.0);
+        tl.play(Anim::set_value(t, 0.5).during(1.0).rate(RateFunc::Linear));
+        tl.play(Anim::set_value(t, 2.0).during(1.0).rate(RateFunc::Linear));
+        let c = tl.compile();
+
+        // from 推演：第二段 from = 第一段 to
+        assert_eq!(
+            c.anims[0].kind.describe(),
+            "SetValue(tracker#0: 1.000→0.500)"
+        );
+        assert_eq!(
+            c.anims[1].kind.describe(),
+            "SetValue(tracker#0: 0.500→2.000)"
+        );
+
+        // 值查表：段前取初值 / 活跃段线性插值 / 段后取终值
+        assert_eq!(tracker_value(&c, t, 0), 1.0);
+        assert!((tracker_value(&c, t, 15) - 0.75).abs() < 1e-9);
+        assert_eq!(tracker_value(&c, t, 30), 0.5);
+        assert!((tracker_value(&c, t, 45) - 1.25).abs() < 1e-9);
+        assert_eq!(tracker_value(&c, t, 90), 2.0);
+    }
+
+    #[test]
+    fn updater每帧按tracker值重建() {
+        let mut tl = make_tl();
+        let t = tl.add_tracker(1.0);
+        let id = tl.add_updater(&[t], |v| vline(v[0] * 40.0));
+        tl.play(Anim::create(id).during(1.0).rate(RateFunc::Linear));
+        tl.play(Anim::set_value(t, 2.0).during(1.0).rate(RateFunc::Linear));
+        tl.wait(0.5);
+        let c = tl.compile();
+
+        // 基准对象以初始值生成：高度 = 1.0 * 40
+        let Shape::Path(base) = &c.items[0].shape else {
+            panic!()
+        };
+        let Some(kurbo::PathEl::LineTo(base_end)) = base.elements().get(1) else {
+            panic!()
+        };
+
+        // create 已结束、tracker 半程（1.0→2.0 的线性中点 = 1.5）→ 高度 60
+        let mid = render_frame(&c, 45);
+        let Shape::Path(p) = &mid.items[0].shape else {
+            panic!()
+        };
+        let Some(kurbo::PathEl::LineTo(end)) = p.elements().get(1) else {
+            panic!()
+        };
+        assert!(
+            (end.y - (90.0 - 60.0)).abs() < 1e-9,
+            "应为 tracker=1.5 的高度"
+        );
+
+        // 结束后：tracker = 2.0 → 高度 80（不同于基准，证明每帧重建）
+        let Shape::Path(p) = &render_frame(&c, 90).items[0].shape else {
+            panic!()
+        };
+        let Some(kurbo::PathEl::LineTo(end)) = p.elements().get(1) else {
+            panic!()
+        };
+        assert!((end.y - (90.0 - 80.0)).abs() < 1e-9);
+        assert!((end.y - base_end.y).abs() > 1.0);
+    }
+
+    #[test]
+    fn updater叠加create生长() {
+        let mut tl = make_tl();
+        let t = tl.add_tracker(1.0);
+        let id = tl.add_updater(&[t], |v| vline(v[0] * 40.0));
+        tl.play(Anim::create(id).during(1.0).rate(RateFunc::Linear));
+        let c = tl.compile();
+
+        // create 半程：tracker 恒为初值 1.0（高度 40），但路径只画出一半
+        let mid = render_frame(&c, 15);
+        let Shape::Path(full) = &c.items[0].shape else {
+            panic!()
+        };
+        let Shape::Path(part) = &mid.items[0].shape else {
+            panic!()
+        };
+        assert!(part.elements().len() < full.elements().len() + 2);
+        // 半程线段终点在 10..50 之间（起点 90、终点 50）
+        let Some(kurbo::PathEl::LineTo(end)) = part.elements().last() else {
+            panic!()
+        };
+        assert!(end.y > 50.0 && end.y < 90.0);
     }
 }
