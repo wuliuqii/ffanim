@@ -31,6 +31,7 @@
   场景（中英混排限宽不出框：末帧内容 bbox 距画布边缘 ≥165px，0 触碰实证）+
   测试 5 项；MathWorld 字体集动态化（基础 typst-assets + 注入）
 
+- feat(api): M8.6 API 覆盖率门禁 + 集成测试补全 + ffmpeg stderr 吞错修复——scripts/api_coverage.sh（40 个门面公开项全覆盖，缺失退出 1，已挂 just ci）；crates/ffanim/tests/ 3 文件 26 用例（timeline 9 调度语义 / render 6 像素探针 / api 11 门面冒烟，ffmpeg 缺失时打点跳过）；ffanim-audio decode stderr null→piped（log::debug 全量记录，失败尾行并入 Error::Encode）
 ## [v0.2.0] - 2026-10-12
 
 M7 地基与拆分 + 1080p 性能基线。semver 0.x 规则自本版本起生效。

@@ -4,11 +4,12 @@
 default:
 	@just --list
 
-# 质量门禁：与 GitHub Actions 完全对齐（fmt + clippy + test）
+# 质量门禁：与 GitHub Actions 完全对齐（fmt + clippy + test + API 覆盖率）
 ci:
 	cargo fmt --all --check
 	cargo clippy --workspace --all-targets -- -D warnings
 	cargo test --workspace
+	./scripts/api_coverage.sh
 	@echo "CI 门禁全绿"
 
 # GPU 特性编译验证（CI build-gpu job 对应；无 GPU 时运行期测试自动跳过）

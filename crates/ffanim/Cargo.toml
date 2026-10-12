@@ -15,3 +15,7 @@ ffanim-core = { workspace = true }
 ffanim-encode = { path = "../ffanim-encode" }
 ffanim-render = { path = "../ffanim-render" }
 ffanim-typst = { path = "../ffanim-typst" }
+
+[dev-dependencies]
+# 集成测试直接用 CPU 后端做像素级断言（与 mp4 输出同一渲染路径）
+ffanim-render = { path = "../ffanim-render" }

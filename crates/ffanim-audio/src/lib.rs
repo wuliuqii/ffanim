@@ -160,7 +160,7 @@ fn decode_pcm(path: &Path) -> Result<Vec<f32>> {
             "-",
         ])
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
         .spawn()
         .map_err(Error::FfmpegNotFound)?;
 
@@ -172,8 +172,20 @@ fn decode_pcm(path: &Path) -> Result<Vec<f32>> {
         .read_to_end(&mut buf)
         .map_err(Error::FfmpegNotFound)?;
     let status = child.wait().map_err(Error::FfmpegNotFound)?;
+    // stderr 不再吞掉：debug 级全量记录，失败时尾行进错误信息（docs/04 L288）
+    let mut err_buf = Vec::new();
+    if let Some(mut e) = child.stderr.take() {
+        let _ = e.read_to_end(&mut err_buf);
+    }
+    let stderr = String::from_utf8_lossy(&err_buf);
+    if !stderr.trim().is_empty() {
+        log::debug!("ffmpeg 解码 stderr: {}", stderr.trim_end());
+    }
     if !status.success() {
-        return Err(Error::Encode(format!("ffmpeg 解码音频失败: {path:?}")));
+        return Err(Error::Encode(format!(
+            "ffmpeg 解码音频失败: {path:?}: {}",
+            stderr.lines().last().unwrap_or_default()
+        )));
     }
     Ok(buf
         .chunks_exact(4)
