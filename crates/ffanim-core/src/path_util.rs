@@ -100,6 +100,85 @@ fn push_full(out: &mut BezPath, el: PathEl) {
     }
 }
 
+/// 提取路径的段级子路径：保留第 `⌈t0×总段数⌉..⌈t1×总段数⌉` 段（t ∈ \[0,1\] 比例）。
+///
+/// 段粒度裁剪（整段进出，不做段内拆分），用于 ShowPassingFlash 类"沿路径局部
+/// 高亮"。首个保留段若处于子路径中间，补 MoveTo 保证路径合法（描边从该段起点画起）。
+///
+/// # Panics
+/// `t0 >= t1` 或越界 \[0,1\] 时 panic。
+pub fn span_path(path: &BezPath, t0: f64, t1: f64) -> BezPath {
+    assert!(
+        (0.0..=1.0).contains(&t0) && (0.0..=1.0).contains(&t1) && t0 < t1,
+        "span_path 需 0 ≤ t0 < t1 ≤ 1，得到 [{t0}, {t1}]"
+    );
+    // 子路径切分与段计数（与 partial_path 同规则）
+    let mut subpaths: Vec<Vec<PathEl>> = vec![Vec::new()];
+    for el in path.elements() {
+        if matches!(el, PathEl::MoveTo(_)) && !subpaths.last().unwrap().is_empty() {
+            subpaths.push(Vec::new());
+        }
+        subpaths.last_mut().unwrap().push(*el);
+    }
+    subpaths.retain(|sp| !sp.is_empty());
+    let segments_of = |sp: &[PathEl]| -> usize {
+        sp.iter()
+            .filter(|el| {
+                matches!(
+                    el,
+                    PathEl::LineTo(_)
+                        | PathEl::QuadTo(_, _)
+                        | PathEl::CurveTo(_, _, _)
+                        | PathEl::ClosePath
+                )
+            })
+            .count()
+    };
+    let total: usize = subpaths.iter().map(|sp| segments_of(sp)).sum();
+    let lo = (t0 * total as f64).ceil() as usize;
+    let hi = (t1 * total as f64).ceil() as usize;
+
+    let mut out = BezPath::new();
+    let mut seg = 0usize;
+    let mut prev = Point::ZERO;
+    let mut collecting = false;
+    for sp in &subpaths {
+        let mut first_in_sub = true;
+        let sub_start = sp.iter().find_map(|el| match el {
+            PathEl::MoveTo(p) => Some(*p),
+            _ => None,
+        });
+        for el in sp {
+            if let PathEl::MoveTo(p) = el {
+                prev = *p;
+                first_in_sub = true;
+                continue;
+            }
+            if seg >= lo && seg < hi {
+                if first_in_sub || !collecting {
+                    out.move_to(prev);
+                }
+                if let (PathEl::ClosePath, Some(s)) = (el, sub_start) {
+                    // 闭合段保留：显式画回子路径起点（新路径起点已变，
+                    // close_path 会错闭合到段起点而非子路径起点）
+                    out.line_to(s);
+                } else {
+                    push_full(&mut out, *el);
+                }
+                collecting = true;
+            } else {
+                collecting = false;
+            }
+            if let Some(end) = el_end(el) {
+                prev = end;
+            }
+            seg += 1;
+            first_in_sub = false;
+        }
+    }
+    out
+}
+
 /// 段的终点（ClosePath 无显式终点，由调用方的 prev 维护语义，返回 None 跳过）。
 fn el_end(el: &PathEl) -> Option<Point> {
     match el {
@@ -247,5 +326,33 @@ mod tests {
         // 75%：第二个子路径画一半（move + 完整 line + move + 部分 line = 4）
         let out = partial_path(&p, 0.75);
         assert_eq!(out.elements().len(), 4);
+    }
+
+    #[test]
+    fn 段级子路径提取() {
+        let t = triangle(); // move + 2 line + close = 3 段
+        // [0, 1/3)：第 1 段（move + line）
+        assert_eq!(span_path(&t, 0.0, 1.0 / 3.0).elements().len(), 2);
+        // [1/3, 2/3)：仅第 2 段（补 MoveTo + line = 2 元素）
+        let mid = span_path(&t, 1.0 / 3.0, 2.0 / 3.0);
+        assert_eq!(mid.elements().len(), 2, "{:?}", mid.elements());
+        let Some(PathEl::MoveTo(p)) = mid.elements().first() else {
+            panic!("首元素应为 MoveTo");
+        };
+        // 描边语义：MoveTo 补到段起点（第 2 段 = (100,0)→(50,-80)），
+        // 补到子路径起点会画出错误线段
+        assert_eq!(*p, Point::new(100.0, 0.0), "中段应从段起点补 MoveTo");
+        // [0, 1)：全部 4 元素
+        assert_eq!(span_path(&t, 0.0, 1.0).elements().len(), 4);
+        // 断开的区间：[2/3, 1) 保留第 3 段（close）
+        let tail = span_path(&t, 2.0 / 3.0, 1.0);
+        assert_eq!(tail.elements().len(), 2, "{:?}", tail.elements());
+    }
+
+    #[test]
+    #[should_panic(expected = "span_path 需")]
+    fn 段级子路径非法区间报错() {
+        let t = triangle();
+        let _ = span_path(&t, 0.5, 0.5);
     }
 }

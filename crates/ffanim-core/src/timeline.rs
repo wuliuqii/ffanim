@@ -6,12 +6,13 @@
 //!
 //! 两阶段模型见 docs/02-架构设计.md §3.2（全项目最核心决策）。
 
-use crate::anim::{Anim, AnimKind};
+use crate::anim::{Anim, AnimKind, PoseDelta};
 use crate::camera::Camera;
 use crate::eval::CompiledTimeline;
 use crate::tracker::{TrackerId, Updater};
-use crate::{Color, Item, ItemId};
+use crate::{Color, Item, ItemId, Shape};
 use kurbo::BezPath;
+use kurbo::{Circle, Point, Rect};
 
 /// 时间轴构建器（构建期唯一入口）。
 #[derive(Debug, Clone)]
@@ -166,9 +167,147 @@ impl Timeline {
             let from = self.items[idx].transform;
             let center = self.items[idx].bbox().center();
             let to = delta.resolve(from, center);
+            // 埋点：位姿解析全链路（坐标计算排查用）
+            log::info!(
+                "位姿解析: item#{id} delta={delta:?} 基线={from:?} 中心=({:.1},{:.1}) → 目标={to:?}",
+                center.x,
+                center.y
+            );
             self.items[idx].transform = to;
             anim.kind = AnimKind::TransformTo { id, from, to };
         }
+    }
+
+    // ---- 强调动画（manim Indicate/Circumscribe/Flash/ShowPassingFlash 对应）----
+    // 全部为构建期编排：展开为既有词汇（TransformTo / FadeIn / FadeOut），
+    // 求值路径零改动；核心分支 log::info 埋点（时序与坐标排查用）。
+
+    /// 闪现强调（manim `Indicate`）：绕对象 bbox 中心放大 `factor` 后回到原位。
+    ///
+    /// 展开为两段 TransformTo（前半程放大、后半程复原），段后基线复位原位；
+    /// 游标推进 `dur`。
+    pub fn indicate(&mut self, id: ItemId, factor: f64, dur: f64) -> &mut Self {
+        let idx = id as usize;
+        assert!(idx < self.items.len(), "indicate 目标对象 #{id} 未注册");
+        let from = self.items[idx].transform;
+        let center = self.items[idx].bbox().center();
+        let to = PoseDelta::Scale(factor).resolve(from, center);
+        let t0 = self.cursor_s;
+        // 埋点：峰值变换的坐标计算全链路
+        log::info!(
+            "indicate: item#{id} factor={factor} 中心=({:.1},{:.1}) 基线={from:?} → 峰值={to:?}",
+            center.x,
+            center.y
+        );
+        self.play(Anim::scale_to(id, factor).during(dur / 2.0));
+        self.play(Anim::transform_to(id, from).during(dur / 2.0));
+        // 埋点：两段时序窗口
+        log::info!(
+            "indicate 时序: item#{id} 放大段=[{t0:.2},{:.2}) 复原段=[{:.2},{:.2})",
+            t0 + dur / 2.0,
+            t0 + dur / 2.0,
+            t0 + dur
+        );
+        self
+    }
+
+    /// 框选强调（manim `Circumscribe`）：围绕对象包围盒外扩 `buff` 的矩形框
+    /// 淡入后淡出（前半程淡入、后半程淡出）。
+    ///
+    /// 框为临时对象（fade_in 段前不可见、fade_out 段后隐藏），游标推进 `dur`。
+    pub fn circumscribe(&mut self, id: ItemId, dur: f64, buff: f64, color: Color) -> &mut Self {
+        let target = self.items[id as usize].bbox();
+        let rect = Rect::new(
+            target.x0 - buff,
+            target.y0 - buff,
+            target.x1 + buff,
+            target.y1 + buff,
+        );
+        let frame = Item::rect(rect).with_stroke(color).with_stroke_width(3.0);
+        let fid = self.add(frame);
+        let t0 = self.cursor_s;
+        self.play(Anim::fade_in(fid).during(dur / 2.0));
+        self.play(Anim::fade_out(fid).during(dur / 2.0));
+        // 埋点：框范围（坐标计算）+ 淡入/淡出窗口（时序）
+        log::info!(
+            "circumscribe: item#{id} 目标bbox={target:?} buff={buff} 框={rect:?}；时序 fade_in=[{t0:.2},{:.2}) fade_out=[{:.2},{:.2})",
+            t0 + dur / 2.0,
+            t0 + dur / 2.0,
+            t0 + dur
+        );
+        self
+    }
+
+    /// 闪现（manim `Flash`）：在 `at` 处闪一个扩张淡出的圆环——半径 `radius`
+    /// 的圆环全程平滑放大 2 倍，前半程淡入、后半程淡出；游标推进 `dur`。
+    pub fn flash(
+        &mut self,
+        at: impl Into<Point>,
+        dur: f64,
+        radius: f64,
+        color: Color,
+    ) -> &mut Self {
+        let at = at.into();
+        assert!(radius > 0.0 && dur > 0.0, "flash 半径与时长须为正");
+        let ring = Item::circle(Circle::new(at, radius))
+            .with_stroke(color)
+            .with_stroke_width(3.0);
+        let fid = self.add(ring);
+        let t0 = self.cursor_s;
+        // 同窗编排：fade_in 前半 + 放大全程（overlap 回退对齐）+ fade_out 后半
+        self.play(Anim::fade_in(fid).during(dur / 2.0));
+        self.overlap(dur / 2.0);
+        self.play(Anim::scale_to(fid, 2.0).during(dur));
+        self.overlap(dur / 2.0);
+        self.play(Anim::fade_out(fid).during(dur / 2.0));
+        // 埋点：中心/半径（坐标计算）+ 三段窗口（时序）
+        log::info!(
+            "flash: 中心=({:.1},{:.1}) radius={radius} 扩张 1→2 倍；时序 fade_in=[{t0:.2},{:.2}) 放大=[{t0:.2},{:.2}) fade_out=[{:.2},{:.2})",
+            at.x,
+            at.y,
+            t0 + dur / 2.0,
+            t0 + dur,
+            t0 + dur / 2.0,
+            t0 + dur
+        );
+        self
+    }
+
+    /// 路径经过闪烁（manim `ShowPassingFlash`）：沿对象路径的 `[t0, t1]` 比例段
+    /// 临时显示一条高亮描边（前半程淡入、后半程淡出），原对象不动；游标推进 `dur`。
+    ///
+    /// 段提取为段粒度（[`crate::path_util::span_path`]），高亮描边继承原对象的变换。
+    pub fn show_passing_flash(
+        &mut self,
+        id: ItemId,
+        t0: f64,
+        t1: f64,
+        dur: f64,
+        color: Color,
+    ) -> &mut Self {
+        let base = &self.items[id as usize];
+        let transform = base.transform;
+        let Shape::Path(path) = &base.shape else {
+            panic!("show_passing_flash 目标须为路径对象（item#{id}）");
+        };
+        let seg = crate::path_util::span_path(path, t0, t1);
+        let elems = seg.elements().len();
+        let item = Item::from_path(seg)
+            .with_stroke(color)
+            .with_stroke_width(3.0)
+            .with_transform(transform);
+        let sid = self.add(item);
+        let start = self.cursor_s;
+        self.play(Anim::fade_in(sid).during(dur / 2.0));
+        self.play(Anim::fade_out(sid).during(dur / 2.0));
+        // 埋点：路径段比例与提取结果（坐标计算）+ 淡入/淡出窗口（时序）
+        log::info!(
+            "show_passing_flash: item#{id} 路径段=[{t0},{t1}] → {elems} 元素（继承原变换）；时序 fade_in=[{start:.2},{:.2}) fade_out=[{:.2},{:.2})",
+            start + dur / 2.0,
+            start + dur / 2.0,
+            start + dur
+        );
+        self
     }
 
     /// 停留（游标推进）。
@@ -337,6 +476,113 @@ mod tests {
             tl.play(Anim::shift_to(42, 1.0, 1.0));
         }));
         assert!(result.is_err(), "未注册对象应 panic");
+    }
+
+    #[test]
+    fn 强调_闪现强调两段往返复位() {
+        use crate::eval::render_frame;
+        let (mut tl, id) = rect_timeline();
+        tl.play(Anim::create(id).during(1.0));
+        tl.indicate(id, 1.2, 1.0); // 游标 = 2.0s
+        let c = tl.compile();
+        assert_eq!(c.anims.len(), 3);
+        // 峰值段 to：绕中心 (50,50) 放大 1.2；复原段 to = 原位（单位阵）
+        let AnimKind::TransformTo { to: peak, .. } = &c.anims[1].kind else {
+            panic!("第二段应为峰值 TransformTo");
+        };
+        let expect = Affine::translate((50.0, 50.0))
+            * Affine::scale(1.2)
+            * Affine::translate((-50.0, -50.0));
+        assert!(affine_close(*peak, expect), "{peak:?}");
+        let AnimKind::TransformTo { to, .. } = &c.anims[2].kind else {
+            panic!("第三段应为复原 TransformTo");
+        };
+        assert!(affine_close(*to, Affine::IDENTITY), "{to:?}");
+        // 时序窗口：放大 [30,45) / 复原 [45,60)，总 60 帧
+        assert_eq!((c.anims[1].start, c.anims[1].end), (30, 45));
+        assert_eq!((c.anims[2].start, c.anims[2].end), (45, 60));
+        assert_eq!(c.duration_frames, 60);
+        // 坐标语义：复原段首帧（45）= 峰值；段后（60）基线复位原位
+        assert!(
+            affine_close(render_frame(&c, 45).items[0].transform, expect),
+            "复原段首帧应为峰值"
+        );
+        assert!(
+            affine_close(render_frame(&c, 60).items[0].transform, Affine::IDENTITY),
+            "段后应复位原位"
+        );
+    }
+
+    #[test]
+    fn 强调_框选强调时序与框范围() {
+        use crate::eval::render_frame;
+        let (mut tl, id) = rect_timeline(); // rect (0,0,100,100)
+        tl.play(Anim::create(id).during(1.0));
+        tl.circumscribe(id, 0.8, 20.0, Color::new(255, 0, 0, 255));
+        let c = tl.compile();
+        // 框对象 = 第 2 个 item：目标 bbox 外扩 20
+        let bb = c.items[1].bbox();
+        assert!(
+            (bb.x0 + 20.0).abs() < 1e-9 && (bb.x1 - 120.0).abs() < 1e-9,
+            "{bb:?}"
+        );
+        // 两段窗口 [30,42) / [42,54)，游标 1.8s = 54 帧
+        assert_eq!((c.anims[1].start, c.anims[1].end), (30, 42));
+        assert_eq!((c.anims[2].start, c.anims[2].end), (42, 54));
+        assert_eq!(c.duration_frames, 54);
+        // 可见性：帧 0 create 进度 0 → 全空 / 中段框可见 / 结束后框隐藏
+        assert_eq!(
+            render_frame(&c, 0).items.len(),
+            0,
+            "帧 0 create 进度 0 → 空"
+        );
+        assert_eq!(render_frame(&c, 35).items.len(), 2, "框淡入中可见");
+        assert_eq!(render_frame(&c, 54).items.len(), 1, "框结束后隐藏");
+    }
+
+    #[test]
+    fn 强调_闪现三段同窗() {
+        use crate::eval::render_frame;
+        let mut tl = Timeline::new(200, 200, 30, BG);
+        tl.flash((100.0, 100.0), 0.6, 20.0, Color::new(255, 200, 0, 255));
+        let c = tl.compile();
+        // fade_in [0,9) / 放大 [0,18) / fade_out [9,18)
+        let windows: Vec<(usize, usize)> = c.anims.iter().map(|a| (a.start, a.end)).collect();
+        assert_eq!(windows, vec![(0, 9), (0, 18), (9, 18)]);
+        assert_eq!(c.duration_frames, 18);
+        // 放大段 to：绕圆心 (100,100) 放大 2 倍（圆 bbox 中心 = 圆心）
+        let AnimKind::TransformTo { to, .. } = &c.anims[1].kind else {
+            panic!("放大段应为 TransformTo");
+        };
+        let expect = Affine::translate((100.0, 100.0))
+            * Affine::scale(2.0)
+            * Affine::translate((-100.0, -100.0));
+        assert!(affine_close(*to, expect), "{to:?}");
+        // 可见性：帧 0 透明度为 0 → 空；闪现中可见；结束后隐藏
+        assert_eq!(render_frame(&c, 0).items.len(), 0);
+        assert_eq!(render_frame(&c, 5).items.len(), 1);
+        assert_eq!(render_frame(&c, 18).items.len(), 0);
+    }
+
+    #[test]
+    fn 强调_路径经过闪烁窗口() {
+        use crate::eval::render_frame;
+        let (mut tl, id) = rect_timeline();
+        tl.play(Anim::create(id).during(1.0));
+        tl.show_passing_flash(id, 0.0, 0.5, 0.8, Color::new(255, 255, 0, 255));
+        let c = tl.compile();
+        // 高亮段对象 = 第 2 个 item：矩形路径 4 段取前 2 段（move + 2 line）
+        let Shape::Path(p) = &c.items[1].shape else {
+            panic!("高亮对象应为路径");
+        };
+        assert_eq!(p.elements().len(), 3, "{:?}", p.elements());
+        // 两段窗口 [30,42) / [42,54)
+        assert_eq!((c.anims[1].start, c.anims[1].end), (30, 42));
+        assert_eq!((c.anims[2].start, c.anims[2].end), (42, 54));
+        assert_eq!(c.duration_frames, 54);
+        // 高亮段帧 35 可见、段后隐藏
+        assert_eq!(render_frame(&c, 35).items.len(), 2);
+        assert_eq!(render_frame(&c, 54).items.len(), 1);
     }
 }
 

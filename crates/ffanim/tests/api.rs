@@ -335,3 +335,59 @@ fn layout_相对布局与画布贴边() {
         "{total:?}"
     );
 }
+
+#[test]
+fn emphasize_强调动画编排() {
+    use ffanim::AnimKind;
+    use ffanim::kurbo::{Affine, Circle, Point};
+
+    let mut tl = Timeline::new(200, 200, 30, BG);
+    let circle = tl.add(Item::circle(Circle::new((50.0, 50.0), 30.0)).with_stroke(FG));
+    tl.play(Anim::create(circle).during(1.0)); // 段 0：[0,30)
+    tl.indicate(circle, 1.2, 1.0); // 段 1/2：[30,45)/[45,60)
+    tl.circumscribe(circle, 0.8, 10.0, Color::new(255, 200, 0, 255)); // 段 3/4：[60,72)/[72,84)
+    tl.flash((100.0, 100.0), 0.6, 20.0, Color::new(255, 200, 0, 255)); // 段 5/6/7：[84,93)/[84,102)/[93,102)
+    tl.show_passing_flash(circle, 0.0, 0.5, 0.4, Color::new(255, 200, 0, 255)); // 段 8/9：[102,108)/[108,114)
+    let c = tl.compile();
+    assert_eq!(c.anims.len(), 10, "四件套展开 = 1+2+2+3+2 段");
+    assert_eq!(c.duration_frames, 114);
+
+    // 时序：indicate 两段 / circumscribe 两段 / flash 三段同窗 / passing 两段
+    let w = |i: usize| (c.anims[i].start, c.anims[i].end);
+    assert_eq!(w(1), (30, 45), "indicate 放大段");
+    assert_eq!(w(2), (45, 60), "indicate 复原段");
+    assert_eq!(w(3), (60, 72), "circumscribe 框淡入");
+    assert_eq!(w(4), (72, 84), "circumscribe 框淡出");
+    assert_eq!(w(5), (84, 93), "flash 淡入前半");
+    assert_eq!(w(6), (84, 102), "flash 放大全程");
+    assert_eq!(w(7), (93, 102), "flash 淡出后半");
+    assert_eq!(w(8), (102, 108), "passing 淡入");
+    assert_eq!(w(9), (108, 114), "passing 淡出");
+
+    // indicate 峰值 = 绕圆心放大 1.2（复原段首帧），段后复位原位
+    let expect =
+        Affine::translate((50.0, 50.0)) * Affine::scale(1.2) * Affine::translate((-50.0, -50.0));
+    let mid = ffanim::render_frame(&c, 45);
+    assert!(mid.items.len() == 1, "indicate 段间只应剩圆本身");
+    let t = mid.items[0].transform;
+    let p = t * Point::new(50.0, 50.0);
+    let q = expect * Point::new(50.0, 50.0);
+    assert!(
+        (p.x - q.x).abs() < 1e-6 && (p.y - q.y).abs() < 1e-6,
+        "峰值应为绕圆心放大: {t:?}"
+    );
+
+    // 临时对象可见性：框/闪环/高亮段段前不可见、中段可见、段后隐藏
+    assert_eq!(
+        ffanim::render_frame(&c, 65).items.len(),
+        2,
+        "框淡入中 = 圆+框"
+    );
+    assert_eq!(ffanim::render_frame(&c, 114).items.len(), 1, "收尾只余圆");
+
+    // flash 放大段落表为 TransformTo（构建期编排不残留新变体）
+    assert!(
+        matches!(c.anims[6].kind, AnimKind::TransformTo { .. }),
+        "flash 放大段应为 TransformTo"
+    );
+}

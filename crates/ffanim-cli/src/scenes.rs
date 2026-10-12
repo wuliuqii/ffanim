@@ -16,6 +16,7 @@ pub const SCENES: &[&str] = &[
     "text_demo",
     "primitives_demo",
     "layout_demo",
+    "emphasize_demo",
 ];
 
 /// 构建场景时间轴。
@@ -30,6 +31,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "text_demo" => text_demo(theme, fps),
         "primitives_demo" => Ok(primitives_demo(theme, fps)),
         "layout_demo" => Ok(layout_demo(theme, fps)),
+        "emphasize_demo" => Ok(emphasize_demo(theme, fps)),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -386,5 +388,54 @@ fn layout_demo(theme: &Theme, fps: u32) -> Timeline {
         .collect();
     tl.group(col_ids.iter().map(|&id| Anim::fade_in(id).during(0.5)), 0.1);
     tl.wait(0.6);
+    tl
+}
+
+/// M9.5 验收场景：强调四件套（indicate / circumscribe / flash / show_passing_flash）。
+///
+/// 对应 manim 的 Indicate / Circumscribe / Flash / ShowPassingFlash；
+/// 全部为构建期编排（两段/三段既有词汇），求值路径零改动。
+fn emphasize_demo(theme: &Theme, fps: u32) -> Timeline {
+    use ffanim_core::kurbo::BezPath;
+
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let sw = f64::from(theme.style.stroke_width);
+    let (w, h) = (960.0_f64, 540.0_f64);
+    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background().unwrap());
+
+    // 左上：圆 create 后 indicate（放大 1.3 倍再复原——"注意这一项"）
+    let circle = tl.add(
+        Item::circle(Circle::new((220.0, 160.0), 70.0))
+            .with_stroke(fg)
+            .with_stroke_width(sw),
+    );
+    tl.play(Anim::create(circle).during(0.8));
+    tl.wait(0.2);
+    tl.indicate(circle, 1.3, 0.8);
+
+    // 右上：矩形 create 后 circumscribe（外框淡入淡出圈选）
+    let rect = tl.add(
+        Item::rect(Rect::new(0.0, 0.0, 200.0, 140.0))
+            .with_stroke(fg)
+            .with_stroke_width(sw)
+            .with_transform(Affine::translate((580.0, 90.0))),
+    );
+    tl.play(Anim::create(rect).during(0.8));
+    tl.circumscribe(rect, 0.8, 20.0, accent);
+
+    // 中下：flash（扩散圆环一闪，指向空白处"这里"）
+    tl.flash((w / 2.0, h * 0.62), 0.6, 30.0, accent);
+    tl.wait(0.3);
+
+    // 底部折线：create 后沿路径中段 passing flash（局部高亮描边）
+    let mut zig = BezPath::new();
+    zig.move_to((180.0, 430.0));
+    zig.line_to((380.0, 360.0));
+    zig.line_to((580.0, 460.0));
+    zig.line_to((780.0, 400.0));
+    let zig_id = tl.add(Item::from_path(zig).with_stroke(fg).with_stroke_width(sw));
+    tl.play(Anim::create(zig_id).during(0.8));
+    tl.show_passing_flash(zig_id, 0.25, 0.75, 0.8, accent);
     tl
 }

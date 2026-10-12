@@ -45,6 +45,12 @@ ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4")?;
   `item.to_edge(Direction::Up, buff, (w, h))`（贴画布边，另一轴居中）/
   `arrange(&mut items, Direction::Down, buff) -> Rect`（依次排列，返回总包围盒，可再整体平移）。
   布局分支带 `log::info` 埋点（RUST_LOG=info 可查输入 bbox/平移量/结果 bbox）。
+- 强调四件套（构建期编排，manim Indicate/Circumscribe/Flash/ShowPassingFlash 对应）：
+  `tl.indicate(id, factor, dur)`（绕 bbox 中心放大 factor 再复原——"注意这一项"）/
+  `tl.circumscribe(id, dur, buff, color)`（bbox 外扩 buff 的框淡入淡出圈选）/
+  `tl.flash(at, dur, radius, color)`（at 处扩散圆环一闪，指向空白处）/
+  `tl.show_passing_flash(id, t0, t1, dur, color)`（沿对象路径 [t0,t1] 段局部高亮描边，
+  需 Shape::Path）。四者埋点齐全（RUST_LOG=info 查峰值坐标/框范围/时序窗口）。
 
 | 动画 | 效果 |
 |---|---|

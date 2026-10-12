@@ -47,6 +47,23 @@
 - 验收：demo_anim 5.8s 全片导出 1..3s 片段，ffprobe 实测 2.0s；3 解析单测 + 1 集成测试
 - 顺手修复 ci-gpu 配方存量编译损坏（peniko `Blob::new` 需 `Arc<dyn AsRef<[u8]>>`，改拷贝进 `Arc<Vec<u8>>`）
 
+### M9.5 manim 对齐第三批：强调动画四件套 indicate / circumscribe / flash / show_passing_flash（2026-10-12）
+
+- feat(core): `Timeline::indicate(id, factor, dur)`——绕 bbox 中心放大 factor 再复原
+  （manim Indicate 对应）：展开为两段 TransformTo（放大段 + 复原段），段后基线复位原位
+- feat(core): `Timeline::circumscribe(id, dur, buff, color)`——目标 bbox 外扩 buff 的描边框
+  淡入淡出圈选（manim Circumscribe 对应；临时对象靠 is_visible 的 appear/hidden_before 语义进出）
+- feat(core): `Timeline::flash(at, dur, radius, color)`——at 处圆环淡入 + 扩张 1→2 倍 + 淡出
+  三段同窗编排（manim Flash 对应，指向空白处）
+- feat(core): `Timeline::show_passing_flash(id, t0, t1, dur, color)`——沿对象路径 [t0,t1] 段
+  局部高亮描边（manim ShowPassingFlash 对应，需 Shape::Path）；配套 `span_path` 段级子路径提取
+  （ClosePath 保留段显式 line_to 回子路径起点，避免错闭合）
+- feat(core): 全部为构建期编排（既有词汇展开落表），求值路径零改动；四件套 +
+  位姿解析分支 `log::info` 埋点齐全（峰值坐标/框范围/时序窗口，RUST_LOG=info 排查动画时序与坐标）
+- feat(cli): emphasize_demo parity 场景（indicate 1.3 倍 / circumscribe 圈选 / flash 指空 /
+  折线中段 passing flash，出片 5.9s 目检通过）
+- test: span_path 单测 2 项 + 强调时序/坐标单测 4 项 + 集成测试 1 项（10 段展开断言）
+
 ### M9.4 manim 对齐第二批：相对布局 next_to / to_edge / arrange（2026-10-12）
 
 - feat(core): 新增 layout 模块——`Item::next_to(&target, Direction, buff)`（邻接 + 另一轴中心对齐）/
