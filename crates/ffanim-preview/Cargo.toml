@@ -14,3 +14,4 @@ ffanim-core = { workspace = true }
 ffanim-render = { path = "../ffanim-render" }
 winit = { workspace = true }
 softbuffer = { workspace = true }
+log = { workspace = true }

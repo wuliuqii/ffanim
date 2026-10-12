@@ -28,6 +28,14 @@ const UI_HEIGHT: f64 = 40.0;
 
 /// 运行预览窗口（阻塞至窗口关闭）。
 pub fn run(tl: CompiledTimeline, accent: ffanim_core::Color) -> Result<(), String> {
+    log::info!(
+        "预览会话开始: {} 帧 / {:.2}s @{}fps，画布 {}x{}",
+        tl.duration_frames,
+        tl.duration_frames as f64 / f64::from(tl.fps),
+        tl.fps,
+        tl.width,
+        tl.height
+    );
     let event_loop = EventLoop::new().map_err(|e| format!("创建事件循环失败: {e}"))?;
     let mut app = PreviewApp {
         tl,
@@ -70,6 +78,12 @@ impl PreviewApp {
     fn set_frame(&mut self, frame: usize) {
         let new = frame.min(self.total());
         if new != self.frame {
+            log::debug!(
+                "set_frame: {} → {}（总 {} 帧）",
+                self.frame,
+                new,
+                self.total() + 1
+            );
             self.frame = new;
             if let Some(w) = &self.window {
                 w.request_redraw();
@@ -81,14 +95,17 @@ impl PreviewApp {
         if self.window.is_none() || self.surface.is_none() {
             return;
         }
+        let t0 = Instant::now(); // 全程计时：与渲染路径日志对齐，排查事件循环与渲染同步
         let (w, h) = (self.tl.width, self.tl.height);
         let ui_h = UI_HEIGHT as u32;
         let win_w = w as usize;
         let win_h = h as usize + ui_h as usize;
 
         // 帧像素：与离线渲染完全一致的 CPU 后端（先完成渲染，避免与 surface 借用冲突）
+        log::trace!("draw: RedrawRequested → 渲染帧 {}", self.frame);
         let draw = ffanim_core::render_frame(&self.tl, self.frame);
         let rgba = self.backend.render(&draw);
+        let t_render = t0.elapsed(); // 求值（render_frame）+ 光栅化（backend.render）
         let (accent, frame, total) = (self.accent, self.frame, self.total());
 
         let window = self.window.as_ref().unwrap();
@@ -125,6 +142,14 @@ impl PreviewApp {
             .map_err(|e| format!("呈现失败: {e}"))
             .expect("呈现失败");
 
+        // 同步点埋点：渲染/呈现耗时 vs 帧预算（超出预算 = 播放掉帧）
+        log::debug!(
+            "draw 完成: 帧 {frame}，渲染 {:.1}ms / 呈现+拷贝 {:.1}ms（帧预算 {:.1}ms）",
+            t_render.as_secs_f64() * 1e3,
+            t0.elapsed().as_secs_f64() * 1e3,
+            1000.0 / f64::from(self.tl.fps)
+        );
+
         // 窗口标题即状态行（免字体依赖）
         let sec = frame as f64 / f64::from(self.tl.fps);
         window.set_title(&format!(
@@ -141,6 +166,11 @@ impl PreviewApp {
             return;
         }
         let progress = (x / width).clamp(0.0, 1.0);
+        log::debug!(
+            "seek: 光标 x={x:.0}/{width:.0}（{:.1}%）→ 帧 {}",
+            progress * 100.0,
+            (progress * self.total() as f64).round() as usize
+        );
         self.playing = false;
         self.set_frame((progress * self.total() as f64).round() as usize);
     }
@@ -214,6 +244,7 @@ impl ApplicationHandler for PreviewApp {
         drop(context);
         self.window = Some(window);
         self.surface = Some(surface);
+        log::debug!("窗口已创建: {}x{}（含 {}px 进度条）", w, h, UI_HEIGHT);
         self.window.as_ref().unwrap().request_redraw();
     }
 
@@ -224,7 +255,10 @@ impl ApplicationHandler for PreviewApp {
         event: WindowEvent,
     ) {
         match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::CloseRequested => {
+                log::debug!("窗口关闭请求（标题栏 ×）");
+                event_loop.exit();
+            }
             WindowEvent::RedrawRequested => self.draw(),
 
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
@@ -238,6 +272,11 @@ impl ApplicationHandler for PreviewApp {
                     Key::Named(NamedKey::Space) => {
                         self.playing = !self.playing;
                         self.last_frame_at = Instant::now();
+                        log::debug!(
+                            "播放/暂停 → {}（自帧 {}）",
+                            if self.playing { "播放" } else { "暂停" },
+                            self.frame
+                        );
                     }
                     Key::Named(NamedKey::ArrowLeft) => {
                         self.playing = false;
@@ -249,8 +288,14 @@ impl ApplicationHandler for PreviewApp {
                     }
                     Key::Named(NamedKey::Home) => self.set_frame(0),
                     Key::Named(NamedKey::End) => self.set_frame(self.total()),
-                    Key::Named(NamedKey::Escape) => event_loop.exit(),
-                    Key::Character(c) if c.to_lowercase() == "q" => event_loop.exit(),
+                    Key::Named(NamedKey::Escape) => {
+                        log::debug!("退出（Esc）");
+                        event_loop.exit();
+                    }
+                    Key::Character(c) if c.to_lowercase() == "q" => {
+                        log::debug!("退出（Q）");
+                        event_loop.exit();
+                    }
                     _ => {}
                 }
             }
@@ -258,6 +303,7 @@ impl ApplicationHandler for PreviewApp {
             // 进度条 seek：按下开始拖动，移动更新，松开结束
             WindowEvent::MouseInput { state, .. } => {
                 self.drag_seek = state == ElementState::Pressed;
+                log::trace!("鼠标 {:?}（drag_seek={}）", state, self.drag_seek);
                 if self.drag_seek {
                     self.seek_to(self.cursor_x);
                 }
@@ -280,9 +326,11 @@ impl ApplicationHandler for PreviewApp {
         if self.last_frame_at.elapsed() >= frame_dur {
             self.last_frame_at = Instant::now();
             if self.frame >= self.total() {
+                log::debug!("播放结束，暂停在尾帧 {}", self.frame);
                 self.playing = false; // 播完暂停在尾帧
             } else {
                 self.frame += 1;
+                log::trace!("播放推进 → 帧 {}", self.frame);
                 if let Some(w) = &self.window {
                     w.request_redraw();
                 }

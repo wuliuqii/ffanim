@@ -1058,6 +1058,7 @@ version = "0.1.0"
 dependencies = [
  "ffanim-core",
  "ffanim-render",
+ "log",
  "softbuffer",
  "winit",
 ]
