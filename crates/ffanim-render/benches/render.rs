@@ -4,9 +4,12 @@
 //! - 数字入库 docs/benchmarks.md（§5.2 性能门禁：随版本记录，>20% 回退必须说明）；
 //! - CI 不跑 bench（太慢），`cargo bench -p ffanim-render` 手动/发版前运行。
 
+// criterion_group! 宏展开的注册函数无文档，豁免 missing_docs 门禁（仅本 bench 文件）
+#![allow(missing_docs)]
+
 use std::hint::black_box;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use ffanim_core::kurbo::{Circle, Rect};
 use ffanim_core::{Anim, Color, Item, Timeline};
 use ffanim_render::{CpuBackend, RenderBackend};

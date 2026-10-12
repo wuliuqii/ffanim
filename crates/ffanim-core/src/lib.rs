@@ -3,6 +3,7 @@
 //! 本 crate 不依赖任何渲染实现（kurbo 仅为几何类型），是整个 workspace 的依赖根。
 
 pub mod anim;
+pub mod camera;
 pub mod coords;
 pub mod error;
 pub mod eval;
@@ -15,6 +16,7 @@ pub mod timeline;
 pub mod tracker;
 
 pub use anim::{Anim, AnimKind};
+pub use camera::Camera;
 pub use coords::Axes;
 pub use error::{Error, Result};
 pub use eval::{CompiledTimeline, render_frame};

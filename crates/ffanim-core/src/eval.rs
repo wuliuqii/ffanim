@@ -30,6 +30,8 @@ pub struct CompiledTimeline {
     pub trackers: Vec<f64>,
     /// 求值期信号（渲染期按帧重建形状）。
     pub updaters: Vec<crate::tracker::Updater>,
+    /// 相机对象句柄（None = 无相机，世界系即屏幕系）。
+    pub camera: Option<ItemId>,
     /// 总帧数（duration_s × fps）。
     pub duration_frames: usize,
 }
@@ -46,6 +48,7 @@ impl Clone for CompiledTimeline {
             anims: self.anims.clone(),
             trackers: self.trackers.clone(),
             updaters: self.updaters.clone(),
+            camera: self.camera,
             duration_frames: self.duration_frames,
         }
     }
@@ -60,6 +63,7 @@ impl std::fmt::Debug for CompiledTimeline {
             .field("anims", &self.anims.len())
             .field("trackers", &self.trackers)
             .field("updaters", &self.updaters)
+            .field("camera", &self.camera)
             .field("duration_frames", &self.duration_frames)
             .finish()
     }
@@ -80,6 +84,12 @@ impl CompiledTimeline {
 pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
     let mut draw = DrawList::new(tl.width, tl.height, tl.background);
 
+    // 相机：world→screen 仿射逐帧求值（None = 单位阵）；相机对象本身不进绘制列表
+    let cam = match tl.camera {
+        Some(cid) => transform_at(tl, cid, tl.items[cid as usize].transform, frame),
+        None => Affine::IDENTITY,
+    };
+
     // 活跃的 Transform：from/to 两个对象跳过常规通道，由形变产物替代
     let active_morphs: Vec<(&ScheduledAnim, f64)> = tl
         .anims
@@ -97,6 +107,9 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
 
     for item in &tl.items {
         let id = item.id;
+        if Some(id) == tl.camera {
+            continue; // 相机即 Item 但不可见（docs/02 §3.4）
+        }
         if skipped.contains(&id) || !is_visible(tl, id, frame) {
             continue;
         }
@@ -111,6 +124,8 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
                 .collect();
             state.shape = up.eval(&values).shape;
         }
+        // TransformTo 段求值：段中插值，段前取 from（段后取存储基线 = 目标）
+        state.transform = transform_at(tl, id, state.transform, frame);
         let mut opacity = 1.0;
         for anim in &tl.anims {
             let Some(alpha) = anim.alpha_at(frame) else {
@@ -134,6 +149,7 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
         state.paint = state.paint.with_opacity(opacity);
         // 完全透明的对象不出现在绘制列表（也避免空路径进入渲染层）
         if opacity > 1e-6 {
+            state.transform = cam * state.transform;
             draw.push(state);
         }
     }
@@ -141,7 +157,8 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
     // 形变产物
     for (anim, t) in active_morphs {
         if let AnimKind::Transform { from, to } = anim.kind {
-            for morphed in morph_items(&tl.items[from as usize], &tl.items[to as usize], t) {
+            for mut morphed in morph_items(&tl.items[from as usize], &tl.items[to as usize], t) {
+                morphed.transform = cam * morphed.transform;
                 draw.push(morphed);
             }
         }
@@ -152,6 +169,25 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
         draw.items.len()
     );
     draw
+}
+
+/// 对象在帧 f 的变换：TransformTo 活跃段线性插值，段前取 from，段后取存储基线（= 目标）。
+fn transform_at(tl: &CompiledTimeline, id: ItemId, base: Affine, f: usize) -> Affine {
+    let mut t = base;
+    for anim in &tl.anims {
+        let AnimKind::TransformTo { id: tid, from, to } = &anim.kind else {
+            continue;
+        };
+        if *tid != id {
+            continue;
+        }
+        if let Some(a) = anim.alpha_at(f) {
+            t = lerp_affine(from, to, a);
+        } else if f < anim.start {
+            t = *from;
+        }
+    }
+    t
 }
 
 /// 值跟踪器在帧 f 的值：活跃段插值，历史段取终值（确定性纯函数；段间不重叠）。
@@ -306,10 +342,11 @@ fn lerp_paint(a: &Paint, b: &Paint, t: f64) -> Paint {
 mod tests {
     use super::*;
     use crate::anim::Anim;
+    use crate::camera::Camera;
     use crate::path_util::partial_path;
     use crate::rate::RateFunc;
     use crate::timeline::Timeline;
-    use kurbo::{Circle, Rect};
+    use kurbo::{Circle, Point, Rect, Vec2};
 
     fn make_tl() -> Timeline {
         Timeline::new(100, 100, 30, Color::new(0, 0, 0, 255))
@@ -533,5 +570,63 @@ mod tests {
             panic!()
         };
         assert!(end.y > 50.0 && end.y < 90.0);
+    }
+
+    /// 探针：单位阵变换的 10x10 矩形（局部原点即世界坐标，便于断言屏幕位置）。
+    fn probe(at: (f64, f64)) -> Item {
+        Item::rect(Rect::new(0.0, 0.0, 10.0, 10.0)).with_transform(Affine::translate(at))
+    }
+
+    #[test]
+    fn 相机推近_注视点为不动点() {
+        let mut tl = make_tl(); // 100x100 @30fps
+        tl.add(probe((50.0, 50.0))); // 注视点处
+        tl.add(probe((25.0, 50.0))); // 注视点左侧
+        let cam = tl.camera(Camera::at(100, 100));
+        let target = Camera {
+            center: Vec2::new(50.0, 50.0),
+            zoom: 2.0,
+            rotation: 0.0,
+        };
+        tl.play(Anim::transform_to(cam, target.affine(100, 100)).during(1.0));
+        let c = tl.compile();
+
+        // 相机对象不进绘制列表
+        assert_eq!(render_frame(&c, 0).items.len(), 2);
+        let origin = |f: usize, i: usize| {
+            let d = render_frame(&c, f);
+            d.items[i].transform * Point::ZERO
+        };
+        // 注视点（画布中心）全程不动
+        assert_eq!(origin(0, 0), Point::new(50.0, 50.0));
+        assert_eq!(origin(30, 0), Point::new(50.0, 50.0));
+        // 左侧点随 zoom 2 外推：50 + (25-50)*2 = 0
+        assert_eq!(origin(0, 1), Point::new(25.0, 50.0));
+        assert_eq!(origin(30, 1), Point::new(0.0, 50.0));
+    }
+
+    #[test]
+    fn 无相机注册时世界系即屏幕系() {
+        let mut tl = make_tl();
+        tl.add(probe((10.0, 20.0)));
+        let c = tl.compile();
+        let t = render_frame(&c, 0).items[0].transform;
+        assert_eq!(t, Affine::translate((10.0, 20.0)), "无相机 = 单位阵合成");
+    }
+
+    #[test]
+    fn transform_to_段前段中段后语义() {
+        let mut tl = make_tl();
+        let id = tl.add(rect_item(Color::new(255, 0, 0, 255))); // 基线 = 单位阵
+        tl.play(Anim::transform_to(id, Affine::translate((90.0, 0.0))).during(1.0));
+        let c = tl.compile();
+        let x_of = |f: usize| render_frame(&c, f).items[0].transform.as_coeffs()[4];
+        // 段前：构建期基线
+        assert_eq!(x_of(0), 0.0);
+        // 段中：系数插值（第 15 帧 Smooth 缓动恰为半程 45）
+        let mid = x_of(15);
+        assert!((40.0..50.0).contains(&mid), "段中应为插值，实际 {mid}");
+        // 段后：停在目标（存储基线已快进）
+        assert_eq!(x_of(45), 90.0);
     }
 }

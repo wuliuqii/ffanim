@@ -7,9 +7,11 @@
 //! 两阶段模型见 docs/02-架构设计.md §3.2（全项目最核心决策）。
 
 use crate::anim::{Anim, AnimKind};
+use crate::camera::Camera;
 use crate::eval::CompiledTimeline;
 use crate::tracker::{TrackerId, Updater};
 use crate::{Color, Item, ItemId};
+use kurbo::BezPath;
 
 /// 时间轴构建器（构建期唯一入口）。
 #[derive(Debug, Clone)]
@@ -26,6 +28,8 @@ pub struct Timeline {
     tracker_cur: Vec<f64>,
     /// 求值期信号（渲染期按帧重建形状）。
     updaters: Vec<Updater>,
+    /// 相机对象句柄（None = 无相机；见 [`Timeline::camera`]）。
+    camera: Option<ItemId>,
     _canvas: CanvasArgs,
 }
 
@@ -41,6 +45,7 @@ impl Timeline {
             trackers: Vec::new(),
             tracker_cur: Vec::new(),
             updaters: Vec::new(),
+            camera: None,
             _canvas: CanvasArgs {
                 width,
                 height,
@@ -79,6 +84,18 @@ impl Timeline {
         item
     }
 
+    /// 注册相机（不可见对象，docs/02 §3.4"相机即 Item"）：相机的 transform 即 world→screen 仿射。
+    ///
+    /// 返回句柄；用 [`Anim::transform_to`] 把相机变换到 [`Camera::affine`] 目标即可推拉摇移。
+    /// 不注册相机时求值按单位阵处理（世界系 = 屏幕系）。
+    pub fn camera(&mut self, cam: Camera) -> ItemId {
+        let item = Item::from_path(BezPath::new())
+            .with_transform(cam.affine(self._canvas.width, self._canvas.height));
+        let id = self.add(item);
+        self.camera = Some(id);
+        id
+    }
+
     /// 在当前游标处排入一个动画，游标推进其时长。
     pub fn play(&mut self, mut anim: Anim) -> &mut Self {
         let overlap = self.pending_overlap_s.take().unwrap_or(0.0);
@@ -86,6 +103,15 @@ impl Timeline {
         if let AnimKind::SetValue { tracker, from, to } = &mut anim.kind {
             *from = self.tracker_cur[*tracker];
             self.tracker_cur[*tracker] = *to;
+        }
+        // TransformTo 的 from 推演：取构建期当前变换，对象基线快进到目标
+        // （段前取 from、段中插值、段后取基线的求值语义见 eval::transform_at）
+        if let AnimKind::TransformTo { id, from, to } = &mut anim.kind {
+            let idx = *id as usize;
+            assert!(idx < self.items.len(), "TransformTo 目标对象 #{id} 未注册");
+            let target = *to;
+            *from = self.items[idx].transform;
+            self.items[idx].transform = target;
         }
         let start_s = (self.cursor_s - overlap).max(0.0);
         self.anims.push((start_s, anim.clone()));
@@ -149,6 +175,7 @@ impl Timeline {
             anims,
             trackers: self.trackers,
             updaters: self.updaters,
+            camera: self.camera,
             duration_frames,
         }
     }

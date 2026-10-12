@@ -5,14 +5,32 @@
 
 ## [Unreleased]
 
-### 变更（M7：地基与拆分，进行中）
+### 新增（M8：功能补齐，进行中）
+
+- feat(core): M8.1 相机系统——`Camera`（center/zoom/rotation）+ 相机即 Item
+  （不可见对象，transform 即 world→screen 仿射，docs/02 §3.4 兑现）+
+  `Anim::transform_to` 通用"变换到目标"词汇（段前取基线/段中插值/段后驻停，
+  from 由构建期推演）；fourier 示例加推近镜头验收段（zoom 1.4 推镜，
+  非背景像素 5.01%→6.50% 实证放大）+ 相机求值测试 3 项
+- fix(render): bench 文件豁免 missing_docs（criterion 宏展开函数无文档）
+
+## [v0.2.0] - 2026-10-12
+
+M7 地基与拆分 + 1080p 性能基线。semver 0.x 规则自本版本起生效。
+
+### 新增
+
+- justfile 任务编排（ci/ci-gpu/doc/demo/bench）+ CHANGELOG + README/LICENSE 重写 + docs/demo.gif（74403fe）
+- missing_docs lint 全 workspace 生效 + 101 处公开项中文文档补全 + CI 加 cargo doc 门禁（7e73405）
+- criterion bench（crates/ffanim-render/benches/render.rs）：cpu_render_1080p 26.43ms（NF1 实时率 1.21x 达标）、rgb24_pack_1080p 1.195ms（≈5.2GB/s）；数字入 docs/benchmarks.md（2465c25）
+
+### 变更
 
 - refactor(core): timeline 按职责拆分 anim/tracker/timeline/eval 四模块，公开 API 零变化（8343faf）
 - refactor(cli): main.rs 按命令族拆分 cmd/ 六模块，--help 逐字不变（7d1da18）
 - refactor(typst): lib.rs 拆分 engine/formula/matching 三模块，公开 API 零变化（cb727b5）
 - docs: 项目优化规划 docs/04 + fourier 示例 BGM 来源与许可标注（b4603b7）
 - fix: Formula::fit_transform 缩放居中修正，创作示例迁移至 examples/（ef7be8b）
-- chore: justfile 任务编排 + CHANGELOG + README 重写（M7.4）
 
 ## [v0.5-m5] - 2026-10-12
 

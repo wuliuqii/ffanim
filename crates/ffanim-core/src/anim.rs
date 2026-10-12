@@ -5,7 +5,7 @@
 
 use crate::rate::RateFunc;
 use crate::{ItemId, tracker::TrackerId};
-use kurbo::Vec2;
+use kurbo::{Affine, Vec2};
 
 /// 动画类型。
 #[derive(Debug, Clone)]
@@ -37,6 +37,16 @@ pub enum AnimKind {
         /// 结束值。
         to: f64,
     },
+    /// 变换到目标：对象 transform 插值到 `to`（段前取构建期基线，段后停在目标；
+    /// 相机推拉摇移与目标位姿的通用词汇）。
+    TransformTo {
+        /// 目标对象。
+        id: ItemId,
+        /// 起始变换（由 Timeline 填充为构建期当前值）。
+        from: Affine,
+        /// 目标变换（完成后保留为对象基线）。
+        to: Affine,
+    },
 }
 
 impl AnimKind {
@@ -56,6 +66,7 @@ impl AnimKind {
             AnimKind::SetValue { tracker, from, to } => {
                 format!("SetValue(tracker#{tracker}: {from:.3}→{to:.3})")
             }
+            AnimKind::TransformTo { id, .. } => format!("TransformTo(item#{id})"),
         }
     }
 }
@@ -93,6 +104,15 @@ impl Anim {
     /// 创建 Transform 动画：`from` 形变为 `to`。
     pub fn transform(from: ItemId, to: ItemId) -> Self {
         Self::of(AnimKind::Transform { from, to })
+    }
+
+    /// 创建 TransformTo 动画：对象变换插值到 `to`（相机推拉摇移与目标位姿的通用词汇）。
+    pub fn transform_to(id: ItemId, to: Affine) -> Self {
+        Self::of(AnimKind::TransformTo {
+            id,
+            from: Affine::IDENTITY, // 由 Timeline::play 填充（构建期当前变换）
+            to,
+        })
     }
 
     /// 值跟踪器动画（from 取构建期该 tracker 的当前值）。

@@ -12,9 +12,9 @@
 //! https://upload.wikimedia.org/wikipedia/commons/9/90/Erik_Satie_-_gymnopedies_-_la_1_ere._lent_et_douloureux.ogg
 //! 许可：Public domain，可自由分发）——裁剪 18s + 响度归一 -18 LUFS + 淡入淡出。
 
-use ffanim::kurbo::{Affine, BezPath};
+use ffanim::kurbo::{Affine, BezPath, Vec2};
 use ffanim::typst::{FormulaOptions, TypstEngine};
-use ffanim::{Anim, Axes, Color, Font, Item, RateFunc, Theme, Timeline};
+use ffanim::{Anim, Axes, Camera, Color, Font, Item, RateFunc, Theme, Timeline};
 
 const W: u32 = 960;
 const H: u32 = 540;
@@ -114,6 +114,19 @@ fn main() -> ffanim::Result<()> {
         tl.play(Anim::set_value(sum, target).during(1.2));
         tl.wait(0.2);
     }
+
+    // —— 推近镜头（M8.1 相机系统验收段）：相机即 Item，transform_to 到目标仿射 ——
+    let camera = tl.camera(Camera::at(W, H));
+    let push_target = Camera {
+        center: Vec2::new(f64::from(W) / 2.0, 350.0), // 注视方波曲线中心
+        zoom: 1.4,
+        rotation: 0.0,
+    };
+    tl.play(
+        Anim::transform_to(camera, push_target.affine(W, H))
+            .during(1.4)
+            .rate(RateFunc::Smooth),
+    );
 
     // —— 幕 5：结论 ——
     let caption = tl.add(text_item(
