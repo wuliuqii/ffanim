@@ -381,6 +381,17 @@ impl std::fmt::Debug for CompiledTimeline {
     }
 }
 
+impl CompiledTimeline {
+    /// `Duration::FromAudio` 语义：时间轴时长至少延伸到指定帧数。
+    ///
+    /// 动画结束后超出部分渲染为尾帧定格（历史段语义：动画停在终值），
+    /// 用于按音频长度定片长（配解说等场景）。只延长不截短。
+    pub fn with_min_duration(mut self, frames: usize) -> Self {
+        self.duration_frames = self.duration_frames.max(frames);
+        self
+    }
+}
+
 /// 已调度的动画（帧为单位）。
 #[derive(Debug, Clone)]
 pub struct ScheduledAnim {

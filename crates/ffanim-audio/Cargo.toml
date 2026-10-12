@@ -11,3 +11,4 @@ workspace = true
 
 [dependencies]
 ffanim-core = { workspace = true }
+log = { workspace = true }

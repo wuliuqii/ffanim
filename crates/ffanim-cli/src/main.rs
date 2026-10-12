@@ -42,6 +42,10 @@ enum Command {
         #[arg(long)]
         segments: Option<usize>,
 
+        /// 音轨文件（渲染后混入；片长延伸到音频长度，Duration::FromAudio 语义）
+        #[arg(long)]
+        audio: Option<PathBuf>,
+
         /// 主题 JSON 路径
         #[arg(long, default_value = "themes/default.json")]
         theme: PathBuf,
@@ -200,6 +204,17 @@ enum Command {
         theme: PathBuf,
     },
 
+    /// 音频诊断：时长/电平/削波/静音段（agent 排查音轨）
+    Audio {
+        /// 音频文件路径
+        #[arg(long, short)]
+        input: PathBuf,
+
+        /// 以 JSON 输出报告
+        #[arg(long)]
+        json: bool,
+    },
+
     /// 加载并展示主题摘要（验证数据驱动管线）
     Info {
         /// 主题 JSON 路径
@@ -215,6 +230,43 @@ fn main() -> ffanim::Result<()> {
 
     let cli = Cli::parse();
     match cli.command {
+        Command::Audio { input, json } => {
+            let report = ffanim_audio::analyze(&input)?;
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "input": input,
+                        "duration": report.duration,
+                        "sample_rate": report.sample_rate,
+                        "channels": report.channels,
+                        "rms_db": report.rms_db,
+                        "peak_db": report.peak_db,
+                        "clipped_samples": report.clipped_samples,
+                        "silence": report.silence,
+                    })
+                );
+            } else {
+                println!(
+                    "音频 {input:?}: {:.2}s @{}Hz（{} 声道）",
+                    report.duration, report.sample_rate, report.channels
+                );
+                println!(
+                    "电平: RMS {:.1}dBFS / 峰值 {:.1}dBFS，削波 {} 样本",
+                    report.rms_db, report.peak_db, report.clipped_samples
+                );
+                if report.silence.is_empty() {
+                    println!("静音段: 无");
+                } else {
+                    println!("静音段:");
+                    for (s, e) in &report.silence {
+                        println!("  {s:.2}s .. {e:.2}s");
+                    }
+                }
+            }
+            Ok(())
+        }
+
         Command::Info { theme } => {
             let theme = ffanim::Theme::from_path(&theme)?;
             let bg = theme.background()?;
@@ -233,10 +285,27 @@ fn main() -> ffanim::Result<()> {
             out,
             fps,
             segments,
+            audio,
             theme,
         } => {
             let theme = ffanim::Theme::from_path(&theme)?;
-            let tl = scenes::build(&scene, &theme, fps)?.compile();
+            let mut tl = scenes::build(&scene, &theme, fps)?.compile();
+
+            // Duration::FromAudio：片长至少延伸到音频长度（尾帧定格）
+            let audio_tmp: Option<PathBuf> = match &audio {
+                Some(a) => {
+                    let report = ffanim_audio::analyze(a)?;
+                    let frames = (report.duration * f64::from(fps)).ceil() as usize;
+                    println!(
+                        "音轨 {a:?}: {:.2}s → 片长延伸到 {frames} 帧",
+                        report.duration
+                    );
+                    tl = tl.with_min_duration(frames);
+                    Some(out.with_extension("mux.mp4"))
+                }
+                None => None,
+            };
+
             println!(
                 "场景 {scene}: {} 帧 / {:.2}s @{}fps，{} 个动画",
                 tl.duration_frames,
@@ -260,12 +329,21 @@ fn main() -> ffanim::Result<()> {
                 ..Default::default()
             };
             let start = Instant::now();
-            ffanim_encode::encode_video(w, h, fps, total, &out, &opts, &frame_of)?;
+            // 有音轨时先渲染到临时文件，混流后删除
+            let encode_out = audio_tmp.clone().unwrap_or_else(|| out.clone());
+            ffanim_encode::encode_video(w, h, fps, total, &encode_out, &opts, &frame_of)?;
             let elapsed = start.elapsed().as_secs_f64();
             println!(
-                "已输出 {out:?}（渲染 {elapsed:.2}s / 视频时长 {video:.2}s，实时率 {:.1}x）",
+                "已输出 {encode_out:?}（渲染 {elapsed:.2}s / 视频时长 {video:.2}s，实时率 {:.1}x）",
                 video / elapsed
             );
+
+            // 音轨混流：视频流复制 + AAC，产物落最终 out
+            if let (Some(a), Some(tmp)) = (&audio, &audio_tmp) {
+                ffanim_audio::mux(tmp, a, &out)?;
+                std::fs::remove_file(tmp).ok();
+                println!("音轨已混入 {out:?}");
+            }
             Ok(())
         }
 

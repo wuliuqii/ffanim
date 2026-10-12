@@ -1013,6 +1013,7 @@ name = "ffanim-audio"
 version = "0.1.0"
 dependencies = [
  "ffanim-core",
+ "log",
 ]
 
 [[package]]
@@ -1022,6 +1023,7 @@ dependencies = [
  "clap",
  "env_logger",
  "ffanim",
+ "ffanim-audio",
  "ffanim-core",
  "ffanim-encode",
  "ffanim-preview",
