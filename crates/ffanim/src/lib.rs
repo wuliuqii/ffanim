@@ -34,7 +34,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// # 示例
 ///
 /// ```no_run
-/// use ffanim::{Anim, Item, Timeline};
+/// use ffanim::{Anim, Color, Item, Timeline};
 ///
 /// let mut tl = Timeline::new(960, 540, 30, Color::new(14, 17, 22, 255));
 /// let cir = tl.add(Item::circle(ffanim::kurbo::Circle::new((480.0, 270.0), 80.0)));
