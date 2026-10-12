@@ -1006,6 +1006,8 @@ name = "ffanim"
 version = "0.1.0"
 dependencies = [
  "ffanim-core",
+ "ffanim-encode",
+ "ffanim-render",
 ]
 
 [[package]]

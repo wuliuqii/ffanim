@@ -1,4 +1,5 @@
 /target
+/out
 Cargo.lock.orig
 *.mp4
 frames/*
