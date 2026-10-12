@@ -1,6 +1,6 @@
 [package]
 name = "ffanim-preview"
-description = "winit + wgpu + egui 实时预览窗口"
+description = "winit + softbuffer 实时预览窗口（播放/暂停/逐帧/seek）"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,3 +11,6 @@ workspace = true
 
 [dependencies]
 ffanim-core = { workspace = true }
+ffanim-render = { path = "../ffanim-render" }
+winit = { workspace = true }
+softbuffer = { workspace = true }

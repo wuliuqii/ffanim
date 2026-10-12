@@ -19,6 +19,7 @@ ffanim-core = { workspace = true }
 ffanim-render = { path = "../ffanim-render" }
 ffanim-encode = { path = "../ffanim-encode" }
 ffanim-typst = { path = "../ffanim-typst" }
+ffanim-preview = { path = "../ffanim-preview" }
 clap = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }

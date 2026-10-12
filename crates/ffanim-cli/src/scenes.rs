@@ -9,7 +9,7 @@ use ffanim_core::kurbo::{Affine, Circle, Rect};
 use ffanim_core::{Anim, Font, Item, Timeline};
 
 /// 场景清单（M5 起支持外部场景文件）。
-pub const SCENES: &[&str] = &["demo_anim", "formula_demo"];
+pub const SCENES: &[&str] = &["demo_anim", "formula_demo", "sine_demo"];
 
 /// 构建场景时间轴。
 pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
@@ -19,6 +19,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
             Ok(demo_anim(theme, &font, fps))
         }
         "formula_demo" => formula_demo(theme, fps),
+        "sine_demo" => sine_demo(theme, fps),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -154,5 +155,47 @@ fn formula_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
         tl.play(anim);
     }
     tl.wait(0.8);
+    Ok(tl)
+}
+
+/// M4 验收场景：坐标系 + 正弦函数图像随 ValueTracker 动画（求值期信号）。
+///
+/// 网格淡入 → 坐标轴描边生长 → sin 曲线逐段画出 → 振幅 1.0→0.2→1.0 呼吸。
+fn sine_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
+    use ffanim_core::Axes;
+
+    let accent = theme.accent().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    let axes = Axes::new((-3.0, 3.0), (-1.2, 1.2))
+        .with_size(840.0, 400.0)
+        .with_center(f64::from(w) / 2.0, f64::from(h) / 2.0);
+
+    // 网格先淡入，坐标轴描边生长
+    let grid = tl.add(axes.grid_item(theme.foreground().unwrap().with_alpha(40), 1.0));
+    tl.play(Anim::fade_in(grid).during(0.6));
+    let ax = tl.add(axes.to_item(&theme.style));
+    tl.overlap(0.4);
+    tl.play(Anim::create(ax).during(1.0));
+
+    // 正弦函数图像：振幅由 ValueTracker 驱动（渲染期每帧重建）
+    let amp = tl.add_tracker(1.0);
+    let graph = tl.add_updater(&[amp], move |v| {
+        axes.plot(
+            |x| v[0] * (x * std::f64::consts::FRAC_PI_2).sin(),
+            (-3.0, 3.0),
+        )
+        .with_stroke(accent)
+        .with_stroke_width(3.0)
+    });
+    tl.wait(0.2);
+    tl.play(Anim::create(graph).during(1.2));
+    tl.wait(0.3);
+
+    // 振幅呼吸
+    tl.play(Anim::set_value(amp, 0.2).during(1.2));
+    tl.play(Anim::set_value(amp, 1.0).during(1.2));
+    tl.wait(0.6);
     Ok(tl)
 }

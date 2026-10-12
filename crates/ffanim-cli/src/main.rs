@@ -99,6 +99,21 @@ enum Command {
         theme: PathBuf,
     },
 
+    /// 实时预览窗口（播放/暂停/逐帧/seek）
+    Preview {
+        /// 场景名
+        #[arg(long, short)]
+        scene: String,
+
+        /// 帧率
+        #[arg(long, default_value_t = 30)]
+        fps: u32,
+
+        /// 主题 JSON 路径
+        #[arg(long, default_value = "themes/default.json")]
+        theme: PathBuf,
+    },
+
     /// 渲染单帧示例场景为 PNG（M1 验收场景：三角形 + 文字 + 圆）
     Frame {
         /// 输出 PNG 路径
@@ -324,6 +339,19 @@ fn main() -> ffanim::Result<()> {
                     "FAIL: {diff_pixels}/{total} 像素差异（{ratio:.3}%，容差 {tolerance}）— 基准 {baseline:?}"
                 );
             }
+            Ok(())
+        }
+
+        Command::Preview { scene, fps, theme } => {
+            let theme = ffanim::Theme::from_path(&theme)?;
+            let tl = scenes::build(&scene, &theme, fps)?.compile();
+            let accent = theme.accent()?;
+            println!(
+                "预览 {scene}: {} 帧 / {:.2}s（空格播放，←/→ 逐帧，Q 退出）",
+                tl.duration_frames,
+                tl.duration_frames as f64 / f64::from(tl.fps)
+            );
+            ffanim_preview::run(tl, accent).map_err(ffanim::Error::Other)?;
             Ok(())
         }
 
