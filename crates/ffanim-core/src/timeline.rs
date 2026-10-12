@@ -31,6 +31,24 @@ pub enum AnimKind {
     Transform { from: ItemId, to: ItemId },
 }
 
+impl AnimKind {
+    /// 人类可读摘要（`timeline` 子命令与 agent 检查用）。
+    pub fn describe(&self) -> String {
+        match self {
+            AnimKind::Create(id) => format!("Create(item#{id})"),
+            AnimKind::FadeIn { id, shift } => {
+                if *shift == Vec2::ZERO {
+                    format!("FadeIn(item#{id})")
+                } else {
+                    format!("FadeIn(item#{id}, shift=({:.0},{:.0}))", shift.x, shift.y)
+                }
+            }
+            AnimKind::FadeOut(id) => format!("FadeOut(item#{id})"),
+            AnimKind::Transform { from, to } => format!("Transform(item#{from}→item#{to})"),
+        }
+    }
+}
+
 /// 动画描述（构建期）。
 #[derive(Debug, Clone)]
 pub struct Anim {

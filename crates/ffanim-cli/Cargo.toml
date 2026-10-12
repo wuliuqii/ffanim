@@ -17,7 +17,9 @@ workspace = true
 ffanim = { path = "../ffanim" }
 ffanim-core = { workspace = true }
 ffanim-render = { path = "../ffanim-render" }
+ffanim-encode = { path = "../ffanim-encode" }
 clap = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
 gpu = ["ffanim-render/gpu"]
