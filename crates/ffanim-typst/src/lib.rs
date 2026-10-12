@@ -127,8 +127,11 @@ pub struct FormulaPiece {
     pub fill: Option<Color>,
     /// (描边色, 描边宽度 pt)。
     pub stroke: Option<(Color, f64)>,
-    /// 源码字节区间（主源内），供 TransformMatchingTex 结构匹配（M3-2）。
+    /// 源码字节区间（主源内），供结构匹配。
     pub source_range: Option<(usize, usize)>,
+    /// 该片段对应的源文本（字形才有；分数线等形状为 None）。
+    /// TransformMatchingTex 的匹配依据。
+    pub text: Option<String>,
 }
 
 /// 排版完成的公式（不可变，可被多帧共享）。
@@ -155,6 +158,66 @@ impl Formula {
                 item
             })
             .collect()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 结构匹配（TransformMatchingTex 基座）
+// ---------------------------------------------------------------------------
+
+/// 两公式的片段匹配结果，供场景层调度 Transform / FadeOut / FadeIn。
+#[derive(Debug, Clone)]
+pub struct MatchPlan {
+    /// 配对片段：(a 下标, b 下标) —— 将做 Transform 形变。
+    pub paired: Vec<(usize, usize)>,
+    /// a 中未配对（将 FadeOut）。
+    pub leave_a: Vec<usize>,
+    /// b 中未配对（将 FadeIn）。
+    pub enter_b: Vec<usize>,
+}
+
+/// 按片段源文本的最长公共子序列（LCS）配对两个公式的片段。
+///
+/// 与 manim `TransformMatchingTex` 的精神一致：相同子式（如 `x^2`、`=`）
+/// 跨公式保留并形变，其余淡出/淡入。形状片段（分数线等，无文本）恒不配对。
+pub fn match_formulas(a: &Formula, b: &Formula) -> MatchPlan {
+    let ta: Vec<Option<&str>> = a.pieces.iter().map(|p| p.text.as_deref()).collect();
+    let tb: Vec<Option<&str>> = b.pieces.iter().map(|p| p.text.as_deref()).collect();
+    let (n, m) = (ta.len(), tb.len());
+
+    // dp[i][j] = ta[i..] 与 tb[j..] 的 LCS 长度
+    let mut dp = vec![vec![0u32; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            dp[i][j] = if ta[i].is_some() && ta[i] == tb[j] {
+                dp[i + 1][j + 1] + 1
+            } else {
+                dp[i + 1][j].max(dp[i][j + 1])
+            };
+        }
+    }
+
+    // 回溯取配对
+    let mut paired = Vec::new();
+    let (mut i, mut j) = (0, 0);
+    while i < n && j < m {
+        if ta[i].is_some() && ta[i] == tb[j] {
+            paired.push((i, j));
+            i += 1;
+            j += 1;
+        } else if dp[i + 1][j] >= dp[i][j + 1] {
+            i += 1;
+        } else {
+            j += 1;
+        }
+    }
+
+    let used_a: std::collections::HashSet<usize> = paired.iter().map(|x| x.0).collect();
+    let used_b: std::collections::HashSet<usize> = paired.iter().map(|x| x.1).collect();
+    MatchPlan {
+        leave_a: (0..n).filter(|k| !used_a.contains(k)).collect(),
+        enter_b: (0..m).filter(|k| !used_b.contains(k)).collect(),
+        paired,
     }
 }
 
@@ -297,11 +360,14 @@ fn convert_text(
             let affine = t * Affine::new([scale, 0.0, 0.0, -scale, x_off, -y_off]);
             transform_path(&mut path, affine);
             let span = glyph.span.0;
+            // 片段源文本：字形在 run 文本中的切片（供结构匹配）
+            let piece_text = text.text.get(glyph.range()).map(str::to_owned);
             out.push(FormulaPiece {
                 path,
                 fill,
                 stroke: None,
                 source_range: world.range(span).map(|r| (r.start, r.end)),
+                text: piece_text,
             });
         }
         cursor_x += glyph.x_advance.at(text.size).to_pt();
@@ -352,6 +418,7 @@ fn convert_shape(shape: &typst::visualize::Shape, t: Affine, out: &mut Vec<Formu
         fill: shape.fill.as_ref().and_then(paint_color),
         stroke,
         source_range: None,
+        text: None,
     });
 }
 
@@ -432,9 +499,29 @@ mod tests {
         let mut engine = TypstEngine::new(8);
         let f = engine.formula("a/b", &opts()).unwrap();
         assert!(
-            f.pieces.iter().any(|p| p.source_range.is_none()),
-            "分数线应为无源码区间的形状片段"
+            f.pieces
+                .iter()
+                .any(|p| p.source_range.is_none() && p.text.is_none()),
+            "分数线应为无源码区间/无文本的形状片段"
         );
+    }
+
+    /// 结构匹配：相同子式配对，不同部分进出。
+    #[test]
+    fn 公式结构匹配() {
+        let mut engine = TypstEngine::new(8);
+        let a = engine.formula("x^2 + y^2 = z^2", &opts()).unwrap();
+        let b = engine.formula("x^2 - y^2 = 0", &opts()).unwrap();
+        let plan = match_formulas(&a, &b);
+        // x, 2, y, 2, = 至少 5 个字形配对
+        assert!(plan.paired.len() >= 5, "配对数: {}", plan.paired.len());
+        // 配对两边的片段文本一致
+        for (i, j) in &plan.paired {
+            assert_eq!(a.pieces[*i].text, b.pieces[*j].text);
+        }
+        // z^2 / + / 0 / - 未配对，进出各有所归
+        assert_eq!(plan.leave_a.len() + plan.paired.len(), a.pieces.len());
+        assert_eq!(plan.enter_b.len() + plan.paired.len(), b.pieces.len());
     }
 
     /// 非法公式应返回可读错误。
