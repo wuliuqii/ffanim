@@ -63,6 +63,38 @@ impl Timeline {
         id
     }
 
+    /// 批量注册（manim `VGroup` 注册侧语义）：返回句柄列表，配合
+    /// [`Timeline::group`] / [`Timeline::together`] 做组级动画。
+    pub fn add_group(&mut self, items: Vec<Item>) -> Vec<ItemId> {
+        let n = items.len();
+        let ids = items.into_iter().map(|it| self.add(it)).collect();
+        log::debug!("add_group: {n} 项注册");
+        ids
+    }
+
+    /// 保存对象当前构建期基准状态（manim `save_state` 对应；快照可多次保存）。
+    ///
+    /// ffanim 的动画不改注册基准，故"当前状态"即注册基准快照。
+    pub fn save_state(&self, id: ItemId) -> Item {
+        self.items[id as usize].clone()
+    }
+
+    /// 恢复对象到快照状态（manim `restore` 对应）：完整 morph（形状/颜色/变换）。
+    ///
+    /// 返回恢复后的新句柄——morph 完成后原句柄对象退场（Transform 语义），
+    /// 后续动画应使用返回句柄。
+    pub fn restore(&mut self, id: ItemId, snapshot: &Item) -> ItemId {
+        let snap_id = self.add(snapshot.clone());
+        // 埋点：恢复编排（时序排查用）
+        log::info!(
+            "restore: item#{id} → 快照 item#{snap_id}（morph 段 [{:.2},{:.2})）",
+            self.cursor_s,
+            self.cursor_s + 1.0
+        );
+        self.play(Anim::transform(id, snap_id));
+        snap_id
+    }
+
     /// 注册值跟踪器（隐形，仅作为 updater 的信号源），返回句柄。
     pub fn add_tracker(&mut self, initial: f64) -> TrackerId {
         self.trackers.push(initial);
@@ -120,6 +152,43 @@ impl Timeline {
     /// （manim `lagged_start` 语义；ratio=1 即顺序不交叠，ratio=0 即同时开始）。
     pub fn lagged_start(&mut self, anims: impl IntoIterator<Item = Anim>, ratio: f64) -> &mut Self {
         self.stagger(anims, |dur| ratio * dur)
+    }
+
+    /// 同窗组（manim `Together` 对应）：全部动画对齐当前游标同时开始，
+    /// 游标推进到最长一段结束；首段继承 pending overlap。
+    pub fn together(&mut self, anims: impl IntoIterator<Item = Anim>) -> &mut Self {
+        let overlap = self.pending_overlap_s.take().unwrap_or(0.0);
+        let start = (self.cursor_s - overlap).max(0.0);
+        let mut end = start;
+        let mut n = 0;
+        for mut anim in anims {
+            self.prepare(&mut anim);
+            self.anims.push((start, anim.clone()));
+            end = end.max(start + anim.duration_s);
+            n += 1;
+        }
+        if n > 0 {
+            self.cursor_s = end;
+            // 埋点：同窗编排（动画时序排查用）
+            log::info!("together: {n} 段同窗 [{start:.2},{end:.2})");
+        }
+        self
+    }
+
+    /// 接续组（manim `Succession` 对应）：依次排入（游标推进总和），
+    /// 首段继承 pending overlap。
+    pub fn succession(&mut self, anims: impl IntoIterator<Item = Anim>) -> &mut Self {
+        let pending = self.pending_overlap_s.unwrap_or(0.0);
+        let begin = (self.cursor_s - pending).max(0.0);
+        let mut n = 0;
+        for anim in anims {
+            self.play(anim);
+            n += 1;
+        }
+        if n > 0 {
+            log::info!("succession: {n} 段接续 [{begin:.2},{:.2})", self.cursor_s);
+        }
+        self
     }
 
     /// 组排布内部实现：第 i 段起始 = 首段起始 + Σ step(段时长)，游标 = 最后一段结束。
@@ -400,6 +469,16 @@ mod tests {
             .all(|(x, y)| (x - y).abs() < 1e-9)
     }
 
+    /// 100x100 @30fps 最小时间轴。
+    fn make_tl() -> Timeline {
+        Timeline::new(100, 100, 30, Color::new(0, 0, 0, 255))
+    }
+
+    /// 40x40 填充矩形（原点 (0,0)，中心 (20,20)，断言坐标计算用）。
+    fn rect_item(fill: crate::Color) -> Item {
+        Item::rect(kurbo::Rect::new(0.0, 0.0, 40.0, 40.0)).with_fill(fill)
+    }
+
     #[test]
     fn 位姿_平移解析为绝对变换并快进基线() {
         let (mut tl, id) = rect_timeline();
@@ -583,6 +662,73 @@ mod tests {
         // 高亮段帧 35 可见、段后隐藏
         assert_eq!(render_frame(&c, 35).items.len(), 2);
         assert_eq!(render_frame(&c, 54).items.len(), 1);
+    }
+
+    // ---- M9.7：P1 薄糖批（Together / Succession / add_group / save_state-restore）----
+
+    #[test]
+    fn together_同窗对齐游标取最长() {
+        let mut tl = make_tl();
+        let a = tl.add(rect_item(Color::new(255, 0, 0, 255)));
+        let b = tl.add(rect_item(Color::new(0, 255, 0, 255)));
+        tl.wait(0.5);
+        tl.together([
+            Anim::create(a).during(1.0),
+            Anim::fade_in(b).during(2.0), // 时长不同：游标应取最长
+        ]);
+        let c = tl.compile();
+        let windows: Vec<(usize, usize)> = c.anims.iter().map(|x| (x.start, x.end)).collect();
+        assert_eq!(windows, vec![(15, 45), (15, 75)], "两段同窗对齐 0.5s");
+        assert_eq!(c.duration_frames, 75, "游标 = 最长段结束");
+    }
+
+    #[test]
+    fn succession_接续游标累加() {
+        let mut tl = make_tl();
+        let a = tl.add(rect_item(Color::new(255, 0, 0, 255)));
+        let b = tl.add(rect_item(Color::new(0, 255, 0, 255)));
+        tl.succession([Anim::fade_in(a).during(0.5), Anim::fade_in(b).during(1.0)]);
+        let c = tl.compile();
+        let windows: Vec<(usize, usize)> = c.anims.iter().map(|x| (x.start, x.end)).collect();
+        assert_eq!(windows, vec![(0, 15), (15, 45)], "依次接续不交叠");
+        assert_eq!(c.duration_frames, 45);
+    }
+
+    #[test]
+    fn add_group_批量注册() {
+        let mut tl = make_tl();
+        let ids = tl.add_group(vec![
+            rect_item(Color::new(255, 0, 0, 255)),
+            rect_item(Color::new(0, 255, 0, 255)),
+            rect_item(Color::new(0, 0, 255, 255)),
+        ]);
+        assert_eq!(ids, vec![0, 1, 2]);
+        tl.group(ids.iter().map(|&id| Anim::fade_in(id).during(0.5)), 0.1);
+        let c = tl.compile();
+        assert_eq!(c.items.len(), 3);
+        assert_eq!(c.anims.len(), 3);
+    }
+
+    #[test]
+    fn save_state_restore_完整恢复() {
+        use crate::eval::render_frame;
+        let mut tl = make_tl();
+        let id = tl.add(rect_item(Color::new(255, 0, 0, 255))); // 基线 = 单位阵
+        let snap = tl.save_state(id);
+        tl.play(Anim::move_to(id, (80.0, 40.0)).during(1.0)); // 基线快进到 (80,40)
+        let restored = tl.restore(id, &snap); // morph 回快照（默认 1.0s）
+        let c = tl.compile();
+
+        // morph 段 [30,60)：段后旧对象退场、快照对象在场且复位
+        let after = render_frame(&c, 60);
+        assert_eq!(after.items.len(), 1, "morph 后只余快照对象");
+        assert_eq!(after.items[0].id, restored);
+        assert_eq!(
+            after.items[0].transform,
+            Affine::IDENTITY,
+            "应复位到快照基线"
+        );
+        assert_eq!(c.duration_frames, 60);
     }
 }
 

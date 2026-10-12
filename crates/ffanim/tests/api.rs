@@ -391,3 +391,61 @@ fn emphasize_强调动画编排() {
         "flash 放大段应为 TransformTo"
     );
 }
+
+#[test]
+fn sugar_薄糖批编排() {
+    use ffanim::kurbo::{Circle, Rect};
+
+    let mut tl = Timeline::new(200, 200, 30, BG);
+
+    // 1) Uncreate：create → uncreate，段后对象隐藏
+    let circle = tl.add(Item::circle(Circle::new((50.0, 50.0), 20.0)).with_stroke(FG));
+    tl.play(Anim::create(circle).during(0.5));
+    tl.play(Anim::uncreate(circle).during(0.5));
+
+    // 2) Together：不同时长同窗对齐，游标取最长
+    let a = tl.add(Item::rect(Rect::new(0.0, 0.0, 30.0, 20.0)).with_fill(FG));
+    let b = tl.add(Item::rect(Rect::new(100.0, 0.0, 30.0, 20.0)).with_fill(FG));
+    tl.together([Anim::fade_in(a).during(0.5), Anim::fade_in(b).during(1.0)]);
+
+    // 3) Succession：依次接续
+    let c1 = tl.add(Item::rect(Rect::new(0.0, 100.0, 20.0, 20.0)).with_fill(FG));
+    tl.succession([
+        Anim::fade_in(c1).during(0.4),
+        Anim::fade_out(c1).during(0.4),
+    ]);
+
+    // 4) 方向家族落表冒烟（FadeIn 变体参数化）
+    let d = tl.add(Item::rect(Rect::new(100.0, 100.0, 20.0, 20.0)).with_fill(FG));
+    tl.play(Anim::grow_from_center(d).during(0.5));
+    tl.play(Anim::spin_in(d, std::f64::consts::FRAC_PI_2).during(0.5));
+
+    // 5) save_state / restore：move_to 后 morph 回快照，返回新句柄
+    let snap = tl.save_state(a);
+    tl.play(Anim::move_to(a, (150.0, 150.0)).during(0.5));
+    let restored = tl.restore(a, &snap);
+
+    let ct = tl.compile();
+    // 1+1 / 2 / 2 / 2 / 1+1 = 10 段
+    assert_eq!(ct.anims.len(), 10, "{:?}", ct.anims.len());
+    // together 同窗
+    assert_eq!((ct.anims[2].start, ct.anims[3].start), (30, 30));
+    // restore 返回的句柄对象在场且复位（morph 段结束后）
+    let after = ffanim::render_frame(&ct, ct.duration_frames);
+    assert!(
+        after.items.iter().any(|it| it.id == restored),
+        "恢复句柄应在场"
+    );
+    let snap_t = after
+        .items
+        .iter()
+        .find(|it| it.id == restored)
+        .unwrap()
+        .transform;
+    assert_eq!(snap_t, snap.transform, "应复位到快照变换");
+    // uncreate 段后圆隐藏
+    assert!(
+        !after.items.iter().any(|it| it.id == circle),
+        "uncreate 后圆应退场"
+    );
+}

@@ -45,6 +45,13 @@ ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4")?;
   `item.to_edge(Direction::Up, buff, (w, h))`（贴画布边，另一轴居中）/
   `arrange(&mut items, Direction::Down, buff) -> Rect`（依次排列，返回总包围盒，可再整体平移）。
   布局分支带 `log::info` 埋点（RUST_LOG=info 可查输入 bbox/平移量/结果 bbox）。
+- 组编排糖（manim Together/Succession/LaggedStart/VGroup/save_state·restore 对应）：
+  `tl.together([...])`（多动画同窗对齐，游标取最长 dur——**规避 overlap 各段 during 必须一致的坑**）/
+  `tl.succession([...])`（逐段接续播）/
+  `tl.add_group(vec![Item]) -> Vec<ItemId>`（VGroup 批量注册）/
+  `tl.save_state(id) -> Item` + `tl.restore(id, &snap) -> ItemId`（快照 + 完整 morph 回快照；
+  **restore 返回新句柄，morph 后旧句柄退场，后续动画用返回值**）。
+  together/succession/restore 带 log::info 埋点（RUST_LOG=info 查同窗/接续时序）。
 - 强调四件套（构建期编排，manim Indicate/Circumscribe/Flash/ShowPassingFlash 对应）：
   `tl.indicate(id, factor, dur)`（绕 bbox 中心放大 factor 再复原——"注意这一项"）/
   `tl.circumscribe(id, dur, buff, color)`（bbox 外扩 buff 的框淡入淡出圈选）/
@@ -55,7 +62,11 @@ ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4")?;
 | 动画 | 效果 |
 |---|---|
 | `Anim::create(id)` | 描边生长（沿路径逐段显现） |
+| `Anim::uncreate(id)` | create 镜像：描边收回 + 填充淡出，段后隐藏（manim Uncreate） |
 | `Anim::fade_in(id)` / `fade_out` | 透明度渐变 |
+| `Anim::fade_in_from(id, dir, dist)` | 方向滑入（Direction::Up/Down/Left/Right 偏移 dist） |
+| `Anim::grow_from_center(id)` / `grow_from_edge(id, dir, dist)` | 从中心缩放 0→1 / 从边缘滑入+展开 |
+| `Anim::spin_in(id, 弧度)` | 旋转进入（缩放 0→1 + 余量角收正，正 = 视觉逆时针） |
 | `Anim::transform(from, to)` | 形变（需同为路径，逐点映射） |
 | `Anim::shift_to(id, dx, dy)` | 相对平移到（manim `.animate.shift`） |
 | `Anim::move_to(id, 点)` | 平移至 bbox 中心落在目标点 |

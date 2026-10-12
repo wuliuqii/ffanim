@@ -136,9 +136,19 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
                     apply_create(&mut state, alpha);
                     opacity *= alpha; // 填充随进度淡入
                 }
-                AnimKind::FadeIn { id: in_id, shift } if *in_id == id => {
+                AnimKind::Uncreate(uc_id) if *uc_id == id => {
+                    apply_create(&mut state, 1.0 - alpha); // 路径按进度收回
+                    opacity *= 1.0 - alpha; // 填充随进度淡出
+                }
+                AnimKind::FadeIn {
+                    id: in_id,
+                    shift,
+                    scale_from,
+                    spin,
+                } if *in_id == id => {
                     opacity *= alpha;
-                    state.transform = enter_transform(&state, *shift, alpha) * state.transform;
+                    state.transform = enter_transform(&state, *shift, *scale_from, *spin, alpha)
+                        * state.transform;
                 }
                 AnimKind::FadeOut(out_id) if *out_id == id => {
                     opacity *= 1.0 - alpha;
@@ -225,6 +235,7 @@ fn is_visible(tl: &CompiledTimeline, id: ItemId, f: usize) -> bool {
                 appear = Some(appear.map_or(anim.start, |s: usize| s.min(anim.start)));
             }
             AnimKind::FadeOut(x) if *x == id => hidden_before.push(anim.end),
+            AnimKind::Uncreate(x) if *x == id => hidden_before.push(anim.end),
             AnimKind::Transform { from, to } => {
                 if *from == id {
                     hidden_before.push(anim.end);
@@ -267,12 +278,13 @@ fn apply_create(state: &mut Item, alpha: f64) {
     }
 }
 
-/// FadeIn 的进入变换：从 shift 偏移处、90% 缩放滑入。
-fn enter_transform(state: &Item, shift: Vec2, alpha: f64) -> Affine {
-    let scale = 0.9 + 0.1 * alpha;
+/// FadeIn 的进入变换：从 shift 偏移处、`scale_from` 缩放、旋转 `spin` 余量滑入。
+fn enter_transform(state: &Item, shift: Vec2, scale_from: f64, spin: f64, alpha: f64) -> Affine {
+    let scale = scale_from + (1.0 - scale_from) * alpha;
     let center = item_center(state);
-    // 以中心为基准缩放
+    // 以中心为基准缩放 + 旋转（旋转余量随 alpha 归零）
     let about_center = Affine::translate(center.to_vec2())
+        * Affine::rotate(-spin * (1.0 - alpha))
         * Affine::scale(scale)
         * Affine::translate(-center.to_vec2());
     Affine::translate(shift * (1.0 - alpha)) * about_center
@@ -731,5 +743,82 @@ mod tests {
         assert_eq!(starts, vec![0, 15]);
         // 游标 = b 结束 = 0.5 + 2.0 = 2.5s
         assert_eq!(c.duration_frames, 75);
+    }
+
+    // ---- M9.7：P1 薄糖批（Uncreate / FadeIn 方向家族 / save_state-restore）----
+
+    #[test]
+    fn uncreate生命周期() {
+        let mut tl = make_tl();
+        let id = tl.add(rect_item(Color::new(255, 0, 0, 255)));
+        tl.play(Anim::create(id).during(1.0));
+        tl.wait(1.0);
+        tl.play(Anim::uncreate(id).during(1.0));
+        let c = tl.compile();
+
+        let base_len = match &c.items[0].shape {
+            Shape::Path(p) => p.elements().len(),
+            _ => panic!(),
+        };
+        // create 完成后：完整可见
+        let full = render_frame(&c, 45);
+        assert_eq!(full.items.len(), 1);
+        // 收尾半程：路径不完整且透明度下降
+        let mid = render_frame(&c, 75);
+        assert_eq!(mid.items.len(), 1, "收尾中途对象在场");
+        assert!(mid.items[0].paint.opacity < 0.9, "填充应随进度淡出");
+        let Shape::Path(p) = &mid.items[0].shape else {
+            panic!()
+        };
+        assert!(p.elements().len() < base_len, "中途路径应已收回一部分");
+        // 段后隐藏
+        assert_eq!(render_frame(&c, 105).items.len(), 0);
+    }
+
+    #[test]
+    fn grow_from_center_中心缩放进入() {
+        let mut tl = make_tl();
+        let id = tl.add(rect_item(Color::new(255, 0, 0, 255))); // 40x40 @ (0,0)，中心 (20,20)
+        tl.play(Anim::grow_from_center(id).during(1.0));
+        let c = tl.compile();
+
+        // 半程：缩放 0.5（绕中心 (20,20)）→ 平移系数 = 20-20×0.5 = 10
+        let mid = render_frame(&c, 15);
+        assert!((mid.items[0].paint.opacity - 0.5).abs() < 1e-6);
+        let t = mid.items[0].transform.as_coeffs();
+        assert!((t[0] - 0.5).abs() < 1e-6, "scale 系数: {t:?}");
+        assert!(
+            (t[4] - 10.0).abs() < 1e-6 && (t[5] - 10.0).abs() < 1e-6,
+            "{t:?}"
+        );
+        // 段末：完全进入，与基线一致
+        assert_eq!(render_frame(&c, 30).items[0].transform, Affine::IDENTITY);
+    }
+
+    #[test]
+    fn spin_in_旋转进入() {
+        let mut tl = make_tl();
+        let id = tl.add(rect_item(Color::new(255, 0, 0, 255)));
+        tl.play(Anim::spin_in(id, std::f64::consts::PI).during(1.0));
+        let c = tl.compile();
+
+        // 半程：旋转余量 -π/2（视觉顺时针回正）+ 缩放 0.5 → 变换非单位阵
+        let mid = render_frame(&c, 15).items[0].transform;
+        assert!(mid.as_coeffs()[1].abs() > 0.1, "应有旋转分量: {mid:?}");
+        // 段末：余量归零，与基线一致
+        assert_eq!(render_frame(&c, 30).items[0].transform, Affine::IDENTITY);
+    }
+
+    #[test]
+    fn fade_in_from_方向偏移() {
+        let mut tl = make_tl();
+        let id = tl.add(rect_item(Color::new(255, 0, 0, 255)));
+        tl.play(Anim::fade_in_from(id, crate::layout::Direction::Right, 60.0).during(1.0));
+        let c = tl.compile();
+
+        // 半程：shift 余量 = 60×(1-0.5) = 30，加上 90%→100% 缩放的平移补偿
+        // （绕中心 (20,20) 缩放 0.95 → tx 补 20×0.05 = 1.0）→ 合计 31
+        let mid = render_frame(&c, 15).items[0].transform.as_coeffs();
+        assert!((mid[4] - 31.0).abs() < 1e-6, "{mid:?}");
     }
 }

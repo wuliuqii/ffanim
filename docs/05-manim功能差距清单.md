@@ -47,17 +47,17 @@
 
 | # | 功能 | manim 对应 | 现状 / 说明 | 工作量 |
 |---|---|---|---|---|
-| P1-1 | Uncreate / Write 反向（描边收尾） | Uncreate/Write | create 反放可 ThereAndBack 近似；显式词汇更直白（变体薄糖） | S |
-| P1-2 | 组合调度糖：Succession / Together | Succession/Together | group/lagged_start 已有；两个薄糖词汇 | S |
-| P1-3 | FadeIn 方向家族 / GrowFromCenter / SpinIn | GrowFromEdge/Center… | FadeIn 已带 shift，封装方向常量即可 | S |
+| P1-1 | Uncreate / Write 反向（描边收尾） | Uncreate/Write | ✅ 已落地（M9.7）：`Anim::uncreate`（create 镜像：描边收回 + 填充淡出，段后隐藏），sugar_demo 场景验收 | S |
+| P1-2 | 组合调度糖：Succession / Together | Succession/Together | ✅ 已落地（M9.7）：`tl.together`（同窗对齐游标取最长 dur）/ `tl.succession`（逐段接续），埋点齐全 | S |
+| P1-3 | FadeIn 方向家族 / GrowFromCenter / SpinIn | GrowFromEdge/Center… | ✅ 已落地（M9.7）：FadeIn 参数化 `{shift, scale_from, spin}`，`fade_in_from/grow_from_center/grow_from_edge/spin_in` 四构造器 | S |
 | P1-4 | MoveAlongPath 沿路径移动 | MoveAlongPath | 需逐帧路径采样求值（TransformTo 不够），中等 | M |
 | P1-5 | 公式以外的结构匹配形变 | TransformMatchingShapes | match_formulas 基座已有（M9.1 diff 升级），扩展到任意路径文本缺失（SVG 字形无 source 文本） | M |
 | P1-6 | 数字滚动 DecimalNumber | DecimalNumber + tracker | tracker+updater+Typst 组合已可行，缺"每帧改文本"的示范与便利封装（Typst LRU 缓存使逐帧排版可行） | S~M |
 | P1-7 | 标注复合件：SurroundingRectangle/Underline/Cross/BackgroundRect | 同名 | P0-1 基元 + P0-2 布局落地后多为薄糖 | S |
 | P1-8 | Brace 花括号 + 括注文本 | Brace | 图形 brace 需形状生成（Typst 侧可排 brace 字符过渡） | M |
 | P1-9 | GIF / WebM 输出 + 画质预设 | -ql/-qm/-qh/-qk | M9 已列（GIF 循环、WebM 编码参数）， EncodeOptions 质量预设 | M |
-| P1-10 | VGroup 语义糖：批量注册 + 整体动画 | VGroup | Group 形状已有；缺 tl.add_group(Vec<Item>) -> Vec<ItemId> 与组级 fade/create | S |
-| P1-11 | save_state / restore | mobject.save_state() | 构建期 clone 薄糖（Item 可 Clone） | S |
+| P1-10 | VGroup 语义糖：批量注册 + 整体动画 | VGroup | ✅ 已落地（M9.7）：`tl.add_group(Vec<Item>) -> Vec<ItemId>`（注册侧；组级动画配 `tl.group`/`together`） | S |
+| P1-11 | save_state / restore | mobject.save_state() | ✅ 已落地（M9.7）：`tl.save_state(id) -> Item` + `tl.restore(id, &snap) -> ItemId`（快照 + 完整 morph，返回新句柄） | S |
 | P1-12 | 按词/按段着色 t2c | Text(t2c=…) | Typst markup 手写可绕（`#text(fill: …)`) | S |
 | P1-13 | 代码块高亮 | Code | Typst 原生 code block 排版即可起步 | M |
 | P1-14 | 表格 | Table/MathTable | 手拼 grid_item + 文本可绕 | M |

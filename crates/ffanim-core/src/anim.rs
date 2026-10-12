@@ -3,6 +3,7 @@
 //! 对应 manim 的 `Create/FadeIn/FadeOut/Transform` 与 `rate_func`；
 //! 只描述"做什么"，调度（何时做）属于 [`crate::timeline::Timeline`]。
 
+use crate::layout::Direction;
 use crate::rate::RateFunc;
 use crate::{ItemId, tracker::TrackerId};
 use kurbo::{Affine, Point, Vec2};
@@ -12,12 +13,19 @@ use kurbo::{Affine, Point, Vec2};
 pub enum AnimKind {
     /// 从无到有：沿路径逐段画出（描边生长），填充随之淡入。
     Create(ItemId),
-    /// 淡入：透明度 0→1，可选从偏移处平移进入、从 90% 缩放放大。
+    /// 描边收尾：沿路径逐段收回（create 的镜像），填充随之淡出，结束后对象隐藏。
+    Uncreate(ItemId),
+    /// 淡入：透明度 0→1，可选从偏移处平移进入、从 `scale_from` 缩放长出、
+    /// 旋转 `spin`（弧度余量）进入。
     FadeIn {
         /// 目标对象。
         id: ItemId,
         /// 进入时的平移偏移（零向量 = 原地淡入）。
         shift: Vec2,
+        /// 进入起始缩放（相对完整尺寸；默认 0.9 = 轻微放大进入）。
+        scale_from: f64,
+        /// 进入旋转余量（弧度，alpha=0 时偏移量；默认 0）。
+        spin: f64,
     },
     /// 淡出：透明度 1→0，结束后对象隐藏。
     FadeOut(ItemId),
@@ -96,12 +104,24 @@ impl AnimKind {
     pub fn describe(&self) -> String {
         match self {
             AnimKind::Create(id) => format!("Create(item#{id})"),
-            AnimKind::FadeIn { id, shift } => {
-                if *shift == Vec2::ZERO {
-                    format!("FadeIn(item#{id})")
-                } else {
-                    format!("FadeIn(item#{id}, shift=({:.0},{:.0}))", shift.x, shift.y)
+            AnimKind::Uncreate(id) => format!("Uncreate(item#{id})"),
+            AnimKind::FadeIn {
+                id,
+                shift,
+                scale_from,
+                spin,
+            } => {
+                let mut s = format!("FadeIn(item#{id}");
+                if *shift != Vec2::ZERO {
+                    s += &format!(", shift=({:.0},{:.0})", shift.x, shift.y);
                 }
+                if (*scale_from - 0.9).abs() > 1e-9 {
+                    s += &format!(", scale_from={scale_from:.2}");
+                }
+                if spin.abs() > 1e-9 {
+                    s += &format!(", spin={spin:.2}rad");
+                }
+                s + ")"
             }
             AnimKind::FadeOut(id) => format!("FadeOut(item#{id})"),
             AnimKind::Transform { from, to } => format!("Transform(item#{from}→item#{to})"),
@@ -136,11 +156,74 @@ impl Anim {
         Self::of(AnimKind::Create(id))
     }
 
-    /// 创建 FadeIn 动画：原地淡入。
+    /// 创建 FadeIn 动画：原地淡入（轻微放大进入）。
     pub fn fade_in(id: ItemId) -> Self {
         Self::of(AnimKind::FadeIn {
             id,
             shift: Vec2::ZERO,
+            scale_from: 0.9,
+            spin: 0.0,
+        })
+    }
+
+    /// 创建 Uncreate 动画：描边逐段收回（create 反放），结束后对象隐藏。
+    ///
+    /// 非路径形状（图片/组合内无路径）退化为纯淡出。
+    pub fn uncreate(id: ItemId) -> Self {
+        Self::of(AnimKind::Uncreate(id))
+    }
+
+    /// 创建 FadeIn 方向家族（manim `FadeIn(point=dir)` 对应）：从 `dir` 侧
+    /// 距离 `dist` 处滑入淡入。`Direction::Left` = 起始在对象左侧。
+    pub fn fade_in_from(id: ItemId, dir: Direction, dist: f64) -> Self {
+        let shift = match dir {
+            Direction::Up => Vec2::new(0.0, -dist),
+            Direction::Down => Vec2::new(0.0, dist),
+            Direction::Left => Vec2::new(-dist, 0.0),
+            Direction::Right => Vec2::new(dist, 0.0),
+        };
+        Self::of(AnimKind::FadeIn {
+            id,
+            shift,
+            scale_from: 0.9,
+            spin: 0.0,
+        })
+    }
+
+    /// 创建 GrowFromCenter 动画（manim 对应）：从包围盒中心 0 缩放长出淡入。
+    pub fn grow_from_center(id: ItemId) -> Self {
+        Self::of(AnimKind::FadeIn {
+            id,
+            shift: Vec2::ZERO,
+            scale_from: 0.0,
+            spin: 0.0,
+        })
+    }
+
+    /// 创建 GrowFromEdge 动画（manim 对应）：从 `dir` 侧 `dist` 处 0 缩放长出淡入。
+    pub fn grow_from_edge(id: ItemId, dir: Direction, dist: f64) -> Self {
+        let shift = match dir {
+            Direction::Up => Vec2::new(0.0, -dist),
+            Direction::Down => Vec2::new(0.0, dist),
+            Direction::Left => Vec2::new(-dist, 0.0),
+            Direction::Right => Vec2::new(dist, 0.0),
+        };
+        Self::of(AnimKind::FadeIn {
+            id,
+            shift,
+            scale_from: 0.0,
+            spin: 0.0,
+        })
+    }
+
+    /// 创建 SpinIn 动画（manim `SpinInFromNothing` 对应）：从中心 0 缩放 +
+    /// 旋转 `angle` 弧度余量进入（正 = 视觉逆时针）。
+    pub fn spin_in(id: ItemId, angle: f64) -> Self {
+        Self::of(AnimKind::FadeIn {
+            id,
+            shift: Vec2::ZERO,
+            scale_from: 0.0,
+            spin: angle,
         })
     }
 

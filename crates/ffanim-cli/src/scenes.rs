@@ -17,6 +17,7 @@ pub const SCENES: &[&str] = &[
     "primitives_demo",
     "layout_demo",
     "emphasize_demo",
+    "sugar_demo",
 ];
 
 /// 构建场景时间轴。
@@ -32,6 +33,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "primitives_demo" => Ok(primitives_demo(theme, fps)),
         "layout_demo" => Ok(layout_demo(theme, fps)),
         "emphasize_demo" => Ok(emphasize_demo(theme, fps)),
+        "sugar_demo" => Ok(sugar_demo(theme, fps)),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -437,5 +439,102 @@ fn emphasize_demo(theme: &Theme, fps: u32) -> Timeline {
     let zig_id = tl.add(Item::from_path(zig).with_stroke(fg).with_stroke_width(sw));
     tl.play(Anim::create(zig_id).during(0.8));
     tl.show_passing_flash(zig_id, 0.25, 0.75, 0.8, accent);
+    tl
+}
+
+/// M9.7 验收场景：P1 薄糖批（Uncreate / Together / Succession / 方向家族 /
+/// add_group / save_state-restore）。
+fn sugar_demo(theme: &Theme, fps: u32) -> Timeline {
+    use ffanim_core::Direction;
+
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let sw = f64::from(theme.style.stroke_width);
+    let (w, h) = (960.0_f64, 540.0_f64);
+    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background().unwrap());
+
+    // 1) Uncreate：圆描边生长 → 收尾收回（create 的镜像）
+    let circle = tl.add(
+        Item::circle(Circle::new((200.0, 140.0), 60.0))
+            .with_stroke(fg)
+            .with_stroke_width(sw),
+    );
+    tl.play(Anim::create(circle).during(0.8));
+    tl.wait(0.2);
+    tl.play(Anim::uncreate(circle).during(0.8));
+
+    // 2) Together：方块与圆同窗淡入（时长不同，游标取最长）
+    let rect_a = tl.add(
+        Item::rect(Rect::new(0.0, 0.0, 130.0, 80.0))
+            .with_stroke(fg)
+            .with_stroke_width(sw)
+            .with_transform(Affine::translate((560.0, 70.0))),
+    );
+    let circle_b = tl.add(
+        Item::circle(Circle::new((830.0, 120.0), 45.0))
+            .with_stroke(accent)
+            .with_stroke_width(sw),
+    );
+    tl.together([
+        Anim::fade_in(rect_a).during(0.7),
+        Anim::fade_in(circle_b).during(1.0),
+    ]);
+
+    // 3) Succession：三支箭头依次描边生长
+    let arrows: Vec<Item> = (0..3)
+        .map(|i: i32| {
+            let x = f64::from(i) * 200.0;
+            Item::arrow((150.0 + x, 280.0), (260.0 + x, 280.0))
+                .with_stroke(fg)
+                .with_fill(fg)
+                .with_stroke_width(sw)
+        })
+        .collect();
+    let arrow_ids = tl.add_group(arrows);
+    tl.succession([
+        Anim::create(arrow_ids[0]).during(0.4),
+        Anim::create(arrow_ids[1]).during(0.4),
+        Anim::create(arrow_ids[2]).during(0.4),
+    ]);
+
+    // 4) 方向家族：中心长出菱形 → 旋转进入三角 → 从左滑入方块
+    let diamond = tl.add(
+        Item::regular_polygon((700.0, 350.0).into(), 50.0, 4)
+            .with_stroke(fg)
+            .with_stroke_width(sw),
+    );
+    tl.play(Anim::grow_from_center(diamond).during(0.6));
+    let tri = tl.add(
+        Item::regular_polygon((855.0, 350.0).into(), 45.0, 3)
+            .with_stroke(accent)
+            .with_stroke_width(sw),
+    );
+    tl.play(Anim::spin_in(tri, std::f64::consts::PI).during(0.6));
+    let slider = tl.add(
+        Item::rect(Rect::new(0.0, 0.0, 110.0, 70.0))
+            .with_stroke(fg)
+            .with_stroke_width(sw)
+            .with_transform(Affine::translate((120.0, 380.0))),
+    );
+    tl.play(Anim::fade_in_from(slider, Direction::Left, 120.0).during(0.6));
+
+    // 5) save_state / restore：方块移到右侧后完整 morph 回快照
+    let snap = tl.save_state(slider);
+    tl.play(Anim::move_to(slider, (420.0, 415.0)).during(0.6));
+    let _restored = tl.restore(slider, &snap);
+
+    // 6) add_group + group：底部三个小方块步进淡入
+    let dots: Vec<Item> = (0..3)
+        .map(|i: i32| {
+            Item::rect(Rect::new(0.0, 0.0, 30.0, 30.0))
+                .with_fill(accent)
+                .with_transform(Affine::translate((700.0 + f64::from(i) * 55.0, 420.0)))
+        })
+        .collect();
+    let dot_ids = tl.add_group(dots);
+    tl.group(
+        dot_ids.iter().map(|&id| Anim::fade_in(id).during(0.4)),
+        0.15,
+    );
     tl
 }

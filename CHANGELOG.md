@@ -47,6 +47,23 @@
 - 验收：demo_anim 5.8s 全片导出 1..3s 片段，ffprobe 实测 2.0s；3 解析单测 + 1 集成测试
 - 顺手修复 ci-gpu 配方存量编译损坏（peniko `Blob::new` 需 `Arc<dyn AsRef<[u8]>>`，改拷贝进 `Arc<Vec<u8>>`）
 
+### M9.7 manim 对齐第四批：P1 薄糖批 Uncreate / Together / Succession / 方向家族 / add_group / save_state·restore（2026-10-12）
+
+- feat(core): docs/05 差距清单 P1-1/2/3/10/11 五项同批落地（全部构建期薄糖，求值路径仅新增
+  Uncreate 分支与 FadeIn 参数化，零既有语义改动）
+- `Anim::uncreate(id)`：create 镜像（描边按进度收回 + 填充淡出，段后隐藏）——`AnimKind::Uncreate`
+  变体，求值复用 `apply_create(1-alpha)`
+- FadeIn 方向家族：`FadeIn` 变体参数化 `{ shift, scale_from, spin }`（默认 0.9/0 保持现行为），
+  新构造器 `fade_in_from(id, dir, dist)` / `grow_from_center(id)` / `grow_from_edge(id, dir, dist)` /
+  `spin_in(id, 弧度)`，统一走 `enter_transform`（位移余量 + 绕 bbox 中心缩放/旋转收正）
+- 组编排糖：`tl.together([...])`（同窗对齐，游标取最长 dur——规避 overlap 各段 during 必须一致的坑）/
+  `tl.succession([...])`（逐段接续）+ `tl.add_group(Vec<Item>) -> Vec<ItemId>`（VGroup 注册侧）+
+  `tl.save_state(id) -> Item` / `tl.restore(id, &snap) -> ItemId`（快照注册 + 完整 morph；
+  返回新句柄，morph 后旧句柄退场）
+- 验收：sugar_demo 场景（六段编排 8.1s/243 帧/15 动画）出片目检通过；together/succession/restore
+  埋点时序核对一致；单测 8 项新增 + 集成 `sugar_薄糖批编排`（10 段断言）；SKILL.md 词汇表同步
+- 教训：`(0..3).map(|i| ... i * 200.0)` 闭包变量被推断为 i32（E0277）——显式 `|i: i32|` + `f64::from(i)`
+
 ### M9.6 修复：encode 临时目录按 pid+调用序号隔离，根除同进程并发编码竞态（2026-10-12）
 
 - fix(encode): 编码临时目录原只按进程 id 命名（`ffanim-encode-<pid>`）——同进程内并发
