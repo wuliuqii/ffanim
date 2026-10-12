@@ -5,6 +5,7 @@
 //! - CPU 后端是兜底路径（CI/无 GPU），GPU 后端是生产路径。
 
 pub mod cpu;
+pub mod tools;
 
 #[cfg(feature = "gpu")]
 pub mod gpu;

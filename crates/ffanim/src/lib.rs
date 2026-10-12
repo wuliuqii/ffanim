@@ -9,6 +9,23 @@ pub use ffanim_core::{
     Style, Theme, Timeline, render_frame,
 };
 
+/// 公式排版子系统（Typst 嵌入）：TypstEngine / FormulaOptions / match_formulas。
+pub mod typst {
+    pub use ffanim_typst::{Formula, FormulaOptions, TypstEngine, match_formulas};
+}
+
+/// 音频子系统：analyze 诊断 / mux 音轨混流。
+pub mod audio {
+    pub use ffanim_audio::{AudioReport, analyze, mux};
+}
+
+/// Agent 视觉诊断：strip 接触表 / onion 洋葱皮（与 CLI 共用同一实现）。
+pub mod tools {
+    pub use ffanim_render::tools::{
+        OnionReport, StripReport, downsample, onion, sample_frames, strip,
+    };
+}
+
 /// 项目版本（供 CLI 与元信息使用）。
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

@@ -4,7 +4,6 @@
 mod demo;
 mod scaffold;
 mod scenes;
-mod tools;
 
 use clap::{Parser, Subcommand};
 use ffanim_core::kurbo;
@@ -539,8 +538,16 @@ fn main() -> ffanim::Result<()> {
                 PathBuf::from(out)
             };
             let accent = theme.accent()?;
-            let report = tools::strip(&tl, font.as_ref(), accent, out, count, cols, thumb_width)
-                .map_err(ffanim::Error::Other)?;
+            let report = ffanim_render::tools::strip(
+                &tl,
+                font.as_ref(),
+                accent,
+                out,
+                count,
+                cols,
+                thumb_width,
+            )
+            .map_err(ffanim::Error::Other)?;
             if json {
                 println!(
                     "{}",
@@ -583,7 +590,8 @@ fn main() -> ffanim::Result<()> {
             } else {
                 PathBuf::from(out)
             };
-            let report = tools::onion(&tl, frame, spread, out).map_err(ffanim::Error::Other)?;
+            let report = ffanim_render::tools::onion(&tl, frame, spread, out)
+                .map_err(ffanim::Error::Other)?;
             if json {
                 println!(
                     "{}",

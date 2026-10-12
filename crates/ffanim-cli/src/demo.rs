@@ -8,26 +8,9 @@ use ffanim_core::kurbo::{Affine, Circle, Rect};
 use ffanim_core::{DrawList, Font, Item};
 use std::path::PathBuf;
 
-/// 常见系统字体搜索路径（Linux/macOS）。
-const FONT_CANDIDATES: &[&str] = &[
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/TTF/DejaVuSans.ttf",
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-    "/System/Library/Fonts/Helvetica.ttc",
-];
-
-/// 加载字体：显式路径优先，否则搜索系统常见位置。
+/// 加载字体：显式路径优先，否则搜索系统常见位置（下沉为 core Font::from_system）。
 pub fn load_font(explicit: Option<PathBuf>) -> ffanim::Result<Font> {
-    let path = match explicit {
-        Some(p) => p,
-        None => FONT_CANDIDATES
-            .iter()
-            .map(PathBuf::from)
-            .find(|p| p.exists())
-            .ok_or(ffanim::Error::NoFontFound)?,
-    };
-    Font::from_path(&path)
+    Font::from_system(explicit)
 }
 
 /// 构建示例场景的 DrawList。

@@ -3,12 +3,14 @@
 //! 核心洞察（docs/01）：作者无法看视频，把视频变成 PNG/文本/数字。
 //! - strip：等距采样 N 帧缩略图拼成网格大图 → 一眼检查全局节奏与构图；
 //! - onion：基准帧叠加前后帧半透明残影 → 一眼检查运动轨迹与速度变化。
+//!
+//! 库式 API（接受 `&CompiledTimeline`），CLI 与外部创作项目共用。
 
 use std::path::PathBuf;
 
+use crate::{CpuBackend, RenderBackend, save_png};
 use ffanim_core::kurbo::Shape as _;
 use ffanim_core::{Color, CompiledTimeline, DrawList, Font, Item};
-use ffanim_render::{CpuBackend, RenderBackend};
 
 /// strip 输出报告（`--json` 用）。
 pub struct StripReport {
@@ -157,8 +159,7 @@ pub fn strip(
         }
     }
 
-    ffanim_render::save_png(&out, gw, gh, &canvas)
-        .map_err(|e| format!("保存 {out:?} 失败: {e}"))?;
+    save_png(&out, gw, gh, &canvas).map_err(|e| format!("保存 {out:?} 失败: {e}"))?;
     log::info!(
         "strip 完成: {} 帧采样 → {out:?}（{}x{}，{} 列）",
         frames.len(),
@@ -248,7 +249,7 @@ pub fn onion(
         }
     }
 
-    ffanim_render::save_png(&out, w, h, &canvas).map_err(|e| format!("保存 {out:?} 失败: {e}"))?;
+    save_png(&out, w, h, &canvas).map_err(|e| format!("保存 {out:?} 失败: {e}"))?;
     log::info!("onion 完成: 基准帧 {frame} ±{spread} → {out:?}");
     Ok(OnionReport { out, frame, spread })
 }

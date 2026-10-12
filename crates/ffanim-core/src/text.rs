@@ -5,7 +5,7 @@
 
 use crate::{Error, Result};
 use kurbo::{Affine, BezPath, PathEl, Point};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use ttf_parser::GlyphId;
 
 /// 已加载的字体文件（单 face）。
@@ -21,6 +21,31 @@ impl Font {
         let path = path.as_ref();
         let data = std::fs::read(path).map_err(|e| Error::FontIo(e, path.to_path_buf()))?;
         Self::from_data(data)
+    }
+
+    /// 系统字体加载：显式路径优先，否则搜索常见系统位置（Linux/macOS）。
+    pub fn from_system(explicit: Option<impl AsRef<Path>>) -> Result<Self> {
+        match explicit {
+            Some(p) => Self::from_path(p),
+            None => {
+                const CANDIDATES: &[&str] = &[
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+                    "/usr/share/fonts/TTF/DejaVuSans.ttf",
+                    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                    "/System/Library/Fonts/Helvetica.ttc",
+                    // CJK：中文标题/字幕需要（ttc 集合，face 0 含常用汉字）
+                    "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+                    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                ];
+                CANDIDATES
+                    .iter()
+                    .map(PathBuf::from)
+                    .find(|p| p.exists())
+                    .ok_or(Error::NoFontFound)
+                    .and_then(Self::from_path)
+            }
+        }
     }
 
     /// 从内存加载。
