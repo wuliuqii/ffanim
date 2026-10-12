@@ -14,16 +14,23 @@ use ffanim_core::{Color, CompiledTimeline, DrawList, Font, Item};
 
 /// strip 输出报告（`--json` 用）。
 pub struct StripReport {
+    /// 输出 PNG 路径。
     pub out: PathBuf,
+    /// 采样帧号列表（升序）。
     pub frames: Vec<usize>,
+    /// 网格列数。
     pub cols: usize,
+    /// 单元格尺寸 (宽, 高)。
     pub thumb: (u32, u32),
 }
 
 /// onion 输出报告（`--json` 用）。
 pub struct OnionReport {
+    /// 输出 PNG 路径。
     pub out: PathBuf,
+    /// 基准帧号。
     pub frame: usize,
+    /// 残影范围（±N 帧）。
     pub spread: isize,
 }
 

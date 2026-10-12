@@ -7,13 +7,18 @@ use std::path::Path;
 /// RGBA 颜色，支持 `#RRGGBB` / `#RRGGBBAA` 十六进制解析。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Color {
+    /// 红分量（0-255）。
     pub r: u8,
+    /// 绿分量（0-255）。
     pub g: u8,
+    /// 蓝分量（0-255）。
     pub b: u8,
+    /// alpha 分量（0-255，255 = 不透明）。
     pub a: u8,
 }
 
 impl Color {
+    /// 常量构造（编译期可用）。
     pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self { r, g, b, a }
     }
@@ -61,6 +66,7 @@ impl Color {
 pub struct ColorSpec(String);
 
 impl ColorSpec {
+    /// 解析为主题色值。
     pub fn parse(&self) -> Result<Color> {
         Color::from_hex(&self.0)
     }
@@ -69,17 +75,24 @@ impl ColorSpec {
 /// 矢量对象默认样式（数据驱动，可被场景级覆盖）。
 #[derive(Debug, Clone, Deserialize)]
 pub struct Style {
+    /// 默认填充色（JSON 十六进制串）。
     pub fill: Option<ColorSpec>,
+    /// 默认描边色。
     pub stroke: Option<ColorSpec>,
+    /// 默认描边宽度（px）。
     pub stroke_width: f32,
 }
 
 /// 主题：调色板 + 默认样式 + 公式排版参数。
 #[derive(Debug, Clone, Deserialize)]
 pub struct Theme {
+    /// 主题名（仅展示用）。
     pub name: String,
+    /// 调色板（语义色）。
     pub palette: Palette,
+    /// 对象默认样式。
     pub style: Style,
+    /// 公式排版参数。
     pub formula: FormulaStyle,
 }
 
@@ -97,10 +110,12 @@ impl Theme {
         self.palette.background.parse()
     }
 
+    /// 前景/文字色。
     pub fn foreground(&self) -> Result<Color> {
         self.palette.foreground.parse()
     }
 
+    /// 强调色（高亮、tracker 曲线等）。
     pub fn accent(&self) -> Result<Color> {
         self.palette.accent.parse()
     }
@@ -118,8 +133,11 @@ impl std::str::FromStr for Theme {
 /// 调色板。
 #[derive(Debug, Clone, Deserialize)]
 pub struct Palette {
+    /// 画布背景色。
     pub background: ColorSpec,
+    /// 前景/文字色。
     pub foreground: ColorSpec,
+    /// 强调色。
     pub accent: ColorSpec,
 }
 
@@ -128,6 +146,7 @@ pub struct Palette {
 pub struct FormulaStyle {
     /// 公式基准字号（pt）。
     pub font_size_pt: f32,
+    /// 公式字体族（Typst 字体名，如 "New Computer Modern Math"）。
     pub font_family: String,
 }
 

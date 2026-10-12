@@ -13,15 +13,28 @@ pub enum AnimKind {
     /// 从无到有：沿路径逐段画出（描边生长），填充随之淡入。
     Create(ItemId),
     /// 淡入：透明度 0→1，可选从偏移处平移进入、从 90% 缩放放大。
-    FadeIn { id: ItemId, shift: Vec2 },
+    FadeIn {
+        /// 目标对象。
+        id: ItemId,
+        /// 进入时的平移偏移（零向量 = 原地淡入）。
+        shift: Vec2,
+    },
     /// 淡出：透明度 1→0，结束后对象隐藏。
     FadeOut(ItemId),
     /// 形变：`from` 形变为 `to`（几何/颜色/变换插值；元素序列不一致时退化为交叉淡化）。
-    Transform { from: ItemId, to: ItemId },
+    Transform {
+        /// 形变起点对象。
+        from: ItemId,
+        /// 形变终点对象（完成后保留在画布上）。
+        to: ItemId,
+    },
     /// 值跟踪器动画：`from` → `to`（updater 求值期信号的数据来源，本身不产生绘制）。
     SetValue {
+        /// 目标跟踪器。
         tracker: TrackerId,
+        /// 起始值（由 Timeline 填充为构建期当前值）。
         from: f64,
+        /// 结束值。
         to: f64,
     },
 }
@@ -50,16 +63,21 @@ impl AnimKind {
 /// 动画描述（构建期）。
 #[derive(Debug, Clone)]
 pub struct Anim {
+    /// 动画类型（做什么）。
     pub kind: AnimKind,
+    /// 时长（秒），默认 1.0，经 [`Anim::during`] 修改。
     pub duration_s: f64,
+    /// 缓动函数（默认 [`RateFunc::Linear`]）。
     pub rate: RateFunc,
 }
 
 impl Anim {
+    /// 创建 Create 动画：沿路径逐段画出。
     pub fn create(id: ItemId) -> Self {
         Self::of(AnimKind::Create(id))
     }
 
+    /// 创建 FadeIn 动画：原地淡入。
     pub fn fade_in(id: ItemId) -> Self {
         Self::of(AnimKind::FadeIn {
             id,
@@ -67,10 +85,12 @@ impl Anim {
         })
     }
 
+    /// 创建 FadeOut 动画：淡出并隐藏。
     pub fn fade_out(id: ItemId) -> Self {
         Self::of(AnimKind::FadeOut(id))
     }
 
+    /// 创建 Transform 动画：`from` 形变为 `to`。
     pub fn transform(from: ItemId, to: ItemId) -> Self {
         Self::of(AnimKind::Transform { from, to })
     }

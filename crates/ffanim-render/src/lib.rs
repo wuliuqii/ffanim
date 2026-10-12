@@ -18,6 +18,7 @@ use ffanim_core::{Color, DrawList, Item, Shape};
 
 /// 渲染后端抽象：DrawList → 非预乘 RGBA8 像素缓冲。
 pub trait RenderBackend {
+    /// 渲染一帧：DrawList → RGBA8 像素缓冲（非预乘，行优先）。
     fn render(&mut self, draw: &DrawList) -> Vec<u8>;
 }
 

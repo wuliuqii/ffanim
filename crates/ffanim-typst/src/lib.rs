@@ -1,8 +1,8 @@
 //! ffanim-typst：Typst 库嵌入（唯一接触面）。
 //!
-//! - [`MathWorld`]：进程内 World 实现（字体来自 typst-assets，主源为内存字符串）；
+//! - `MathWorld`：进程内 World 实现（字体来自 typst-assets，主源为内存字符串）；
 //! - [`TypstEngine`]：公式排版入口 + LRU 缓存（同公式二次排版 0 开销）；
-//! - [`Formula`]：排版产物 → ffanim [`Item`] 适配层（字形/形状 → 贝塞尔路径）。
+//! - [`Formula`]：排版产物 → ffanim `Item` 适配层（字形/形状 → 贝塞尔路径）。
 //!
 //! 坐标约定：Formula 内部为 pt 单位、y 向下（与 Typst Frame 一致），
 //! 缩放/居中由调用方通过 `Item::with_transform` 完成。

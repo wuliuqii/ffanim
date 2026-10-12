@@ -164,9 +164,13 @@ struct CanvasArgs {
 /// 已调度的动画（帧为单位）。
 #[derive(Debug, Clone)]
 pub struct ScheduledAnim {
+    /// 起始帧（含）。
     pub start: usize,
+    /// 结束帧（不含）。
     pub end: usize,
+    /// 动画类型（做什么）。
     pub kind: AnimKind,
+    /// 缓动函数（进度 → 0..1）。
     pub rate: crate::rate::RateFunc,
 }
 

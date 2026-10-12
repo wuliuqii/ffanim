@@ -23,6 +23,8 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: 测试
         run: cargo test --workspace
+      - name: rustdoc 零警告（missing_docs 门禁）
+        run: cargo doc --workspace --no-deps
 
   # GPU 特性编译验证（无 GPU 硬件，运行时测试自动跳过）
   build-gpu:

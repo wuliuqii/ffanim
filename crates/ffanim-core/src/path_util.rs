@@ -5,7 +5,7 @@
 
 use kurbo::{Affine, BezPath, PathEl, Point};
 
-/// 提取路径的前 `alpha` 比例（∈[0,1]）。
+/// 提取路径的前 `alpha` 比例（∈\[0,1\]，超界钳制）。
 ///
 /// - `alpha = 1.0` 返回完整路径；
 /// - 最后一个未完成的段通过 de Casteljau 拆分取前半段；

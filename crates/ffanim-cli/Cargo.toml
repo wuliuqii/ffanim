@@ -9,6 +9,8 @@ repository.workspace = true
 [[bin]]
 name = "ffanim"
 path = "src/main.rs"
+# 门面 lib（crates/ffanim）与 CLI bin 同名 → rustdoc 输出路径冲突，bin 不产文档
+doc = false
 
 [lints]
 workspace = true

@@ -17,12 +17,15 @@ pub type ValueFn = Arc<dyn Fn(&[f64]) -> Item + Send + Sync>;
 /// 渲染期每帧以依赖 tracker 的当前值调用 [`Updater::eval`] 重建形状，
 /// 无可变状态（Send + Sync），与两阶段模型的并行求值兼容。
 pub struct Updater {
+    /// 重建的目标对象（渲染期按 id 就位替换）。
     pub item_id: ItemId,
+    /// 依赖的 tracker 下标列表（f 的输入顺序）。
     pub deps: Vec<TrackerId>,
     f: ValueFn,
 }
 
 impl Updater {
+    /// 注册求值期信号：每帧以 deps 顺序的 tracker 当前值调用 `f` 重建对象。
     pub fn new(
         item_id: ItemId,
         deps: Vec<TrackerId>,

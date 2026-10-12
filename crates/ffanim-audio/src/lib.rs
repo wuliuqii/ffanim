@@ -16,10 +16,13 @@ const DECODE_SR: u32 = 48_000;
 /// 音频诊断报告（`audio analyze` / `--json` 用）。
 #[derive(Debug, Clone)]
 pub struct AudioReport {
+    /// 源文件路径。
     pub path: PathBuf,
     /// 时长（秒）
     pub duration: f64,
+    /// 采样率（Hz）。
     pub sample_rate: u32,
+    /// 声道数。
     pub channels: usize,
     /// 全程 RMS 电平（dBFS，0 = 满幅正弦）
     pub rms_db: f64,
@@ -34,9 +37,13 @@ pub struct AudioReport {
 /// PCM 统计（纯函数，可测）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct PcmStats {
+    /// 全程 RMS 电平（dBFS）。
     pub rms_db: f64,
+    /// 峰值电平（dBFS）。
     pub peak_db: f64,
+    /// 削波样本数（|x| ≥ 1.0）。
     pub clipped_samples: usize,
+    /// 静音区间（起止秒）。
     pub silence: Vec<(f64, f64)>,
 }
 

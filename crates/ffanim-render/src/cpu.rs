@@ -8,6 +8,7 @@ use ffanim_core::DrawList;
 pub struct CpuBackend;
 
 impl CpuBackend {
+    /// 创建 CPU 后端（无状态，可按帧独立实例化以支持分段并行）。
     pub fn new() -> Self {
         Self
     }

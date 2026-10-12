@@ -1,6 +1,6 @@
 //! 缓动函数：manim rate_func 词汇的等价实现。
 //!
-//! 所有函数输入输出均约束在 [0,1]，超界输入先被钳制。
+//! 所有函数输入输出均约束在 \[0,1\]，超界输入先被钳制。
 
 /// 缓动类型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -19,7 +19,7 @@ pub enum RateFunc {
 }
 
 impl RateFunc {
-    /// 求值：t ∈ [0,1] → 进度 ∈ [0,1]（ThereAndBack 中点后回落）。
+    /// 求值：t ∈ \[0,1\] → 进度 ∈ \[0,1\]（ThereAndBack 中点后回落）。
     pub fn eval(self, t: f64) -> f64 {
         let t = t.clamp(0.0, 1.0);
         match self {

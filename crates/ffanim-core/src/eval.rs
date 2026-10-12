@@ -14,17 +14,23 @@ use kurbo::{Affine, Vec2}; // bounding_box
 
 /// 编译后的不可变时间轴（渲染期唯一输入）。
 pub struct CompiledTimeline {
+    /// 帧率。
     pub fps: u32,
+    /// 画布宽（像素）。
     pub width: u32,
+    /// 画布高（像素）。
     pub height: u32,
+    /// 背景色。
     pub background: Color,
     /// 全部对象的基准状态，下标即 [`ItemId`]。
     pub items: Vec<Item>,
+    /// 静态调度表（起始快照 → 目标快照），按 start_s 升序。
     pub anims: Vec<ScheduledAnim>,
     /// 值跟踪器初始值，下标即 [`TrackerId`]。
     pub trackers: Vec<f64>,
     /// 求值期信号（渲染期按帧重建形状）。
     pub updaters: Vec<crate::tracker::Updater>,
+    /// 总帧数（duration_s × fps）。
     pub duration_frames: usize,
 }
 

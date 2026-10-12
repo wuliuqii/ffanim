@@ -16,8 +16,11 @@ pub type ItemId = u64;
 /// 填充/描边样式（已解析为具体颜色，主题解析发生在构建期）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Paint {
+    /// 填充色（None = 不填充）。
     pub fill: Option<Color>,
+    /// 描边色（None = 不描边）。
     pub stroke: Option<Color>,
+    /// 描边宽度（像素）。
     pub stroke_width: f64,
 }
 
@@ -60,9 +63,13 @@ pub enum Shape {
 /// 可视对象。
 #[derive(Debug, Clone)]
 pub struct Item {
+    /// 对象唯一标识（0 = 未注册，注册后由 Timeline 分配）。
     pub id: ItemId,
+    /// 形状（路径或组合）。
     pub shape: Shape,
+    /// 填充/描边样式。
     pub paint: Paint,
+    /// 仿射变换（挂在 Item 上，不烘焙进点阵）。
     pub transform: Affine,
 }
 
@@ -115,26 +122,31 @@ impl Item {
         Self::from_path(path)
     }
 
+    /// 设置对象 id（构建器风格）。
     pub fn with_id(mut self, id: ItemId) -> Self {
         self.id = id;
         self
     }
 
+    /// 设置填充色（构建器风格）。
     pub fn with_fill(mut self, color: Color) -> Self {
         self.paint.fill = Some(color);
         self
     }
 
+    /// 设置描边色（构建器风格）。
     pub fn with_stroke(mut self, color: Color) -> Self {
         self.paint.stroke = Some(color);
         self
     }
 
+    /// 设置描边宽度（构建器风格）。
     pub fn with_stroke_width(mut self, width: f64) -> Self {
         self.paint.stroke_width = width;
         self
     }
 
+    /// 设置仿射变换（构建器风格）。
     pub fn with_transform(mut self, transform: Affine) -> Self {
         self.transform = transform;
         self
@@ -149,13 +161,18 @@ impl Item {
 /// 一帧的绘制指令（渲染层唯一输入）。
 #[derive(Debug, Clone)]
 pub struct DrawList {
+    /// 画布宽（像素）。
     pub width: u32,
+    /// 画布高（像素）。
     pub height: u32,
+    /// 背景色。
     pub background: Color,
+    /// 本帧全部可见对象（已按 z 序排列）。
     pub items: Vec<Item>,
 }
 
 impl DrawList {
+    /// 创建空绘制指令列表。
     pub fn new(width: u32, height: u32, background: Color) -> Self {
         Self {
             width,
@@ -165,6 +182,7 @@ impl DrawList {
         }
     }
 
+    /// 追加一个对象（追加顺序即 z 序，后画在上）。
     pub fn push(&mut self, item: Item) {
         self.items.push(item);
     }

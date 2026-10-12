@@ -17,6 +17,7 @@ pub struct FormulaOptions {
 pub struct FormulaPiece {
     /// 绝对坐标路径（pt，y 向下，已含字形平移与缩放）。
     pub path: BezPath,
+    /// 填充色（None = 只描边，如分数线）。
     pub fill: Option<Color>,
     /// (描边色, 描边宽度 pt)。
     pub stroke: Option<(Color, f64)>,
@@ -30,8 +31,11 @@ pub struct FormulaPiece {
 /// 排版完成的公式（不可变，可被多帧共享）。
 #[derive(Debug, Clone)]
 pub struct Formula {
+    /// 排版宽度（pt）。
     pub width_pt: f64,
+    /// 排版高度（pt）。
     pub height_pt: f64,
+    /// 绘制片段（字形轮廓 + 几何形状，顺序即 Typst Frame 遍历序）。
     pub pieces: Vec<FormulaPiece>,
 }
 
