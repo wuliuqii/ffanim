@@ -645,3 +645,55 @@ fn move_沿路径移动编排() {
         end[5]
     );
 }
+
+/// P1-5 结构匹配形变编排（公式以外）：`match_shapes` 几何签名配对 +
+/// `MatchPlan` 调度 transform（门面 re-export 覆盖）。
+#[test]
+fn shapes_结构匹配形变编排() {
+    use ffanim::kurbo::{Affine, Circle, Rect};
+    use ffanim::{MatchPlan, match_shapes, render_frame};
+
+    // 三件套：同 base path + transform 挂位（验证平移无关配对）
+    let sq = || Item::rect(Rect::new(0.0, 0.0, 60.0, 60.0));
+    let ci = || Item::circle(Circle::new((0.0, 0.0), 30.0));
+    let tri = || Item::regular_polygon((0.0, 0.0).into(), 30.0, 3);
+    let place = |it: Item, x: f64| {
+        it.with_fill(FG)
+            .with_transform(Affine::translate((x, 270.0)))
+    };
+    // a = [方, 三角, 圆] → b = [方, 圆, 三角]：后两者交换（乱序移动）
+    let a = vec![place(sq(), 100.0), place(tri(), 200.0), place(ci(), 300.0)];
+    let b = vec![place(sq(), 500.0), place(ci(), 600.0), place(tri(), 700.0)];
+
+    let plan: MatchPlan = match_shapes(&a, &b);
+    assert_eq!(plan.paired, vec![(0, 0), (1, 2), (2, 1)], "{plan:?}");
+    assert!(plan.leave_a.is_empty() && plan.enter_b.is_empty());
+
+    // 编排：a 同窗淡入 → 配对形变（together 同窗口）
+    let mut tl = Timeline::new(960, 540, 30, BG);
+    let ids_a: Vec<_> = a.iter().map(|it| tl.add(it.clone())).collect();
+    let ids_b: Vec<_> = b.iter().map(|it| tl.add(it.clone())).collect();
+    tl.group(ids_a.iter().map(|&id| Anim::fade_in(id).during(0.6)), 0.0);
+    tl.wait(0.3);
+    tl.together(
+        plan.paired
+            .iter()
+            .map(|&(i, j)| Anim::transform(ids_a[i], ids_b[j]).during(1.0)),
+    );
+    let ct = tl.compile();
+    assert_eq!(ct.anims.len(), 6, "3 淡入 + 3 形变");
+    assert_eq!(ct.duration_frames, 57, "0.6 + 0.3 + 1.0 @30fps");
+
+    // 求值：形变窗口前 a 可见（3 件）→ 窗口中形变插值（3 件）→ 窗口后 b 可见（3 件）
+    assert_eq!(render_frame(&ct, 20).items.len(), 3);
+    assert_eq!(render_frame(&ct, 42).items.len(), 3);
+    assert_eq!(render_frame(&ct, 56).items.len(), 3);
+    // 窗口中点：三角从 a1(200,270) 形变到 b2(700,270)，DrawList 位置取插值中点
+    let morph = render_frame(&ct, 42);
+    let tri_tx = morph.items[1].transform.as_coeffs();
+    assert!(
+        (tri_tx[4] - 450.0).abs() < 1.0,
+        "三角中点 x = {}",
+        tri_tx[4]
+    );
+}

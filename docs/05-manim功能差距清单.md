@@ -51,7 +51,7 @@
 | P1-2 | 组合调度糖：Succession / Together | Succession/Together | ✅ 已落地（M9.7）：`tl.together`（同窗对齐游标取最长 dur）/ `tl.succession`（逐段接续），埋点齐全 | S |
 | P1-3 | FadeIn 方向家族 / GrowFromCenter / SpinIn | GrowFromEdge/Center… | ✅ 已落地（M9.7）：FadeIn 参数化 `{shift, scale_from, spin}`，`fade_in_from/grow_from_center/grow_from_edge/spin_in` 四构造器 | S |
 | P1-4 | MoveAlongPath 沿路径移动 | MoveAlongPath | 需逐帧路径采样求值（TransformTo 不够），中等 | ✅ M9.10（弧长匀速采样 + transform_at 顺序段根修） |
-| P1-5 | 公式以外的结构匹配形变 | TransformMatchingShapes | match_formulas 基座已有（M9.1 diff 升级），扩展到任意路径文本缺失（SVG 字形无 source 文本） | M |
+| P1-5 | 公式以外的结构匹配形变 | TransformMatchingShapes | match_formulas 基座已有（M9.1 diff 升级），扩展到任意路径文本缺失（SVG 字形无 source 文本） | ✅ M9.11（match_shapes 几何签名配对 + MatchPlan 上移统一） |
 | P1-6 | 数字滚动 DecimalNumber | DecimalNumber + tracker | tracker+updater+Typst 组合已可行，缺"每帧改文本"的示范与便利封装（Typst LRU 缓存使逐帧排版可行） | S~M |
 | P1-7 | 标注复合件：SurroundingRectangle/Underline/Cross/BackgroundRect | 同名 | ✅ 已落地（M9.8）：`Item::surrounding_rect/underline/cross/background_rect`（基于注册基线 bbox + `Item::group` 拼组标注），annotate_demo 场景验收 | S |
 | P1-8 | Brace 花括号 + 括注文本 | Brace | 图形 brace 需形状生成（Typst 侧可排 brace 字符过渡） | M |

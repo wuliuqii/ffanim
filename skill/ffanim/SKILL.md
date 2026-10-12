@@ -117,6 +117,13 @@ tmTheme，token 色属排版引擎资产不走场景主题 JSON）；`lang` 空�
 引擎已自动填入主题前景色（`CodeTheme::foreground_hex()`），画布配色可据此对齐**。
 code 带埋点（RUST_LOG=info 查语言/行数/主题 → 宽高/片段数/着色种数/耗时）。
 
+结构匹配形变（manim TransformMatchingTex / TransformMatchingShapes 对应）：
+`ffanim_typst::match_formulas(&f1, &f2)`（源文本 diff 配对，公式专用）与 `ffanim::match_shapes(&[Item], &[Item])`
+（几何签名配对，公式以外任意散件）共用 `MatchPlan { paired, leave_a, enter_b }` → 配对做
+`Anim::transform`、其余 `fade_out`/`fade_in`（同窗 `tl.together`）。签名 = 平移归零 + 0.01pt
+精度序列化：同形异位必配对（outline_text/SVG 烘焙位移、arrange 挂 transform 均可），异形不配对；
+粒度调用方定（逐字形 / 逐图形），Group/Image 不参与。
+
 ## Agent 验证循环（无人工看片）
 
 写完场景后按序执行，全部机器可判定：

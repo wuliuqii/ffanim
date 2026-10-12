@@ -13,16 +13,9 @@ use crate::formula::Formula;
 use similar::{DiffOp, TextDiff};
 use std::collections::{HashMap, VecDeque};
 
-/// 两公式的片段匹配结果，供场景层调度 Transform / FadeOut / FadeIn。
-#[derive(Debug, Clone)]
-pub struct MatchPlan {
-    /// 配对片段：(a 下标, b 下标) —— 将做 Transform 形变（含移动配对，index 允许乱序）。
-    pub paired: Vec<(usize, usize)>,
-    /// a 中未配对（将 FadeOut）。
-    pub leave_a: Vec<usize>,
-    /// b 中未配对（将 FadeIn）。
-    pub enter_b: Vec<usize>,
-}
+// MatchPlan 上移统一至 ffanim-core::match_shape（match_shapes 几何配对共用同型），
+// 此处 re-export 保持 `ffanim_typst::MatchPlan` 公开路径不变。
+pub use ffanim_core::match_shape::MatchPlan;
 
 /// 按片段源文本 diff 配对两个公式（Myers + move 配对）。
 ///

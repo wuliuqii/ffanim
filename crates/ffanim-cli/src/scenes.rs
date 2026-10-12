@@ -21,6 +21,7 @@ pub const SCENES: &[&str] = &[
     "annotate_demo",
     "code_demo",
     "move_demo",
+    "shapes_demo",
 ];
 
 /// 构建场景时间轴。
@@ -40,6 +41,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "annotate_demo" => annotate_demo(theme, fps),
         "code_demo" => code_demo(theme, fps),
         "move_demo" => move_demo(theme, fps),
+        "shapes_demo" => shapes_demo(theme, fps),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -757,5 +759,75 @@ fn move_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     tl.play(Anim::move_along_path(ball, &track).during(2.4));
 
     tl.wait(0.7);
+    Ok(tl)
+}
+
+/// M9.11 验收场景（P1-5）：TransformMatchingShapes 任意片段结构匹配形变。
+///
+/// 标题淡入 → "MATH" 逐字形淡入 → `match_shapes` 几何签名配对 →
+/// M/A/T 跨行形变（T 异位滑动）、H 淡出、S 淡入。
+fn shapes_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
+    use ffanim_core::{Color, ItemId};
+
+    let font = load_font(None)?;
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // 1) 标题淡入
+    let text_path = font.outline_text("TransformMatchingShapes", 52.0).unwrap();
+    let bounds = text_path.bounding_box();
+    let dx = f64::from(w) / 2.0 - (bounds.x0 + bounds.x1) / 2.0;
+    let title = tl.add(
+        Item::from_path(text_path)
+            .with_fill(fg)
+            .with_transform(Affine::translate((dx, f64::from(h) * 0.12))),
+    );
+    tl.play(Anim::fade_in(title).during(0.7));
+
+    // 逐字形散件：单字符 outline_text（同字形 base path 相同，位置烘焙在坐标里）
+    let glyphs = |word: &str, size: f64, cx: f64, baseline: f64, color: Color| -> Vec<Item> {
+        let adv = size * 0.78;
+        let n = word.chars().count() as f64;
+        word.chars()
+            .enumerate()
+            .map(|(i, c)| {
+                let path = font.outline_text(&c.to_string(), size).unwrap();
+                let x = cx - adv * (n - 1.0) / 2.0 + i as f64 * adv;
+                Item::from_path(path)
+                    .with_fill(color)
+                    .with_transform(Affine::translate((x, baseline)))
+            })
+            .collect()
+    };
+
+    // 2) "MATH" 逐字形淡入
+    let a_parts = glyphs("MATH", 96.0, 480.0, 250.0, accent);
+    let ids_a: Vec<ItemId> = a_parts.iter().map(|it| tl.add(it.clone())).collect();
+    tl.group(ids_a.iter().map(|&id| Anim::fade_in(id).during(0.8)), 0.08);
+    tl.wait(0.4);
+
+    // 3) match_shapes 配对 → M/A/T 形变（T 异位滑动）、H 淡出、S 淡入
+    let b_parts = glyphs("MAST", 96.0, 480.0, 420.0, fg);
+    let ids_b: Vec<ItemId> = b_parts.iter().map(|it| tl.add(it.clone())).collect();
+    let plan = ffanim::match_shapes(&a_parts, &b_parts);
+    let dur = 1.4;
+    let anims = plan
+        .paired
+        .iter()
+        .map(|&(i, j)| Anim::transform(ids_a[i], ids_b[j]).during(dur))
+        .chain(
+            plan.leave_a
+                .iter()
+                .map(|&k| Anim::fade_out(ids_a[k]).during(dur)),
+        )
+        .chain(
+            plan.enter_b
+                .iter()
+                .map(|&k| Anim::fade_in(ids_b[k]).during(dur)),
+        );
+    tl.together(anims);
+    tl.wait(0.8);
     Ok(tl)
 }

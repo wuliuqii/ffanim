@@ -47,6 +47,20 @@
 - 验收：demo_anim 5.8s 全片导出 1..3s 片段，ffprobe 实测 2.0s；3 解析单测 + 1 集成测试
 - 顺手修复 ci-gpu 配方存量编译损坏（peniko `Blob::new` 需 `Arc<dyn AsRef<[u8]>>`，改拷贝进 `Arc<Vec<u8>>`）
 
+### M9.11 manim 对齐第八批：P1-5 TransformMatchingShapes 任意片段结构匹配（2026-10-12）
+
+- feat(core): `ffanim::match_shapes(&[Item], &[Item]) -> MatchPlan`（match_shape 模块）——
+  文本缺失路径片段（SVG 字形/几何图形）的几何签名配对，manim `TransformMatchingShapes` 对应
+- **几何签名**：base path 平移归零 + 0.01pt 精度序列化——同形异位必配对（outline_text/SVG
+  的烘焙位移、arrange 的 transform 挂位均可），异形不配对；样式不参与，Group/Image 不参与
+- 算法 = 按签名 FIFO 二部配对（重复件按出现序对应，输出确定性排序，与文本 diff 不同天然
+  允许乱序移动）；粒度调用方决定（逐字形 / 逐图形）
+- **MatchPlan 上移统一**：struct 从 ffanim-typst::matching 移至 ffanim-core::match_shape，
+  typst 侧 re-export 保持 `ffanim_typst::MatchPlan` 公开路径零变化（文本配对与几何配对同型）
+- match_shapes 带 log::info 埋点：输入片段数 → 配对数（含异位移动）/淡出/淡入
+- 验收：shapes_demo 场景（"MATH" → "MAST" 逐字形：M/A 原地形变、T 异位滑动、H 淡出、
+  S 淡入）4.3s 出片目检；单测 7 项 + 集成 1 项（三件套交换配对 + 窗口三相处数 + 中点位置）
+
 ### M9.10 manim 对齐第七批：P1-4 MoveAlongPath 沿路径移动（2026-10-12）
 
 - feat(core): `Anim::move_along_path(id, &BezPath)`（AnimKind::MoveAlongPath）——弧长匀速
