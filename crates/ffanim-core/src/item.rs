@@ -6,7 +6,7 @@
 //! - `DrawList` 是渲染层唯一输入，GPU/CPU 后端消费同一表示。
 
 use crate::{Color, Error, Result};
-use kurbo::{Affine, BezPath, Circle, Rect};
+use kurbo::{Affine, BezPath, Circle, Rect, Vec2};
 // kurbo::Shape 与本模块的 Shape 枚举重名，匿名导入
 use kurbo::Shape as _;
 
@@ -163,6 +163,116 @@ impl Item {
         Self::from_path(circle.to_path(0.1))
     }
 
+    /// 椭圆。
+    pub fn ellipse(center: impl Into<kurbo::Point>, rx: f64, ry: f64) -> Self {
+        Self::from_path(kurbo::Ellipse::new(center, Vec2::new(rx, ry), 0.0).to_path(0.1))
+    }
+
+    /// 圆弧：从 start_deg 到 end_deg（度），**视觉上逆时针**扫过（manim 语义；
+    /// 屏幕 y 向下，实现层面 kurbo 数学角取负）。
+    pub fn arc(center: impl Into<kurbo::Point>, radius: f64, start_deg: f64, end_deg: f64) -> Self {
+        assert!(end_deg != start_deg, "圆弧起止角相同");
+        let start = start_deg.to_radians();
+        let sweep = (end_deg - start_deg).to_radians();
+        // y 向下：视觉逆时针 = 数学顺时针 = 扫角取负
+        let a = kurbo::Arc::new(center, Vec2::new(radius, radius), -start, -sweep, 0.0);
+        Self::from_path(a.to_path(0.1))
+    }
+
+    /// 线段。
+    pub fn line(a: impl Into<kurbo::Point>, b: impl Into<kurbo::Point>) -> Self {
+        let mut path = BezPath::new();
+        path.move_to(a.into());
+        path.line_to(b.into());
+        Self::from_path(path)
+    }
+
+    /// 虚线线段：dash/gap 交替沿 a→b 铺满。
+    pub fn dashed_line(
+        a: impl Into<kurbo::Point>,
+        b: impl Into<kurbo::Point>,
+        dash: f64,
+        gap: f64,
+    ) -> Self {
+        let (a, b) = (a.into(), b.into());
+        assert!(dash > 0.0 && gap > 0.0, "dash/gap 必须为正");
+        let d = b - a;
+        let len = d.hypot();
+        assert!(len > 1e-6, "虚线起止点重合");
+        let dir = d / len;
+        let mut path = BezPath::new();
+        let mut s = 0.0;
+        while s < len {
+            let e = (s + dash).min(len);
+            path.move_to(a + dir * s);
+            path.line_to(a + dir * e);
+            s = e + gap;
+        }
+        Self::from_path(path)
+    }
+
+    /// 箭头：线段 + 闭合三角头（头长自适应 = min(线长/4, 32px)，半角 25°）。
+    /// 三角头需填充：建议 `with_stroke(c).with_fill(c)` 同色。
+    pub fn arrow(a: impl Into<kurbo::Point>, b: impl Into<kurbo::Point>) -> Self {
+        let (a, b) = (a.into(), b.into());
+        let d = b - a;
+        let len = d.hypot();
+        assert!(len > 1e-6, "箭头起止点重合");
+        let dir = d / len;
+        let head_len = (len * 0.25).min(32.0);
+        let head_w = head_len * 0.466; // 半角 25°（tan 25° ≈ 0.466）
+        let base = b - dir * head_len;
+        let n = Vec2::new(-dir.y, dir.x);
+        let mut path = BezPath::new();
+        path.move_to(a);
+        path.line_to(base); // 线段止于头部底边，避免穿出
+        path.move_to(b);
+        path.line_to(base + n * head_w);
+        path.line_to(base - n * head_w);
+        path.close_path();
+        Self::from_path(path)
+    }
+
+    /// 全局包围盒（含自身 transform；`Group` 递归合并子项包围盒）。
+    /// 路径取控制点包围盒（kurbo 语义，与 manim 控制点框一致，布局够用）。
+    pub fn bbox(&self) -> Rect {
+        let local = match &self.shape {
+            Shape::Path(p) => {
+                if p.elements().is_empty() {
+                    Rect::ZERO
+                } else {
+                    p.bounding_box()
+                }
+            }
+            Shape::Group(children) => children
+                .iter()
+                .map(Item::bbox)
+                .reduce(|a, b| a.union(b))
+                .unwrap_or(Rect::ZERO),
+            Shape::Image(img) => Rect::new(0.0, 0.0, f64::from(img.width), f64::from(img.height)),
+        };
+        // 仿射变换四角后取轴对齐包围盒（含旋转的保守框）
+        let t = self.transform;
+        let xs = [
+            (t * kurbo::Point::new(local.x0, local.y0)).x,
+            (t * kurbo::Point::new(local.x1, local.y0)).x,
+            (t * kurbo::Point::new(local.x0, local.y1)).x,
+            (t * kurbo::Point::new(local.x1, local.y1)).x,
+        ];
+        let ys = [
+            (t * kurbo::Point::new(local.x0, local.y0)).y,
+            (t * kurbo::Point::new(local.x1, local.y0)).y,
+            (t * kurbo::Point::new(local.x0, local.y1)).y,
+            (t * kurbo::Point::new(local.x1, local.y1)).y,
+        ];
+        Rect::new(
+            xs.iter().cloned().fold(f64::INFINITY, f64::min),
+            ys.iter().cloned().fold(f64::INFINITY, f64::min),
+            xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+            ys.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+        )
+    }
+
     /// 正多边形。
     pub fn regular_polygon(center: kurbo::Point, radius: f64, sides: usize) -> Self {
         assert!(sides >= 3, "多边形至少 3 条边");
@@ -255,16 +365,104 @@ impl DrawList {
 mod tests {
     use super::*;
 
+    fn path_of(item: &Item) -> &BezPath {
+        match &item.shape {
+            Shape::Path(p) => p,
+            other => panic!("应为路径，得 {other:?}"),
+        }
+    }
+
     #[test]
     fn 正多边形闭合路径() {
         let item = Item::regular_polygon((100.0, 100.0).into(), 50.0, 3);
-        let Shape::Path(path) = &item.shape else {
-            panic!("应为路径");
-        };
-        let elements: Vec<_> = path.elements().to_vec();
+        let elements: Vec<_> = path_of(&item).elements().to_vec();
         // 3 顶点：move_to + 2 line_to + close = 4
         assert_eq!(elements.len(), 4);
         assert!(matches!(elements[0], kurbo::PathEl::MoveTo(_)));
+    }
+
+    #[test]
+    fn 线段与箭头路径结构() {
+        let line = Item::line((0.0, 0.0), (100.0, 0.0));
+        assert_eq!(path_of(&line).elements().len(), 2, "move_to + line_to");
+
+        // 箭头：线段（2 元素）+ 三角头（move + 2 line + close = 4）= 6
+        let arrow = Item::arrow((0.0, 0.0), (100.0, 0.0));
+        let els = path_of(&arrow).elements();
+        assert_eq!(els.len(), 6);
+        assert!(
+            matches!(els[2], kurbo::PathEl::MoveTo(_)),
+            "第 3 元素应起头部子路径"
+        );
+        assert!(matches!(els[5], kurbo::PathEl::ClosePath), "头部应闭合");
+        // 线段止于头部底边：第 2 点 x < 终点 x
+        if let kurbo::PathEl::LineTo(p) = els[1] {
+            assert!(p.x < 100.0, "线段不应穿出箭头底部");
+        } else {
+            panic!("第 2 元素应为 LineTo");
+        }
+    }
+
+    #[test]
+    fn 虚线段数() {
+        // 长 100、dash 10/gap 10 → 5 段虚线（每段 move+line = 2 元素）
+        let d = Item::dashed_line((0.0, 0.0), (100.0, 0.0), 10.0, 10.0);
+        assert_eq!(path_of(&d).elements().len(), 10);
+        // 尾部不足时截断：长 25 → dash 10 + 5（截断），共 2 段
+        let d2 = Item::dashed_line((0.0, 0.0), (25.0, 0.0), 10.0, 10.0);
+        assert_eq!(path_of(&d2).elements().len(), 4);
+    }
+
+    #[test]
+    fn 圆弧视觉逆时针包围盒() {
+        // 从 0° 到 90° 视觉逆时针：屏幕 y 向下 → 弧在右上，y 为负
+        let a = Item::arc((0.0, 0.0), 100.0, 0.0, 90.0);
+        let bb = a.bbox();
+        assert!((bb.x1 - 100.0).abs() < 1.0, "右边界 ≈100: {bb:?}");
+        assert!(
+            (bb.y0 + 100.0).abs() < 1.0,
+            "上边界 ≈-100（视觉向上）: {bb:?}"
+        );
+        assert!(
+            bb.y1 < 1.0 && bb.x0 > -1.0,
+            "弧不应越出第一视觉象限: {bb:?}"
+        );
+    }
+
+    #[test]
+    fn 椭圆包围盒() {
+        let e = Item::ellipse((50.0, 50.0), 30.0, 10.0);
+        let bb = e.bbox();
+        assert!(
+            (bb.x0 - 20.0).abs() < 1.0 && (bb.x1 - 80.0).abs() < 1.0,
+            "{bb:?}"
+        );
+        assert!(
+            (bb.y0 - 40.0).abs() < 1.0 && (bb.y1 - 60.0).abs() < 1.0,
+            "{bb:?}"
+        );
+    }
+
+    #[test]
+    fn 包围盒含变换与组合() {
+        let r = Item::rect(Rect::new(0.0, 0.0, 100.0, 100.0)).with_translate(10.0, 20.0);
+        let bb = r.bbox();
+        assert_eq!(bb, Rect::new(10.0, 20.0, 110.0, 120.0), "平移后包围盒");
+
+        let g = Item {
+            id: 1,
+            shape: Shape::Group(vec![
+                Item::circle(Circle::new((0.0, 0.0), 10.0)),
+                Item::circle(Circle::new((100.0, 0.0), 10.0)),
+            ]),
+            paint: Paint::default(),
+            transform: Affine::IDENTITY,
+        };
+        let bb = g.bbox();
+        assert!(
+            (bb.x0 + 10.0).abs() < 1.0 && (bb.x1 - 110.0).abs() < 1.0,
+            "组合取并集: {bb:?}"
+        );
     }
 
     #[test]

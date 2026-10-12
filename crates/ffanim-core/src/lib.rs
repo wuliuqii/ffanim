@@ -16,7 +16,7 @@ pub mod text;
 pub mod timeline;
 pub mod tracker;
 
-pub use anim::{Anim, AnimKind};
+pub use anim::{Anim, AnimKind, PoseDelta};
 pub use camera::Camera;
 pub use coords::Axes;
 pub use error::{Error, Result};

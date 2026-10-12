@@ -9,7 +9,13 @@ use ffanim_core::kurbo::{Affine, Circle, Rect};
 use ffanim_core::{Anim, Font, Item, Timeline};
 
 /// 场景清单（M5 起支持外部场景文件）。
-pub const SCENES: &[&str] = &["demo_anim", "formula_demo", "sine_demo", "text_demo"];
+pub const SCENES: &[&str] = &[
+    "demo_anim",
+    "formula_demo",
+    "sine_demo",
+    "text_demo",
+    "primitives_demo",
+];
 
 /// 构建场景时间轴。
 pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
@@ -21,6 +27,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "formula_demo" => formula_demo(theme, fps),
         "sine_demo" => sine_demo(theme, fps),
         "text_demo" => text_demo(theme, fps),
+        "primitives_demo" => Ok(primitives_demo(theme, fps)),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -253,4 +260,57 @@ fn text_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     show(&mut tl, &cap, 460.0, 0.8);
     tl.wait(0.8);
     Ok(tl)
+}
+
+/// manim 对齐 P0 验收场景：标注基元（线/箭头/虚线/弧/椭圆）+ 位姿动作糖。
+///
+/// 前半段基元逐个描边生长（group 错开），后半段演示 `shift_to / rotate_to /
+/// scale_to / move_to` 四个相对位姿动作（构建期解析为绝对 TransformTo）。
+fn primitives_demo(theme: &Theme, fps: u32) -> Timeline {
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let sw = f64::from(theme.style.stroke_width);
+    let (w, h) = (960.0_f64, 540.0_f64);
+    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background().unwrap());
+
+    // —— 标注基元逐个 create（group 错开 0.15s）——
+    let line = tl.add(
+        Item::line((100.0, 120.0), (300.0, 120.0))
+            .with_stroke(fg)
+            .with_stroke_width(sw),
+    );
+    let arrow = tl.add(
+        Item::arrow((380.0, 120.0), (560.0, 120.0))
+            .with_stroke(accent)
+            .with_fill(accent),
+    );
+    let dash = tl.add(
+        Item::dashed_line((640.0, 120.0), (860.0, 120.0), 14.0, 10.0)
+            .with_stroke(fg)
+            .with_stroke_width(sw),
+    );
+    let arc = tl.add(
+        Item::arc((200.0, 360.0), 80.0, 0.0, 180.0)
+            .with_stroke(accent)
+            .with_stroke_width(sw),
+    );
+    let ell = tl.add(
+        Item::ellipse((620.0, 360.0), 140.0, 70.0)
+            .with_stroke(fg)
+            .with_stroke_width(sw),
+    );
+    let ids = [line, arrow, dash, arc, ell];
+    tl.group(ids.iter().map(|&id| Anim::create(id).during(0.8)), 0.15);
+    tl.wait(0.4);
+
+    // —— 位姿动作糖：相对目标在 play 时按基线解析为绝对 TransformTo ——
+    tl.play(Anim::shift_to(arrow, 80.0, 0.0).during(0.8)); // 箭头右移
+    tl.overlap(0.4);
+    tl.play(Anim::rotate_to(arc, std::f64::consts::FRAC_PI_2).during(0.8)); // 弧视觉逆时针转 90°
+    tl.overlap(0.4);
+    tl.play(Anim::scale_to(ell, 1.4).during(0.8)); // 椭圆放大
+    tl.wait(0.2);
+    tl.play(Anim::move_to(ell, (w / 2.0, h / 2.0)).during(1.0)); // 移到画布中心
+    tl.wait(0.6);
+    tl
 }

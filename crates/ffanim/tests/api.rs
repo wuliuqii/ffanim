@@ -250,3 +250,57 @@ fn analyze_pcm_纯函数诊断() {
         hot.clipped_samples
     );
 }
+
+#[test]
+fn primitives_标注基元与位姿动作() {
+    use ffanim::PoseDelta;
+    use ffanim::kurbo::{Affine, Point, Vec2};
+
+    // —— 标注基元：路径非空 + 包围盒合理 ——
+    assert!((Item::line((0.0, 0.0), (100.0, 0.0)).bbox().x1 - 100.0).abs() < 1e-9);
+    let arrow = Item::arrow((0.0, 0.0), (100.0, 0.0));
+    assert!(
+        arrow.bbox().y0 < 0.0,
+        "箭头头部应超出线段包围盒: {:?}",
+        arrow.bbox()
+    );
+    assert!(
+        (Item::dashed_line((0.0, 0.0), (50.0, 0.0), 10.0, 5.0)
+            .bbox()
+            .x1
+            - 50.0)
+            .abs()
+            < 1e-9
+    );
+    let ell = Item::ellipse((0.0, 0.0), 30.0, 10.0);
+    assert!((ell.bbox().width() - 60.0).abs() < 1.0, "{:?}", ell.bbox());
+    assert!(
+        Item::arc((0.0, 0.0), 50.0, 0.0, 90.0).bbox().y0 < 0.0,
+        "视觉逆时针弧应在上方"
+    );
+
+    // —— 位姿动作：构建期 Pose 在 play 时解析为绝对 TransformTo ——
+    let mut tl = Timeline::new(200, 200, 30, BG);
+    let id = tl.add(arrow);
+    tl.play(Anim::shift_to(id, 40.0, 0.0).during(1.0));
+    tl.play(Anim::rotate_to(id, std::f64::consts::FRAC_PI_2).during(1.0));
+    tl.play(Anim::scale_to(id, 2.0).during(1.0));
+    tl.play(Anim::move_to(id, (150.0, 150.0)).during(1.0));
+    let c = tl.compile();
+    assert_eq!(c.anims.len(), 4, "四段位姿动作全部落表");
+    assert!(
+        c.anims
+            .iter()
+            .all(|a| matches!(a.kind, ffanim::AnimKind::TransformTo { .. })),
+        "编译表内不应残留 Pose 变体"
+    );
+
+    // PoseDelta 为门面公开项（规则 B）：resolve 语义直接断言
+    let d: PoseDelta = PoseDelta::Shift(Vec2::new(40.0, 0.0));
+    let to = d.resolve(Affine::IDENTITY, Point::new(50.0, 25.0));
+    let p = to * Point::new(50.0, 25.0);
+    assert!(
+        (p.x - 90.0).abs() < 1e-9 && (p.y - 25.0).abs() < 1e-9,
+        "{p:?}"
+    );
+}

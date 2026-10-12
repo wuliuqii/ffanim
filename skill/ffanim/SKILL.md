@@ -36,14 +36,25 @@ ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4")?;
 - `tl.add(item) -> ItemId`：注册对象（初始状态）。动画不修改原对象，渲染期按调度表插值。
 - `tl.add_tracker(v0) -> TrackerId` / `Anim::set_value(tracker, to)`：值动画（与其他动画同表调度）。
 - `tl.add_updater(&[deps], move |v| Item)`：注册信号节点，渲染期按 tracker 值**逐帧重建**形状（如函数图像随参数变化）。
+- 基元构造器：`Item::rect / circle / regular_polygon / from_path / from_image` +
+  标注五件套 `Item::line(a, b)` / `arrow(a, b)`（线+闭合三角头，需同色 fill+stroke）/
+  `dashed_line(a, b, dash, gap)` / `arc(center, r, 起角°, 止角°)`（视觉逆时针）/
+  `ellipse(center, rx, ry)`；`item.bbox() -> Rect` 查包围盒（布局/对齐用）。
 
 | 动画 | 效果 |
 |---|---|
 | `Anim::create(id)` | 描边生长（沿路径逐段显现） |
 | `Anim::fade_in(id)` / `fade_out` | 透明度渐变 |
 | `Anim::transform(from, to)` | 形变（需同为路径，逐点映射） |
+| `Anim::shift_to(id, dx, dy)` | 相对平移到（manim `.animate.shift`） |
+| `Anim::move_to(id, 点)` | 平移至 bbox 中心落在目标点 |
+| `Anim::rotate_to(id, 弧度)` | 绕 bbox 中心旋转（正 = **视觉逆时针**） |
+| `Anim::scale_to(id, 系数)` | 绕 bbox 中心缩放 |
 | `Anim::set_value(tracker, to)` | tracker 值动画 |
 | `.during(s)` | 时长（秒）；`.shift(dx, dy)` 位移修饰；`RateFunc` 缓动（Linear/Smooth/EaseIn/EaseOut/ThereAndBack） |
+
+> 位姿四件套（shift_to/move_to/rotate_to/scale_to）在 `play()` 时按构建期基线解析为
+> 绝对 TransformTo，可连续串接（后段基于前段终点）。
 
 ### ⚠️ `tl.overlap(d)` 语义（最常见坑）
 

@@ -46,6 +46,19 @@
 - CLI `render --section "起..止秒"`：秒→帧四舍五入 + clamp 到全片；与 `--audio` 同用时提示音轨为完整音轨
 - 验收：demo_anim 5.8s 全片导出 1..3s 片段，ffprobe 实测 2.0s；3 解析单测 + 1 集成测试
 - 顺手修复 ci-gpu 配方存量编译损坏（peniko `Blob::new` 需 `Arc<dyn AsRef<[u8]>>`，改拷贝进 `Arc<Vec<u8>>`）
+
+### M9.3 manim 对齐第一批：标注基元 + 位姿动作糖（2026-10-12）
+
+- feat(core): 标注基元五件套——`Item::line` / `arrow`（线+闭合三角头，头长自适应 min(len/4, 32px)）/
+  `dashed_line(a, b, dash, gap)` / `arc(center, r, 起角°, 止角°)`（视觉逆时针，manim 语义）/
+  `ellipse(center, rx, ry)` + `Item::bbox()`（Path 控制点框 / Group 递归并集 / Image 按尺寸，含变换四角）
+- feat(core): 位姿动作糖——`Anim::shift_to / move_to / rotate_to / scale_to`（manim `.animate.*` 对应）：
+  构建期 `AnimKind::Pose` 中间表示 + `PoseDelta::resolve`（绕 bbox 中心的相对位姿 → 绝对仿射），
+  `Timeline::play` 时解析落表为 `TransformTo`，编译表内不出现 Pose 变体（求值路径零改动）
+- feat(cli): primitives_demo parity 场景（基元 group 描边生长 + 位姿动作串演，出片 5.2s 目检通过）
+- test: item 基元/包围盒 6 项 + timeline 位姿语义 5 项 + 集成测试 1 项（PoseDelta 门面覆盖），
+  SKILL.md 词汇表与 docs/05 P0-1/P0-4 状态同步
+
 ## [v0.2.0] - 2026-10-12
 
 M7 地基与拆分 + 1080p 性能基线。semver 0.x 规则自本版本起生效。

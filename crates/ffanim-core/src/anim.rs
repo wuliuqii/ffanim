@@ -5,7 +5,7 @@
 
 use crate::rate::RateFunc;
 use crate::{ItemId, tracker::TrackerId};
-use kurbo::{Affine, Vec2};
+use kurbo::{Affine, Point, Vec2};
 
 /// 动画类型。
 #[derive(Debug, Clone)]
@@ -47,6 +47,48 @@ pub enum AnimKind {
         /// 目标变换（完成后保留为对象基线）。
         to: Affine,
     },
+    /// 相对位姿动作（构建期中间表示，manim `.animate.*` 对应词汇）：
+    /// [`Timeline::play`](crate::Timeline::play) 时按构建期基线解析为绝对
+    /// [`AnimKind::TransformTo`]，编译表内不出现此变体。
+    Pose {
+        /// 目标对象。
+        id: ItemId,
+        /// 相对位姿变化。
+        delta: PoseDelta,
+    },
+}
+
+/// 相对位姿目标：`resolve` 由基线变换与包围盒中心算出绝对目标变换。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PoseDelta {
+    /// 世界系平移 delta。
+    Shift(Vec2),
+    /// 平移使对象 bbox 中心落在目标点。
+    MoveTo(Point),
+    /// 绕 bbox 中心旋转（弧度；正 = **视觉逆时针**，manim 语义）。
+    Rotate(f64),
+    /// 绕 bbox 中心缩放系数。
+    Scale(f64),
+}
+
+impl PoseDelta {
+    /// 由基线变换 `from` 与其包围盒中心 `center` 计算绝对目标变换。
+    pub fn resolve(self, from: Affine, center: Point) -> Affine {
+        let c = Vec2::new(center.x, center.y);
+        match self {
+            PoseDelta::Shift(d) => Affine::translate(d) * from,
+            PoseDelta::MoveTo(p) => {
+                Affine::translate(Vec2::new(p.x - center.x, p.y - center.y)) * from
+            }
+            PoseDelta::Rotate(a) => {
+                // 视觉逆时针 = 数学顺时针（y 向下）→ 角度取负
+                Affine::translate(c) * Affine::rotate(-a) * Affine::translate(-c) * from
+            }
+            PoseDelta::Scale(k) => {
+                Affine::translate(c) * Affine::scale(k) * Affine::translate(-c) * from
+            }
+        }
+    }
 }
 
 impl AnimKind {
@@ -67,6 +109,12 @@ impl AnimKind {
                 format!("SetValue(tracker#{tracker}: {from:.3}→{to:.3})")
             }
             AnimKind::TransformTo { id, .. } => format!("TransformTo(item#{id})"),
+            AnimKind::Pose { id, delta } => match delta {
+                PoseDelta::Shift(d) => format!("Pose(item#{id}, shift=({:.0},{:.0}))", d.x, d.y),
+                PoseDelta::MoveTo(p) => format!("Pose(item#{id}, move_to=({:.0},{:.0}))", p.x, p.y),
+                PoseDelta::Rotate(a) => format!("Pose(item#{id}, rotate={a:.2}rad)"),
+                PoseDelta::Scale(k) => format!("Pose(item#{id}, scale={k:.2})"),
+            },
         }
     }
 }
@@ -112,6 +160,38 @@ impl Anim {
             id,
             from: Affine::IDENTITY, // 由 Timeline::play 填充（构建期当前变换）
             to,
+        })
+    }
+
+    /// 位姿动作：世界系平移（manim `.animate.shift(dx, dy)` 对应）。
+    pub fn shift_to(id: ItemId, dx: f64, dy: f64) -> Self {
+        Self::of(AnimKind::Pose {
+            id,
+            delta: PoseDelta::Shift(Vec2::new(dx, dy)),
+        })
+    }
+
+    /// 位姿动作：移动到目标点（对象 bbox 中心对齐）。
+    pub fn move_to(id: ItemId, target: impl Into<Point>) -> Self {
+        Self::of(AnimKind::Pose {
+            id,
+            delta: PoseDelta::MoveTo(target.into()),
+        })
+    }
+
+    /// 位姿动作：绕 bbox 中心旋转（弧度；正 = 视觉逆时针，manim 语义）。
+    pub fn rotate_to(id: ItemId, angle: f64) -> Self {
+        Self::of(AnimKind::Pose {
+            id,
+            delta: PoseDelta::Rotate(angle),
+        })
+    }
+
+    /// 位姿动作：绕 bbox 中心缩放。
+    pub fn scale_to(id: ItemId, factor: f64) -> Self {
+        Self::of(AnimKind::Pose {
+            id,
+            delta: PoseDelta::Scale(factor),
         })
     }
 

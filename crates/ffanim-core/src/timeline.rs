@@ -145,7 +145,8 @@ impl Timeline {
     }
 
     /// 构建期推演（play/group 共用）：SetValue 与 TransformTo 的 from 取构建期当前值，
-    /// 对象/tracker 基线快进到目标（求值期段前取 from 的语义见 `eval::transform_at`）。
+    /// 对象/tracker 基线快进到目标（求值期段前取 from 的语义见 `eval::transform_at`）；
+    /// Pose（相对位姿）解析为绝对 TransformTo。
     fn prepare(&mut self, anim: &mut Anim) {
         if let AnimKind::SetValue { tracker, from, to } = &mut anim.kind {
             *from = self.tracker_cur[*tracker];
@@ -157,6 +158,16 @@ impl Timeline {
             let target = *to;
             *from = self.items[idx].transform;
             self.items[idx].transform = target;
+        }
+        if let AnimKind::Pose { id, delta } = anim.kind.clone() {
+            // 相对位姿：由基线与 bbox 中心算绝对目标后按 TransformTo 落表
+            let idx = id as usize;
+            assert!(idx < self.items.len(), "Pose 目标对象 #{id} 未注册");
+            let from = self.items[idx].transform;
+            let center = self.items[idx].bbox().center();
+            let to = delta.resolve(from, center);
+            self.items[idx].transform = to;
+            anim.kind = AnimKind::TransformTo { id, from, to };
         }
     }
 
@@ -227,6 +238,106 @@ struct CanvasArgs {
     width: u32,
     height: u32,
     background: Color,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kurbo::{Affine, Point};
+
+    const BG: crate::Color = crate::Color::new(14, 17, 22, 255);
+
+    /// 100x100 矩形（原点在 (0,0)），compile 后返回（anims/items 语义断言用）。
+    fn rect_timeline() -> (Timeline, ItemId) {
+        let mut tl = Timeline::new(960, 540, 30, BG);
+        let id = tl.add(Item::rect(kurbo::Rect::new(0.0, 0.0, 100.0, 100.0)));
+        (tl, id)
+    }
+
+    fn affine_close(a: Affine, b: Affine) -> bool {
+        a.as_coeffs()
+            .iter()
+            .zip(b.as_coeffs())
+            .all(|(x, y)| (x - y).abs() < 1e-9)
+    }
+
+    #[test]
+    fn 位姿_平移解析为绝对变换并快进基线() {
+        let (mut tl, id) = rect_timeline();
+        tl.play(Anim::shift_to(id, 50.0, 0.0).during(1.0));
+        let c = tl.compile();
+        // 落表为 TransformTo：from = 单位阵，to = 平移(50,0)
+        assert_eq!(c.anims.len(), 1);
+        assert!(
+            matches!(&c.anims[0].kind, AnimKind::TransformTo { from, to, .. }
+                if *from == Affine::IDENTITY && affine_close(*to, Affine::translate((50.0, 0.0)))),
+            "应为绝对 TransformTo: {:?}",
+            c.anims[0].kind
+        );
+        // 基线快进：对象变换 = 目标位姿
+        assert!(affine_close(
+            c.items[0].transform,
+            Affine::translate((50.0, 0.0))
+        ));
+    }
+
+    #[test]
+    fn 位姿_连续动作基于前段基线() {
+        let (mut tl, id) = rect_timeline();
+        tl.play(Anim::shift_to(id, 50.0, 0.0).during(1.0));
+        tl.play(Anim::scale_to(id, 2.0).during(1.0));
+        let c = tl.compile();
+        let AnimKind::TransformTo { from, to, .. } = &c.anims[1].kind else {
+            panic!("第二段应为 TransformTo");
+        };
+        // from = 第一段终点；中心 = 平移后 bbox 中心 (100, 50)
+        assert!(affine_close(*from, Affine::translate((50.0, 0.0))));
+        let expect = Affine::translate((100.0, 50.0))
+            * Affine::scale(2.0)
+            * Affine::translate((-100.0, -50.0))
+            * Affine::translate((50.0, 0.0));
+        assert!(affine_close(*to, expect), "to = 绕新中心缩放: {to:?}");
+    }
+
+    #[test]
+    fn 位姿_旋转视觉逆时针() {
+        let (mut tl, id) = rect_timeline();
+        tl.play(Anim::rotate_to(id, std::f64::consts::FRAC_PI_2).during(1.0));
+        let c = tl.compile();
+        let AnimKind::TransformTo { to, .. } = &c.anims[0].kind else {
+            panic!("应为 TransformTo");
+        };
+        // bbox 中心 (50,50)；右侧点 (100,50) 视觉逆时针 → 顶点 (50,0)
+        let p = *to * Point::new(100.0, 50.0);
+        assert!(
+            (p.x - 50.0).abs() < 1e-9 && (p.y - 0.0).abs() < 1e-9,
+            "右点应到顶点: {p:?}"
+        );
+    }
+
+    #[test]
+    fn 位姿_移动到目标点对齐中心() {
+        let (mut tl, id) = rect_timeline();
+        tl.play(Anim::move_to(id, (300.0, 200.0)).during(1.0));
+        let c = tl.compile();
+        let AnimKind::TransformTo { to, .. } = &c.anims[0].kind else {
+            panic!("应为 TransformTo");
+        };
+        // 原 bbox 中心 (50,50) → 平移 (250,150)
+        assert!(
+            affine_close(*to, Affine::translate((250.0, 150.0))),
+            "{to:?}"
+        );
+    }
+
+    #[test]
+    fn 位姿_未注册对象报错() {
+        let mut tl = Timeline::new(960, 540, 30, BG);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            tl.play(Anim::shift_to(42, 1.0, 1.0));
+        }));
+        assert!(result.is_err(), "未注册对象应 panic");
+    }
 }
 
 /// 已调度的动画（帧为单位）。
