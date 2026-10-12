@@ -5,8 +5,8 @@
 
 pub use ffanim_core::kurbo;
 pub use ffanim_core::{
-    Anim, AnimKind, Axes, Camera, Color, CompiledTimeline, DrawList, Error, Font, Item, RateFunc,
-    Result, Style, Theme, Timeline, render_frame,
+    Anim, AnimKind, Axes, Camera, Color, CompiledTimeline, DrawList, Error, Font, ImageAsset, Item,
+    RateFunc, Result, Style, Theme, Timeline, from_svg_file, from_svg_str, render_frame,
 };
 
 /// 公式/富文本排版子系统（Typst 嵌入）：TypstEngine / Formula / Text / match_formulas。

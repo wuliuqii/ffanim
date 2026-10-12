@@ -146,7 +146,7 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
                 _ => {}
             }
         }
-        state.paint = state.paint.with_opacity(opacity);
+        with_opacity_all(&mut state, opacity);
         // 完全透明的对象不出现在绘制列表（也避免空路径进入渲染层）
         if opacity > 1e-6 {
             state.transform = cam * state.transform;
@@ -278,14 +278,51 @@ fn enter_transform(state: &Item, shift: Vec2, alpha: f64) -> Affine {
     Affine::translate(shift * (1.0 - alpha)) * about_center
 }
 
-/// 对象包围盒中心（变换后）。
+/// 对象包围盒中心（变换后；组合取子项包围盒并集）。
 fn item_center(state: &Item) -> kurbo::Point {
-    let Shape::Path(path) = &state.shape else {
-        return kurbo::Point::ZERO;
+    let mut bbox = None;
+    collect_bbox(state, Affine::IDENTITY, &mut bbox);
+    bbox.map_or(kurbo::Point::ZERO, |b| {
+        kurbo::Point::new((b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0)
+    })
+}
+
+/// 递归收集对象在 `parent` 坐标系下的包围盒（None = 无可见几何）。
+fn collect_bbox(item: &Item, parent: Affine, out: &mut Option<kurbo::Rect>) {
+    let t = parent * item.transform;
+    let local = match &item.shape {
+        Shape::Path(path) => Some(path.bounding_box()),
+        Shape::Image(img) => Some(kurbo::Rect::new(
+            0.0,
+            0.0,
+            f64::from(img.width),
+            f64::from(img.height),
+        )),
+        Shape::Group(children) => {
+            let mut b = None;
+            for child in children {
+                collect_bbox(child, t, &mut b);
+            }
+            b
+        }
     };
-    let b = path.bounding_box();
-    let c = kurbo::Point::new((b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0);
-    state.transform * c
+    if let Some(b) = local {
+        let b = t.transform_rect_bbox(b);
+        match out {
+            Some(o) => *o = o.union(b),
+            None => *out = Some(b),
+        }
+    }
+}
+
+/// 整体透明度递归应用（组合的子项同步淡入/淡出）。
+fn with_opacity_all(item: &mut Item, opacity: f64) {
+    item.paint = item.paint.with_opacity(opacity);
+    if let Shape::Group(children) = &mut item.shape {
+        for child in children {
+            with_opacity_all(child, opacity);
+        }
+    }
 }
 
 /// Transform 求值：元素序列一致 → 单个形变对象；否则 → 交叉淡化对。
@@ -303,14 +340,10 @@ fn morph_items(a: &Item, b: &Item, t: f64) -> Vec<Item> {
         }];
     }
     // 退化：交叉淡化（过滤完全透明项）
-    let fade_a = Item {
-        paint: a.paint.with_opacity(1.0 - t),
-        ..a.clone()
-    };
-    let fade_b = Item {
-        paint: b.paint.with_opacity(t),
-        ..b.clone()
-    };
+    let mut fade_a = a.clone();
+    with_opacity_all(&mut fade_a, 1.0 - t);
+    let mut fade_b = b.clone();
+    with_opacity_all(&mut fade_b, t);
     let mut out = Vec::with_capacity(2);
     if t < 1.0 {
         out.push(fade_a);
@@ -335,11 +368,47 @@ fn lerp_paint(a: &Paint, b: &Paint, t: f64) -> Paint {
             (None, y) => y,
         },
         stroke_width: lerp(a.stroke_width, b.stroke_width, t),
+        opacity: lerp(a.opacity, b.opacity, t),
     }
 }
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn 组合淡入传导子项() {
+        let mut tl = Timeline::new(64, 64, 30, Color::new(0, 0, 0, 255));
+        let group = tl.add(Item {
+            id: 0,
+            shape: Shape::Group(vec![
+                Item::circle(kurbo::Circle::new((0.0, 0.0), 10.0))
+                    .with_fill(Color::new(255, 0, 0, 255)),
+            ]),
+            paint: Paint::default(),
+            transform: Affine::IDENTITY,
+        });
+        tl.play(Anim::fade_in(group).during(1.0));
+        let draw = render_frame(&tl.compile(), 15);
+        assert_eq!(draw.items.len(), 1);
+        let Shape::Group(children) = &draw.items[0].shape else {
+            panic!("应为组合");
+        };
+        // 子项 paint 透明度系数与颜色 alpha 同步为半程 0.5
+        assert!((children[0].paint.opacity - 0.5).abs() < 1e-6);
+        assert_eq!(children[0].paint.fill.unwrap().a, 128);
+    }
+
+    #[test]
+    fn 图片淡入透明度() {
+        let mut tl = Timeline::new(64, 64, 30, Color::new(0, 0, 0, 255));
+        let img = tl.add(Item::from_image(vec![255; 4 * 4 * 4], 4, 4).unwrap());
+        tl.play(Anim::fade_in(img).during(1.0));
+        let ct = tl.compile();
+        // 半程：透明度 0.5，图片对象在场
+        let draw = render_frame(&ct, 15);
+        assert_eq!(draw.items.len(), 1);
+        assert!((draw.items[0].paint.opacity - 0.5).abs() < 1e-6);
+    }
     use super::*;
     use crate::anim::Anim;
     use crate::camera::Camera;

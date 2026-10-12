@@ -48,23 +48,62 @@ pub fn to_peniko(color: Color) -> vello_cpu::peniko::Color {
     ])
 }
 
-/// 渲染单个 Item 到 CPU 上下文（填充 + 描边两遍）。
+/// 渲染单个 Item 到 CPU 上下文（填充 + 描边两遍；图片走 fill_rect + 透明度层）。
 fn render_cpu_item(ctx: &mut vello_cpu::RenderContext, transform: kurbo::Affine, item: &Item) {
-    let Shape::Path(path) = &item.shape else {
-        return; // Group 由 walk_items 展开
-    };
     ctx.set_transform(vello_cpu::kurbo::Affine::new(transform.as_coeffs()));
-    let paint = &item.paint;
-
-    if let Some(fill) = paint.fill {
-        ctx.set_paint(to_peniko(fill));
-        ctx.fill_path(path);
-    }
-    // 注意：stroke_path 使用当前 paint，描边前必须显式 set_paint(描边色)
-    if let Some(stroke) = paint.stroke {
-        ctx.set_paint(to_peniko(stroke));
-        ctx.set_stroke(vello_cpu::kurbo::Stroke::new(paint.stroke_width));
-        ctx.stroke_path(path);
+    match &item.shape {
+        Shape::Path(path) => {
+            let paint = &item.paint;
+            if let Some(fill) = paint.fill {
+                ctx.set_paint(to_peniko(fill));
+                ctx.fill_path(path);
+            }
+            // 注意：stroke_path 使用当前 paint，描边前必须显式 set_paint(描边色)
+            if let Some(stroke) = paint.stroke {
+                ctx.set_paint(to_peniko(stroke));
+                ctx.set_stroke(vello_cpu::kurbo::Stroke::new(paint.stroke_width));
+                ctx.stroke_path(path);
+            }
+        }
+        Shape::Image(img) => {
+            let (Ok(w), Ok(h)) = (u16::try_from(img.width), u16::try_from(img.height)) else {
+                log::warn!(
+                    "图片尺寸超 CPU 后端上限（65535px），跳过: {}x{}",
+                    img.width,
+                    img.height
+                );
+                return;
+            };
+            // from_parts 消费 Vec<u8>（bytemuck 转为 PremulRgba8），故逐帧拷贝一份
+            let pixmap = vello_cpu::Pixmap::from_parts(
+                img.rgba.to_vec(),
+                w,
+                h,
+                vello_cpu::PixelMetadata::new(
+                    vello_cpu::peniko::ImageAlphaType::AlphaPremultiplied,
+                    true,
+                ),
+            );
+            let image = vello_cpu::Image {
+                image: vello_cpu::ImageSource::Pixmap(std::sync::Arc::new(pixmap)),
+                sampler: Default::default(),
+            };
+            let opacity = item.paint.opacity as f32;
+            if opacity < 1.0 {
+                ctx.push_opacity_layer(opacity);
+            }
+            ctx.set_paint(image);
+            ctx.fill_rect(&vello_cpu::kurbo::Rect::new(
+                0.0,
+                0.0,
+                f64::from(img.width),
+                f64::from(img.height),
+            ));
+            if opacity < 1.0 {
+                ctx.pop_layer();
+            }
+        }
+        Shape::Group(_) => {} // Group 由 walk_items 展开
     }
 }
 

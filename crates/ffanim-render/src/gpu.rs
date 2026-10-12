@@ -78,27 +78,62 @@ impl GpuBackend {
             &draw.items,
             vello::kurbo::Affine::IDENTITY,
             &mut |t, item| {
-                let ffanim_core::Shape::Path(path) = &item.shape else {
-                    return; // Group 由 walk_items 展开
-                };
                 let paint = &item.paint;
-                if let Some(fill) = paint.fill {
-                    scene.fill(
-                        vello::peniko::Fill::NonZero,
-                        vello::kurbo::Affine::new(t.as_coeffs()),
-                        &vello::peniko::Brush::from(to_peniko(fill)),
-                        None,
-                        path,
-                    );
-                }
-                if let Some(stroke) = paint.stroke {
-                    scene.stroke(
-                        &vello::kurbo::Stroke::new(paint.stroke_width),
-                        vello::kurbo::Affine::new(t.as_coeffs()),
-                        &vello::peniko::Brush::from(to_peniko(stroke)),
-                        None,
-                        path,
-                    );
+                match &item.shape {
+                    ffanim_core::Shape::Image(img) => {
+                        // Arc<[u8]> 零拷贝入 Blob（AsRef<[u8]> dyn 装箱）
+                        let data = vello::peniko::ImageData {
+                            data: vello::peniko::Blob::new(std::sync::Arc::clone(&img.rgba)),
+                            format: vello::peniko::ImageFormat::Rgba8,
+                            alpha_type: vello::peniko::ImageAlphaType::AlphaPremultiplied,
+                            width: img.width,
+                            height: img.height,
+                        };
+                        let brush = vello::peniko::ImageBrush {
+                            image: data,
+                            sampler: Default::default(),
+                        };
+                        let alpha = paint.opacity as f32;
+                        if alpha < 1.0 {
+                            scene.push_layer(
+                                vello::peniko::Fill::NonZero,
+                                vello::peniko::Mix::Normal,
+                                alpha,
+                                vello::kurbo::Affine::IDENTITY,
+                                &vello::kurbo::Rect::new(
+                                    0.0,
+                                    0.0,
+                                    f64::from(img.width),
+                                    f64::from(img.height),
+                                ),
+                            );
+                        }
+                        scene.draw_image(&brush, vello::kurbo::Affine::new(t.as_coeffs()));
+                        if alpha < 1.0 {
+                            scene.pop_layer();
+                        }
+                    }
+                    ffanim_core::Shape::Path(path) => {
+                        if let Some(fill) = paint.fill {
+                            scene.fill(
+                                vello::peniko::Fill::NonZero,
+                                vello::kurbo::Affine::new(t.as_coeffs()),
+                                &vello::peniko::Brush::from(to_peniko(fill)),
+                                None,
+                                path,
+                            );
+                        }
+                        if let Some(stroke) = paint.stroke {
+                            scene.stroke(
+                                &vello::kurbo::Stroke::new(paint.stroke_width),
+                                vello::kurbo::Affine::new(t.as_coeffs()),
+                                &vello::peniko::Brush::from(to_peniko(stroke)),
+                                None,
+                                path,
+                            );
+                        }
+                    }
+                    ffanim_core::Shape::Group(_) => {} // Group 由 walk_items 展开
                 }
             },
         );

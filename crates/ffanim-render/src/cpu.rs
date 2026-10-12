@@ -134,4 +134,50 @@ mod tests {
             &buf[center..center + 4]
         );
     }
+
+    #[test]
+    fn 图片渲染冒烟() {
+        // 2x2 纯红图片平移到 (3,3)，画布 8x8
+        let mut rgba = vec![0u8; 4 * 4];
+        for px in rgba.chunks_exact_mut(4) {
+            px.copy_from_slice(&[255, 0, 0, 255]);
+        }
+        let mut draw = DrawList::new(8, 8, Color::new(0, 0, 0, 255));
+        draw.push(
+            Item::from_image(rgba, 2, 2)
+                .unwrap()
+                .with_translate(3.0, 3.0),
+        );
+        let buf = CpuBackend.render(&draw);
+        // (4,4) 在图片内 = 红
+        let idx = ((4 * 8 + 4) * 4) as usize;
+        assert_eq!(
+            &buf[idx..idx + 4],
+            &[255, 0, 0, 255],
+            "{:?}",
+            &buf[idx..idx + 4]
+        );
+        // 角落 = 背景
+        assert_eq!(buf[0], 0);
+    }
+
+    #[test]
+    fn 图片透明度渲染() {
+        // 2x2 纯红图片 opacity 0.5 叠在黑底上 → 中心 ≈ 128 红
+        let mut rgba = vec![0u8; 4 * 4];
+        for px in rgba.chunks_exact_mut(4) {
+            px.copy_from_slice(&[255, 0, 0, 255]);
+        }
+        let mut item = Item::from_image(rgba, 2, 2).unwrap();
+        item.paint.opacity = 0.5;
+        let mut draw = DrawList::new(8, 8, Color::new(0, 0, 0, 255));
+        draw.push(item.with_translate(3.0, 3.0));
+        let buf = CpuBackend.render(&draw);
+        let idx = ((4 * 8 + 4) * 4) as usize;
+        assert!(
+            (100..=160).contains(&buf[idx]),
+            "透明度 0.5 中心应为半红: {:?}",
+            &buf[idx..idx + 4]
+        );
+    }
 }

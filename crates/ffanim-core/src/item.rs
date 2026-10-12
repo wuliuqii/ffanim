@@ -5,7 +5,7 @@
 //! - 变换挂在 Item 上，不烘焙进点阵，插值 = 属性插值 + 可选路径 morph；
 //! - `DrawList` 是渲染层唯一输入，GPU/CPU 后端消费同一表示。
 
-use crate::Color;
+use crate::{Color, Error, Result};
 use kurbo::{Affine, BezPath, Circle, Rect};
 // kurbo::Shape 与本模块的 Shape 枚举重名，匿名导入
 use kurbo::Shape as _;
@@ -22,6 +22,8 @@ pub struct Paint {
     pub stroke: Option<Color>,
     /// 描边宽度（像素）。
     pub stroke_width: f64,
+    /// 整体透明度系数（图片对象专用；路径对象透明度承载在颜色 alpha）。
+    pub opacity: f64,
 }
 
 impl Default for Paint {
@@ -30,6 +32,7 @@ impl Default for Paint {
             fill: None,
             stroke: None,
             stroke_width: 4.0,
+            opacity: 1.0,
         }
     }
 }
@@ -47,7 +50,54 @@ impl Paint {
             fill: scale(self.fill),
             stroke: scale(self.stroke),
             stroke_width: self.stroke_width,
+            opacity: self.opacity * opacity,
         }
+    }
+}
+
+/// 位图资源（预乘 RGBA8，`Arc` 共享避免逐帧拷贝）。
+#[derive(Clone)]
+pub struct ImageAsset {
+    /// 预乘 alpha 的 RGBA8 像素（行优先）。
+    pub rgba: std::sync::Arc<[u8]>,
+    /// 宽（像素）。
+    pub width: u32,
+    /// 高（像素）。
+    pub height: u32,
+}
+
+impl std::fmt::Debug for ImageAsset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // 像素数据可能巨大，只打印尺寸
+        f.debug_struct("ImageAsset")
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .finish()
+    }
+}
+
+impl ImageAsset {
+    /// 从非预乘 RGBA8 像素构造（构造时一次性转预乘，长度不符返回错误）。
+    pub fn from_rgba8(rgba: Vec<u8>, width: u32, height: u32) -> Result<Self> {
+        let expected = (width.saturating_mul(height) as usize) * 4;
+        if rgba.len() != expected {
+            return Err(Error::Other(format!(
+                "图片数据长度不符: 期望 {expected} 字节（{width}x{height}x4），实际 {}",
+                rgba.len()
+            )));
+        }
+        let mut data = rgba;
+        for px in data.chunks_exact_mut(4) {
+            let a = u16::from(px[3]);
+            px[0] = (u16::from(px[0]) * a / 255) as u8;
+            px[1] = (u16::from(px[1]) * a / 255) as u8;
+            px[2] = (u16::from(px[2]) * a / 255) as u8;
+        }
+        Ok(Self {
+            rgba: data.into(),
+            width,
+            height,
+        })
     }
 }
 
@@ -58,6 +108,8 @@ pub enum Shape {
     Path(BezPath),
     /// 组合：子 Item 随父 Item 一起变换。
     Group(Vec<Item>),
+    /// 位图图片（预乘 RGBA8，尺寸见 [`ImageAsset`]）。
+    Image(ImageAsset),
 }
 
 /// 可视对象。
@@ -82,6 +134,17 @@ impl Item {
             paint: Paint::default(),
             transform: Affine::IDENTITY,
         }
+    }
+
+    /// 从非预乘 RGBA8 像素构造图片对象（构造时一次性转预乘）。
+    pub fn from_image(rgba: Vec<u8>, width: u32, height: u32) -> Result<Self> {
+        let asset = ImageAsset::from_rgba8(rgba, width, height)?;
+        Ok(Self {
+            id: 0,
+            shape: Shape::Image(asset),
+            paint: Paint::default(),
+            transform: Affine::IDENTITY,
+        })
     }
 
     /// 矩形。
@@ -216,5 +279,17 @@ mod tests {
             panic!("应为组合");
         };
         assert_eq!(children.len(), 1);
+    }
+
+    #[test]
+    fn 图片预乘转换() {
+        let rgba = vec![255, 0, 0, 128, 0, 255, 0, 255];
+        let asset = ImageAsset::from_rgba8(rgba, 2, 1).unwrap();
+        // 半透明红：R 预乘为 128
+        assert_eq!(&asset.rgba[0..4], &[128, 0, 0, 128]);
+        // 全不透明绿：不变
+        assert_eq!(&asset.rgba[4..8], &[0, 255, 0, 255]);
+        // 长度不符报错
+        assert!(ImageAsset::from_rgba8(vec![0; 3], 1, 1).is_err());
     }
 }
