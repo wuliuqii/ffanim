@@ -109,22 +109,20 @@ fn formula_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     // 公式局部坐标 → 画布居中（fit_transform：缩放后的中心精确落在目标点）
     let place = |f: &ffanim_typst::Formula| f.fit_transform(w / 2.0, h / 2.0, scale);
 
-    // —— Write：逐字形 Create，相邻错开 0.06s（lag_ratio 等价）——
-    // overlap 语义：下一 play 的 start = 游标 - overlap。
-    // play 推进 during，回退 during-step 即得相邻字形步进 step。
+    // —— Write：逐字形 Create，group 按步长错开排入（M8.3 组动画，替代 overlap 手工回退）——
     let write_dur = 0.5;
     let step = 0.06;
-    let items_a = f1.to_items();
-    let n_a = items_a.len();
-    let mut ids_a: Vec<ItemId> = Vec::with_capacity(n_a);
-    for (k, item) in items_a.into_iter().enumerate() {
-        let id = tl.add(item.with_transform(place(&f1)));
-        tl.play(Anim::create(id).during(write_dur).rate(RateFunc::Smooth));
-        if k + 1 < n_a {
-            tl.overlap(write_dur - step);
-        }
-        ids_a.push(id);
-    }
+    let ids_a: Vec<ItemId> = f1
+        .to_items()
+        .into_iter()
+        .map(|item| tl.add(item.with_transform(place(&f1))))
+        .collect();
+    tl.group(
+        ids_a
+            .iter()
+            .map(|&id| Anim::create(id).during(write_dur).rate(RateFunc::Smooth)),
+        step,
+    );
     tl.wait(0.6);
 
     // —— TransformMatchingTex：配对形变，其余淡出/淡入（同一窗口并行）——

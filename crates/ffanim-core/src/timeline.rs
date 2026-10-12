@@ -99,13 +99,58 @@ impl Timeline {
     /// 在当前游标处排入一个动画，游标推进其时长。
     pub fn play(&mut self, mut anim: Anim) -> &mut Self {
         let overlap = self.pending_overlap_s.take().unwrap_or(0.0);
-        // SetValue 的 from 推演：取构建期 tracker 当前值（顺序语义，并行段需留意）
+        self.prepare(&mut anim);
+        let start_s = (self.cursor_s - overlap).max(0.0);
+        self.anims.push((start_s, anim.clone()));
+        self.cursor_s = start_s + anim.duration_s;
+        self
+    }
+
+    /// 组动画：子动画按固定步长错开排入（manim `LaggedStart` 手感的直接形式）。
+    ///
+    /// 第 i 段起始 = 首段起始 + i×`step`，游标推进到最后一段结束；首段继承
+    /// pending overlap（[`Timeline::overlap`]）。`step` 小于段时长时相邻段自然交叠，
+    /// 等价于逐段 `play + overlap` 手工对齐（M3 踩坑点），但意图直白不易错。
+    pub fn group(&mut self, anims: impl IntoIterator<Item = Anim>, step: f64) -> &mut Self {
+        self.stagger(anims, |_| step)
+    }
+
+    /// [`Timeline::group`] 的 lag ratio 形式：相邻段起始间隔 = ratio × 前一段时长
+    /// （manim `lagged_start` 语义；ratio=1 即顺序不交叠，ratio=0 即同时开始）。
+    pub fn lagged_start(&mut self, anims: impl IntoIterator<Item = Anim>, ratio: f64) -> &mut Self {
+        self.stagger(anims, |dur| ratio * dur)
+    }
+
+    /// 组排布内部实现：第 i 段起始 = 首段起始 + Σ step(段时长)，游标 = 最后一段结束。
+    fn stagger(
+        &mut self,
+        anims: impl IntoIterator<Item = Anim>,
+        step_of: impl Fn(f64) -> f64,
+    ) -> &mut Self {
+        let overlap = self.pending_overlap_s.take().unwrap_or(0.0);
+        let mut start = (self.cursor_s - overlap).max(0.0);
+        let mut end = self.cursor_s;
+        let mut n = 0;
+        for mut anim in anims {
+            self.prepare(&mut anim);
+            self.anims.push((start, anim.clone()));
+            end = start + anim.duration_s;
+            start += step_of(anim.duration_s).max(0.0);
+            n += 1;
+        }
+        if n > 0 {
+            self.cursor_s = end;
+        }
+        self
+    }
+
+    /// 构建期推演（play/group 共用）：SetValue 与 TransformTo 的 from 取构建期当前值，
+    /// 对象/tracker 基线快进到目标（求值期段前取 from 的语义见 `eval::transform_at`）。
+    fn prepare(&mut self, anim: &mut Anim) {
         if let AnimKind::SetValue { tracker, from, to } = &mut anim.kind {
             *from = self.tracker_cur[*tracker];
             self.tracker_cur[*tracker] = *to;
         }
-        // TransformTo 的 from 推演：取构建期当前变换，对象基线快进到目标
-        // （段前取 from、段中插值、段后取基线的求值语义见 eval::transform_at）
         if let AnimKind::TransformTo { id, from, to } = &mut anim.kind {
             let idx = *id as usize;
             assert!(idx < self.items.len(), "TransformTo 目标对象 #{id} 未注册");
@@ -113,10 +158,6 @@ impl Timeline {
             *from = self.items[idx].transform;
             self.items[idx].transform = target;
         }
-        let start_s = (self.cursor_s - overlap).max(0.0);
-        self.anims.push((start_s, anim.clone()));
-        self.cursor_s = start_s + anim.duration_s;
-        self
     }
 
     /// 停留（游标推进）。

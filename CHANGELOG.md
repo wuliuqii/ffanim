@@ -13,6 +13,10 @@
   from 由构建期推演）；fourier 示例加推近镜头验收段（zoom 1.4 推镜，
   非背景像素 5.01%→6.50% 实证放大）+ 相机求值测试 3 项
 - fix(render): bench 文件豁免 missing_docs（criterion 宏展开函数无文档）
+- feat(core): M8.3 组动画——`Timeline::group`（固定步长错开）+ `lagged_start`
+  （间隔 = ratio × 前段时长，manim lagged_start 语义），与 play 共享构建期推演；
+  fourier / formula_demo 的 Write 重写为 group，调度逐帧等价（快照 PASS），
+  消除 `overlap(dur-step)` 手工对齐（M3 踩坑根源）
 
 ## [v0.2.0] - 2026-10-12
 

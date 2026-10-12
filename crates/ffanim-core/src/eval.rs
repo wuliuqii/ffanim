@@ -629,4 +629,38 @@ mod tests {
         // 段后：停在目标（存储基线已快进）
         assert_eq!(x_of(45), 90.0);
     }
+
+    #[test]
+    fn group_步进错开与游标推进() {
+        let mut tl = make_tl();
+        let a = tl.add(rect_item(Color::new(255, 0, 0, 255)));
+        let b = tl.add(rect_item(Color::new(0, 255, 0, 255)));
+        tl.wait(0.5);
+        tl.group(
+            [Anim::create(a).during(1.0), Anim::create(b).during(1.0)],
+            0.25,
+        );
+        let c = tl.compile();
+        let starts: Vec<usize> = c.anims.iter().map(|x| x.start).collect();
+        assert_eq!(starts, vec![15, 23]); // 0.5s / 0.75s（首段 + 固定步长 0.25s）
+        // 游标 = 最后一段结束：0.75 + 1.0 = 1.75s = 52.5 帧
+        assert_eq!(c.duration_frames, 53);
+    }
+
+    #[test]
+    fn lagged_start_间隔为段时长乘比例() {
+        let mut tl = make_tl();
+        let a = tl.add(rect_item(Color::new(255, 0, 0, 255)));
+        let b = tl.add(rect_item(Color::new(0, 255, 0, 255)));
+        tl.lagged_start(
+            [Anim::create(a).during(1.0), Anim::create(b).during(2.0)],
+            0.5,
+        );
+        let c = tl.compile();
+        let starts: Vec<usize> = c.anims.iter().map(|x| x.start).collect();
+        // b 起始 = 0 + 0.5×1.0 = 0.5s（比例 × 前段时长，manim lagged_start 语义）
+        assert_eq!(starts, vec![0, 15]);
+        // 游标 = b 结束 = 0.5 + 2.0 = 2.5s
+        assert_eq!(c.duration_frames, 75);
+    }
 }

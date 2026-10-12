@@ -60,16 +60,17 @@ fn main() -> ffanim::Result<()> {
     let place = formula.fit_transform(f64::from(W) / 2.0, 158.0, 1.5);
     let write_dur = 0.5;
     let step = 0.06;
-    let pieces = formula.to_items();
-    let n = pieces.len();
-    for (k, piece) in pieces.into_iter().enumerate() {
-        let id = tl.add(piece.with_transform(place));
-        tl.play(Anim::create(id).during(write_dur).rate(RateFunc::Smooth));
-        if k + 1 < n {
-            // overlap 语义：回退 during-step → 相邻字形步进 0.06s（lag ratio 等价）
-            tl.overlap(write_dur - step);
-        }
-    }
+    // 公式逐字写出：group 按步长错开排入（M8.3 组动画，替代逐段 play+overlap 手工对齐）
+    let ids: Vec<_> = formula
+        .to_items()
+        .into_iter()
+        .map(|piece| tl.add(piece.with_transform(place)))
+        .collect();
+    tl.group(
+        ids.iter()
+            .map(|&id| Anim::create(id).during(write_dur).rate(RateFunc::Smooth)),
+        step,
+    );
     tl.wait(0.5);
 
     // —— 幕 3：坐标系 + 方波目标 ——
