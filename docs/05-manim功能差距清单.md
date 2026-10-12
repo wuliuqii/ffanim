@@ -39,7 +39,7 @@
 | # | 功能 | manim 对应 | ffanim 现状 | 用户影响 | 工作量 |
 |---|---|---|---|---|---|
 | P0-1 | **标注基元**：线段/箭头/虚线/圆弧/椭圆 | Line/Arrow/DashedLine/Arc/Ellipse | ✅ 已落地（M9.3）：`Item::line/arrow/dashed_line/arc/ellipse` + `bbox()`，primitives_demo 场景验收 | 几何图示、指向标注、角度标记、轨迹线——教学视频的"第二高频"元素画不出来 | S |
-| P0-2 | **相对布局**：bbox 查询 + next_to/to_edge/arrange | mobject.bbox、`next_to`、`to_edge`、`arrange` | 无任何布局 API，构图全靠手调像素坐标 | agent 无预览，排版类场景（公式组、步骤列表、标注跟随）只能 inspect 试错，效率极低 | M |
+| P0-2 | **相对布局**：bbox 查询 + next_to/to_edge/arrange | mobject.bbox、`next_to`、`to_edge`、`arrange` | ✅ 已落地（M9.4）：`Item::next_to/to_edge` + `arrange`（构建期纯操作，核心分支 log::info 埋点），layout_demo 场景验收 | agent 无预览，排版类场景（公式组、步骤列表、标注跟随）只能 inspect 试错，效率极低 | M |
 | P0-3 | **强调动画**：闪现强调/框选强调/经过闪烁 | Indicate/Circumscribe/Flash/ShowPassingFlash | 无；只能手拼 fade+transform 复合 | 教学节奏词缺失（"注意这一项"），每个场景都用 | S~M |
 | P0-4 | **动作变换糖**：shift_to/rotate_to/scale_to/move_to | `.animate.shift()`/`rotate()`/`scale()`/`move_to()` | ✅ 已落地（M9.3）：`Anim::shift_to/move_to/rotate_to/scale_to`（构建期 Pose 解析为绝对 TransformTo） | 每个位移/旋转场景都要写矩阵运算，繁琐易错；薄语法糖不破架构 | S |
 

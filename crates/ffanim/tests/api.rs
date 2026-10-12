@@ -304,3 +304,34 @@ fn primitives_标注基元与位姿动作() {
         "{p:?}"
     );
 }
+
+#[test]
+fn layout_相对布局与画布贴边() {
+    use ffanim::kurbo::Rect;
+    use ffanim::{Direction, arrange};
+
+    let base = Item::rect(Rect::new(0.0, 0.0, 100.0, 60.0));
+    let other = Item::rect(Rect::new(300.0, 100.0, 400.0, 160.0));
+
+    // next_to 右侧：x0 = other.x1 + buff，y 中心对齐
+    let c = base.clone().next_to(&other, Direction::Right, 20.0);
+    let bb = c.bbox();
+    assert!((bb.x0 - 420.0).abs() < 1e-9, "{bb:?}");
+    assert!((bb.y0 - 100.0).abs() < 1e-9, "垂直居中: {bb:?}");
+
+    // to_edge 顶部：y0 = buff，x 对画布居中
+    let t = base.clone().to_edge(Direction::Up, 10.0, (960.0, 540.0));
+    let bb = t.bbox();
+    assert!(
+        (bb.y0 - 10.0).abs() < 1e-9 && (bb.x0 - 430.0).abs() < 1e-9,
+        "{bb:?}"
+    );
+
+    // arrange 横排：总包围盒含两项与间距
+    let mut row = vec![base.clone(), base];
+    let total: ffanim::kurbo::Rect = arrange(&mut row, Direction::Right, 30.0);
+    assert!(
+        (total.x1 - 230.0).abs() < 1e-9 && (total.y1 - 60.0).abs() < 1e-9,
+        "{total:?}"
+    );
+}

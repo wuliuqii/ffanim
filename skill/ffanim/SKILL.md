@@ -40,6 +40,11 @@ ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4")?;
   标注五件套 `Item::line(a, b)` / `arrow(a, b)`（线+闭合三角头，需同色 fill+stroke）/
   `dashed_line(a, b, dash, gap)` / `arc(center, r, 起角°, 止角°)`（视觉逆时针）/
   `ellipse(center, rx, ry)`；`item.bbox() -> Rect` 查包围盒（布局/对齐用）。
+- 相对布局（构建期纯操作，manim `next_to`/`to_edge`/`arrange` 对应）：
+  `item.next_to(&target, Direction::Right, buff)`（邻接 + 另一轴中心对齐）/
+  `item.to_edge(Direction::Up, buff, (w, h))`（贴画布边，另一轴居中）/
+  `arrange(&mut items, Direction::Down, buff) -> Rect`（依次排列，返回总包围盒，可再整体平移）。
+  布局分支带 `log::info` 埋点（RUST_LOG=info 可查输入 bbox/平移量/结果 bbox）。
 
 | 动画 | 效果 |
 |---|---|

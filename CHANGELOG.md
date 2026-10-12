@@ -47,6 +47,18 @@
 - 验收：demo_anim 5.8s 全片导出 1..3s 片段，ffprobe 实测 2.0s；3 解析单测 + 1 集成测试
 - 顺手修复 ci-gpu 配方存量编译损坏（peniko `Blob::new` 需 `Arc<dyn AsRef<[u8]>>`，改拷贝进 `Arc<Vec<u8>>`）
 
+### M9.4 manim 对齐第二批：相对布局 next_to / to_edge / arrange（2026-10-12）
+
+- feat(core): 新增 layout 模块——`Item::next_to(&target, Direction, buff)`（邻接 + 另一轴中心对齐）/
+  `Item::to_edge(Direction, buff, canvas)`（贴画布边，另一轴对画布居中，manim 帧边 next_to 语义）/
+  `arrange(&mut items, Direction, buff) -> Rect`（依次排列，返回总包围盒供整组再平移）；
+  全部构建期纯操作（bbox → 左乘平移仿射），`Direction` 视觉方向（屏幕 y 向下）
+- feat(core): 布局核心分支 `log::info` 埋点——next_to/to_edge 四方向分支各打输入 bbox、
+  对齐边计算式、平移量，函数尾打结果 bbox；arrange 打逐项与汇总（RUST_LOG=info 可查，构图排错用）
+- feat(cli): layout_demo parity 场景（to_edge 标题贴顶 / arrange 横排居中 / arrange 竖排列表，出片 3.2s 目检通过）
+- test: layout 单测 5 项（四方向邻接 / 贴边居中 / 批量总包围盒 / 不修改原对象）+ 集成测试 1 项；
+  门面 re-export `Direction` / `arrange`
+
 ### M9.3 manim 对齐第一批：标注基元 + 位姿动作糖（2026-10-12）
 
 - feat(core): 标注基元五件套——`Item::line` / `arrow`（线+闭合三角头，头长自适应 min(len/4, 32px)）/

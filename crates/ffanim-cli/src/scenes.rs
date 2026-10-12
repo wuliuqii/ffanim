@@ -15,6 +15,7 @@ pub const SCENES: &[&str] = &[
     "sine_demo",
     "text_demo",
     "primitives_demo",
+    "layout_demo",
 ];
 
 /// 构建场景时间轴。
@@ -28,6 +29,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "sine_demo" => sine_demo(theme, fps),
         "text_demo" => text_demo(theme, fps),
         "primitives_demo" => Ok(primitives_demo(theme, fps)),
+        "layout_demo" => Ok(layout_demo(theme, fps)),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -311,6 +313,78 @@ fn primitives_demo(theme: &Theme, fps: u32) -> Timeline {
     tl.play(Anim::scale_to(ell, 1.4).during(0.8)); // 椭圆放大
     tl.wait(0.2);
     tl.play(Anim::move_to(ell, (w / 2.0, h / 2.0)).during(1.0)); // 移到画布中心
+    tl.wait(0.6);
+    tl
+}
+
+/// manim 对齐 P0-2 验收场景：相对布局 next_to / to_edge / arrange。
+///
+/// 标题块贴顶边（to_edge）→ 三基元横排居中（arrange + 总包围盒平移）→
+/// 步骤列表竖排（arrange）；全部为构建期布局，动画只做淡入/描边生长。
+fn layout_demo(theme: &Theme, fps: u32) -> Timeline {
+    use ffanim_core::kurbo::Vec2;
+    use ffanim_core::{Direction, ItemId, arrange};
+
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let sw = f64::from(theme.style.stroke_width);
+    let (w, h) = (960.0_f64, 540.0_f64);
+    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background().unwrap());
+
+    // 标题块贴顶边（to_edge：另一轴对画布居中）
+    let title = tl.add(
+        Item::rect(Rect::new(0.0, 0.0, 360.0, 56.0))
+            .with_fill(accent)
+            .to_edge(Direction::Up, 24.0, (w, h)),
+    );
+    tl.play(Anim::fade_in(title).during(0.6));
+
+    // 三基元横排（arrange Right），总包围盒平移到画布中心
+    let c = Item::circle(Circle::new((0.0, 0.0), 60.0))
+        .with_stroke(fg)
+        .with_stroke_width(sw);
+    let r = Item::rect(Rect::new(0.0, 0.0, 140.0, 90.0))
+        .with_stroke(fg)
+        .with_stroke_width(sw);
+    let e = Item::ellipse((0.0, 0.0), 90.0, 45.0)
+        .with_stroke(fg)
+        .with_stroke_width(sw);
+    let mut row = vec![c, r, e];
+    let total = arrange(&mut row, Direction::Right, 40.0);
+    let shift = Affine::translate(Vec2::new(
+        w / 2.0 - total.center().x,
+        h / 2.0 - total.center().y,
+    ));
+    let row_ids: Vec<ItemId> = row
+        .into_iter()
+        .map(|mut it| {
+            let t = shift * it.transform;
+            it.transform = t;
+            tl.add(it)
+        })
+        .collect();
+    tl.group(row_ids.iter().map(|&id| Anim::create(id).during(0.7)), 0.15);
+    tl.wait(0.2);
+
+    // 步骤列表竖排（arrange Down），平移到画布左侧
+    let mut col: Vec<Item> = (0..4)
+        .map(|_| {
+            Item::rect(Rect::new(0.0, 0.0, 120.0, 44.0))
+                .with_stroke(fg)
+                .with_stroke_width(sw)
+        })
+        .collect();
+    arrange(&mut col, Direction::Down, 20.0);
+    let to_left = Affine::translate(Vec2::new(80.0, 170.0));
+    let col_ids: Vec<ItemId> = col
+        .into_iter()
+        .map(|mut it| {
+            let t = to_left * it.transform;
+            it.transform = t;
+            tl.add(it)
+        })
+        .collect();
+    tl.group(col_ids.iter().map(|&id| Anim::fade_in(id).during(0.5)), 0.1);
     tl.wait(0.6);
     tl
 }
