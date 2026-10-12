@@ -55,6 +55,9 @@ enum Command {
 
     /// 加载并展示主题摘要（验证数据驱动管线）
     Info(cmd::scaffold::InfoArgs),
+
+    /// 公式片段匹配预览（TransformMatchingTex 调度计划，agent/作者预检）
+    Diff(cmd::formula::DiffArgs),
 }
 
 fn main() -> ffanim::Result<()> {
@@ -75,6 +78,7 @@ fn main() -> ffanim::Result<()> {
         Command::New(a) => cmd::scaffold::new(a),
         Command::Audio(a) => cmd::audio::audio(a),
         Command::Info(a) => cmd::scaffold::info(a),
+        Command::Diff(a) => cmd::formula::diff(a),
     }
 }
 

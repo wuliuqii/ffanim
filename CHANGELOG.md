@@ -32,6 +32,13 @@
   测试 5 项；MathWorld 字体集动态化（基础 typst-assets + 注入）
 
 - feat(api): M8.6 API 覆盖率门禁 + 集成测试补全 + ffmpeg stderr 吞错修复——scripts/api_coverage.sh（40 个门面公开项全覆盖，缺失退出 1，已挂 just ci）；crates/ffanim/tests/ 3 文件 26 用例（timeline 9 调度语义 / render 6 像素探针 / api 11 门面冒烟，ffmpeg 缺失时打点跳过）；ffanim-audio decode stderr null→piped（log::debug 全量记录，失败尾行并入 Error::Encode）
+
+### M9.1 公式 diff 引擎升级（2026-10-12）
+
+- `match_formulas` 用 similar（Myers）重写替代手写 LCS，新增 move 二部配对：同文本的删除/插入对识别为移动（`a+b=c → b+a=c` 交换子式做 Transform 而非消失重现，乱序下标配对）
+- 形状片段（无源文本）用侧别唯一占位符，恒不跨配对
+- 新增 `ffanim diff <a> <b>` CLI 子命令：预检 TransformMatchingTex 调度计划（配对/淡出/淡入）
+- 3 单测（交换 move / 原位替换 / 形状恒不配对），门禁全绿
 ## [v0.2.0] - 2026-10-12
 
 M7 地基与拆分 + 1080p 性能基线。semver 0.x 规则自本版本起生效。

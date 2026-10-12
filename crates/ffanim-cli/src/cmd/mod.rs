@@ -8,6 +8,7 @@
 //! - audio / preview
 
 pub mod audio;
+pub mod formula;
 pub mod inspect;
 pub mod preview;
 pub mod render;

@@ -21,6 +21,8 @@ comemo = "0.4"
 ecow = "0.2"
 # 排版 LRU 缓存
 lru = "0.16"
+# 片段 diff（M9.1）：Myers/Patience 序列 diff + move 配对，替代手写 LCS
+similar = "2"
 
 [dev-dependencies]
 ffanim-render = { path = "../ffanim-render" }
