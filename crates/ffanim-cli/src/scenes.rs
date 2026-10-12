@@ -106,9 +106,8 @@ fn formula_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     let (w, h) = (960.0_f64, 540.0_f64);
     let scale = 2.0; // pt → px
     let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background().unwrap());
-    // 公式局部坐标 → 画布居中
-    let place =
-        |f: &ffanim_typst::Formula| f.center_transform(w / 2.0, h / 2.0) * Affine::scale(scale);
+    // 公式局部坐标 → 画布居中（fit_transform：缩放后的中心精确落在目标点）
+    let place = |f: &ffanim_typst::Formula| f.fit_transform(w / 2.0, h / 2.0, scale);
 
     // —— Write：逐字形 Create，相邻错开 0.06s（lag_ratio 等价）——
     // overlap 语义：下一 play 的 start = 游标 - overlap。

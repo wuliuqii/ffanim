@@ -454,6 +454,17 @@ impl Formula {
     pub fn center_transform(&self, cx: f64, cy: f64) -> Affine {
         Affine::translate((cx - self.width_pt / 2.0, cy - self.height_pt / 2.0))
     }
+
+    /// 缩放后居中：先按 `scale` 缩放，再让**缩放后**的公式中心落在 (cx, cy)。
+    ///
+    /// 注意 `center_transform(cx, cy) * Affine::scale(s)` 是错的——居中按未缩放
+    /// 尺寸计算，实际中心会偏移 (s-1)/2·(w,h)，横向溢出/出画布均源于此。
+    pub fn fit_transform(&self, cx: f64, cy: f64, scale: f64) -> Affine {
+        Affine::translate((
+            cx - scale * self.width_pt / 2.0,
+            cy - scale * self.height_pt / 2.0,
+        )) * Affine::scale(scale)
+    }
 }
 
 #[cfg(test)]
@@ -478,6 +489,28 @@ mod tests {
         for p in &f.pieces {
             assert!(!p.path.elements().is_empty(), "片段路径不应为空");
         }
+    }
+
+    /// fit_transform 应把缩放后的公式中心精确落在目标点。
+    #[test]
+    fn fit_transform缩放居中() {
+        let mut engine = TypstEngine::new(8);
+        let f = engine.formula("x^2 + y^2 = z^2", &opts()).unwrap();
+        let (w, h) = (f.width_pt, f.height_pt);
+        // 中心点 (w/2, h/2) 经变换后应落在 (480, 158)
+        let t = f.fit_transform(480.0, 158.0, 1.5);
+        let c = t * ffanim_core::kurbo::Point::new(w / 2.0, h / 2.0);
+        assert!(
+            (c.x - 480.0).abs() < 1e-6 && (c.y - 158.0).abs() < 1e-6,
+            "中心: {c:?}"
+        );
+        // 左上角 (0,0) 应为 480 - 1.5w/2（缩放后居中，而非未缩放居中）
+        let o = t * ffanim_core::kurbo::Point::new(0.0, 0.0);
+        assert!(
+            (o.x - (480.0 - 1.5 * w / 2.0)).abs() < 1e-6,
+            "左上角 x: {}",
+            o.x
+        );
     }
 
     /// 缓存：同公式二次排版应返回同一 Arc（0 开销）。

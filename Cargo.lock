@@ -1005,9 +1005,11 @@ checksum = "3296eb97d869113eaf148a6bdf01884e90b3828ad7ae2340b0f93362fc158611"
 name = "ffanim"
 version = "0.1.0"
 dependencies = [
+ "ffanim-audio",
  "ffanim-core",
  "ffanim-encode",
  "ffanim-render",
+ "ffanim-typst",
 ]
 
 [[package]]

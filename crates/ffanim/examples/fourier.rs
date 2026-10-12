@@ -1,10 +1,13 @@
-//! M6 实际创作验证：傅里叶级数逼近方波。
+//! ffanim 创作示例：傅里叶级数逼近方波（M6 实际创作验证）。
 //!
 //! 真实用户视角走通全流程：主题 JSON → 公式 Write → 坐标系 + 方波目标 →
 //! 部分和 S_N 随 ValueTracker 逐阶升高（吉布斯过冲可见）→ 渲染出片 →
 //! strip/onion 诊断（agent 无看片验证循环的库式用法）。
 //!
-//! 运行：`cargo run`（需 PATH 有 ffmpeg），产物 out/fourier.mp4 + 诊断 PNG。
+//! 运行（仓库根目录）：
+//! `cargo run -p ffanim --release --example fourier`（需 PATH 有 ffmpeg）
+//! 产物：out/fourier.mp4 + strip/onion 诊断 PNG。
+//! 配音：`BGM=路径.wav cargo run ...` 自动混流并延伸片长（FromAudio 语义）。
 
 use ffanim::kurbo::{Affine, BezPath};
 use ffanim::typst::{FormulaOptions, TypstEngine};
@@ -18,7 +21,9 @@ const FPS: u32 = 30;
 const CJK_FONT: &str = "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc";
 
 fn main() -> ffanim::Result<()> {
-    let theme = Theme::from_path("themes/default.json")?;
+    // 数据驱动：颜色与描边宽度来自主题 JSON（仓库根 themes/）
+    let theme_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../themes/default.json");
+    let theme = Theme::from_path(theme_path)?;
     let accent = theme.accent()?;
     let fg = theme.foreground()?;
     let mut tl = Timeline::new(W, H, FPS, theme.background()?);
@@ -27,7 +32,14 @@ fn main() -> ffanim::Result<()> {
     let font = Font::from_path(CJK_FONT).or_else(|_| Font::from_system(None::<&str>))?;
 
     // —— 幕 1：标题淡入 ——
-    let title = tl.add(text_item(&font, "傅里叶级数与方波", 52.0, f64::from(W) / 2.0, 48.0, fg)?);
+    let title = tl.add(text_item(
+        &font,
+        "傅里叶级数与方波",
+        52.0,
+        f64::from(W) / 2.0,
+        48.0,
+        fg,
+    )?);
     tl.play(Anim::fade_in(title).during(1.0));
     tl.wait(0.3);
 
@@ -41,8 +53,8 @@ fn main() -> ffanim::Result<()> {
         "f(x) = 4/pi (sin x + frac(sin 3x, 3) + frac(sin 5x, 5) + dots)",
         &fopts,
     )?;
-    // 公式局部坐标 → 画布（scale 1.5 防溢出；center y=158 与标题/坐标区拉开，strip 实测校准）
-    let place = formula.center_transform(f64::from(W) / 2.0, 158.0) * Affine::scale(1.5);
+    // 缩放后居中于标题下方（fit_transform 修正 center_transform 的缩放偏移）
+    let place = formula.fit_transform(f64::from(W) / 2.0, 158.0, 1.5);
     let write_dur = 0.5;
     let step = 0.06;
     let pieces = formula.to_items();
@@ -203,5 +215,7 @@ fn square_wave_item(axes: &Axes, color: Color) -> Item {
             path.line_to(p);
         }
     }
-    Item::from_path(path).with_stroke(color).with_stroke_width(2.0)
+    Item::from_path(path)
+        .with_stroke(color)
+        .with_stroke_width(2.0)
 }
