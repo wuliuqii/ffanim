@@ -6,8 +6,8 @@
 //! - 生成的路径直接烘入像素坐标（c2p 一次性变换），与场景其余对象同构；
 //! - 数据 y 轴向上、画布 y 轴向下，翻转在 c2p 内完成。
 
-use crate::{Color, Item, Shape, Style};
-use kurbo::{BezPath, Point, Shape as _};
+use crate::{Color, Item, Style};
+use kurbo::{BezPath, Point};
 
 /// 平面直角坐标系（数据坐标范围 + 画布占位）。
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -184,7 +184,7 @@ impl Color {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Color;
+    use crate::Shape;
 
     fn test_axes() -> Axes {
         Axes::new((-2.0, 2.0), (-1.0, 1.0))
