@@ -45,6 +45,13 @@ ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4")?;
   `item.to_edge(Direction::Up, buff, (w, h))`（贴画布边，另一轴居中）/
   `arrange(&mut items, Direction::Down, buff) -> Rect`（依次排列，返回总包围盒，可再整体平移）。
   布局分支带 `log::info` 埋点（RUST_LOG=info 可查输入 bbox/平移量/结果 bbox）。
+- 标注复合件（manim SurroundingRectangle/Underline/Cross/BackgroundRect 对应，P1-7）：
+  `Item::surrounding_rect(&target, buff)`（圈选框）/ `Item::underline(&target, buff)`（底线）/
+  `Item::cross(&target, buff)`（对角叉）/ `Item::background_rect(&target, buff)`（背景板，
+  **注册须先于目标**——z 序 = 注册顺序）。样式链式自定（半透明用 `Color { a, ..theme色 }`）；
+  公式等排版散件先 `Item::group(items)` 拼组再标注（**拼组仅作几何用途，不注册**）。
+  **标注基于注册基线 bbox：目标有位姿动画时，标注需挂相同 shift_to 同步**（基线不随动画变）。
+  四构造器 + group 带 log::info 埋点（RUST_LOG=info 查目标 bbox/外扩框/底线坐标）。
 - 组编排糖（manim Together/Succession/LaggedStart/VGroup/save_state·restore 对应）：
   `tl.together([...])`（多动画同窗对齐，游标取最长 dur——**规避 overlap 各段 during 必须一致的坑**）/
   `tl.succession([...])`（逐段接续播）/

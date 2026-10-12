@@ -233,6 +233,75 @@ impl Item {
         Self::from_path(path)
     }
 
+    /// 组合对象（manim `VGroup` 构造侧对应）：子项随父变换，bbox 递归 union。
+    /// 典型用途：把排版散件（如 [`crate::Shape::Path`] 列表）拼成整体后做标注/布局；
+    /// 拼组仅作几何用途时**不要注册**，注册散件本身即可。
+    pub fn group(children: Vec<Item>) -> Self {
+        let n = children.len();
+        log::info!("group: 拼组 {n} 项（bbox 递归 union）");
+        Self {
+            id: 0,
+            shape: Shape::Group(children),
+            paint: Paint::default(),
+            transform: Affine::IDENTITY,
+        }
+    }
+
+    /// 标注复合件公用：目标包围盒四边外扩 `buff` 像素。
+    fn inflated_bbox(target: &Item, buff: f64) -> Rect {
+        let b = target.bbox();
+        Rect::new(b.x0 - buff, b.y0 - buff, b.x1 + buff, b.y1 + buff)
+    }
+
+    /// 圈选框：目标包围盒外扩 `buff` 的矩形（manim `SurroundingRectangle`）。
+    /// 样式由调用方链式设置（建议 `with_stroke(accent)`）。
+    pub fn surrounding_rect(target: &Item, buff: f64) -> Self {
+        let b = target.bbox();
+        let r = Self::inflated_bbox(target, buff);
+        log::info!("surrounding_rect: 目标 bbox={b:?} buff={buff} → 外扩框 {r:?}");
+        Self::rect(r)
+    }
+
+    /// 背景板：目标包围盒外扩 `buff` 的填充矩形（manim `BackgroundRect`）。
+    /// **注册顺序须在目标之前**（z 序 = 注册顺序，先注册画在下）。
+    pub fn background_rect(target: &Item, buff: f64) -> Self {
+        let b = target.bbox();
+        let r = Self::inflated_bbox(target, buff);
+        log::info!(
+            "background_rect: 目标 bbox={b:?} buff={buff} → 背景矩形 {r:?}（注册须先于目标）"
+        );
+        Self::rect(r)
+    }
+
+    /// 下划线：目标底部下方 `buff` 处、与 bbox 等宽的横线（manim `Underline`）。
+    pub fn underline(target: &Item, buff: f64) -> Self {
+        let b = target.bbox();
+        // 屏幕 y 向下：bbox.y1 = 视觉底部，下划线在 y1 + buff
+        let y = b.y1 + buff;
+        log::info!(
+            "underline: 目标 bbox={b:?} buff={buff} → 底线 ({},{})→({},{})",
+            b.x0,
+            y,
+            b.x1,
+            y
+        );
+        Self::line((b.x0, y), (b.x1, y))
+    }
+
+    /// 叉：目标包围盒外扩 `buff` 后的两条对角线（manim `Cross`，否定语义）。
+    /// 单路径双子路径——`Anim::create` 会按对角逐条描出。
+    pub fn cross(target: &Item, buff: f64) -> Self {
+        let b = target.bbox();
+        let r = Self::inflated_bbox(target, buff);
+        let mut path = BezPath::new();
+        path.move_to((r.x0, r.y0));
+        path.line_to((r.x1, r.y1));
+        path.move_to((r.x1, r.y0));
+        path.line_to((r.x0, r.y1));
+        log::info!("cross: 目标 bbox={b:?} buff={buff} → 对角双线 [{r:?}]");
+        Self::from_path(path)
+    }
+
     /// 全局包围盒（含自身 transform；`Group` 递归合并子项包围盒）。
     /// 路径取控制点包围盒（kurbo 语义，与 manim 控制点框一致，布局够用）。
     pub fn bbox(&self) -> Rect {
@@ -489,5 +558,77 @@ mod tests {
         assert_eq!(&asset.rgba[4..8], &[0, 255, 0, 255]);
         // 长度不符报错
         assert!(ImageAsset::from_rgba8(vec![0; 3], 1, 1).is_err());
+    }
+
+    #[test]
+    fn surrounding_rect_外扩与路径结构() {
+        let target = Item::rect(Rect::new(0.0, 0.0, 100.0, 50.0));
+        let frame = Item::surrounding_rect(&target, 10.0);
+        assert_eq!(frame.bbox(), Rect::new(-10.0, -10.0, 110.0, 60.0));
+        // 矩形路径：move + 3 line + close = 5 元素
+        assert_eq!(path_of(&frame).elements().len(), 5);
+    }
+
+    #[test]
+    fn underline_底部间隙线() {
+        let target = Item::rect(Rect::new(0.0, 0.0, 100.0, 50.0));
+        let ul = Item::underline(&target, 8.0);
+        let bb = ul.bbox();
+        // 等宽横线，位于视觉底部（y1=50）下方 8px
+        assert_eq!(bb, Rect::new(0.0, 58.0, 100.0, 58.0), "{bb:?}");
+        assert_eq!(path_of(&ul).elements().len(), 2);
+    }
+
+    #[test]
+    fn cross_对角双线() {
+        let target = Item::rect(Rect::new(0.0, 0.0, 100.0, 50.0));
+        let c = Item::cross(&target, 10.0);
+        // 叉的范围 = 外扩框
+        assert_eq!(c.bbox(), Rect::new(-10.0, -10.0, 110.0, 60.0));
+        // 两条对角线：2 × (move + line) = 4 元素
+        let els: Vec<_> = path_of(&c).elements().to_vec();
+        assert_eq!(els.len(), 4);
+        assert!(
+            matches!(els[2], kurbo::PathEl::MoveTo(_)),
+            "第二条对角线应起新子路径"
+        );
+    }
+
+    #[test]
+    fn 背景板与圈选框同几何() {
+        let target = Item::circle(Circle::new((50.0, 50.0), 20.0));
+        let bg = Item::background_rect(&target, 6.0);
+        let frame = Item::surrounding_rect(&target, 6.0);
+        assert_eq!(
+            bg.bbox(),
+            frame.bbox(),
+            "background_rect 几何 = surrounding_rect"
+        );
+        // 圆目标 (30,30)~(70,70) 外扩 6
+        assert_eq!(bg.bbox(), Rect::new(24.0, 24.0, 76.0, 76.0));
+    }
+
+    #[test]
+    fn 标注随目标变换() {
+        let target = Item::rect(Rect::new(0.0, 0.0, 100.0, 50.0)).with_translate(200.0, 100.0);
+        let frame = Item::surrounding_rect(&target, 10.0);
+        // 框基于目标全局 bbox（含平移），落在 (190,90)~(310,160)
+        assert_eq!(frame.bbox(), Rect::new(190.0, 90.0, 310.0, 160.0));
+    }
+
+    #[test]
+    fn group_拼组包围盒() {
+        let grp = Item::group(vec![
+            Item::circle(Circle::new((0.0, 0.0), 10.0)),
+            Item::rect(Rect::new(0.0, 0.0, 100.0, 20.0)).with_translate(50.0, 0.0),
+        ]);
+        assert_eq!(
+            grp.bbox(),
+            Rect::new(-10.0, -10.0, 150.0, 20.0),
+            "递归 union"
+        );
+        // 组上标注：框罩住整组
+        let frame = Item::surrounding_rect(&grp, 5.0);
+        assert_eq!(frame.bbox(), Rect::new(-15.0, -15.0, 155.0, 25.0));
     }
 }

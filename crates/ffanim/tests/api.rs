@@ -449,3 +449,66 @@ fn sugar_薄糖批编排() {
         "uncreate 后圆应退场"
     );
 }
+
+/// P1-7 标注复合件编排：四构造器基于目标 bbox 几何 + 拼组标注 + 圈选框随目标同步位姿。
+#[test]
+fn annotate_标注复合件编排() {
+    use ffanim::kurbo::Rect;
+    use ffanim::render_frame;
+
+    let mut tl = Timeline::new(480, 270, 30, BG);
+
+    // 1) 目标矩形 + 圈选框（外扩 10）：框几何应等于目标 bbox ± buff
+    let target = tl.add(Item::rect(Rect::new(100.0, 50.0, 200.0, 100.0)));
+    let grp = Item::group(vec![Item::rect(Rect::new(100.0, 50.0, 200.0, 100.0))]);
+    let frame = tl.add(Item::surrounding_rect(&grp, 10.0).with_stroke(FG));
+    tl.play(Anim::create(frame).during(0.5));
+
+    // 2) 下划线：底部下方 8px 等宽横线
+    let ul = tl.add(Item::underline(&grp, 8.0).with_stroke(FG));
+    tl.play(Anim::create(ul).during(0.4));
+
+    // 3) 叉 + 背景板（注册先于目标 = 画在下）
+    let cr = tl.add(Item::cross(&grp, 6.0).with_stroke(FG));
+    tl.play(Anim::create(cr).during(0.4));
+    let bg = tl.add(Item::background_rect(&grp, 12.0).with_fill(BG));
+
+    // 4) 圈选框随目标同步平移（标注基线语义）
+    tl.together([
+        Anim::shift_to(target, 40.0, 0.0).during(0.5),
+        Anim::shift_to(frame, 40.0, 0.0).during(0.5),
+    ]);
+
+    let ct = tl.compile();
+    // 1 / 1 / 1 / 2 = 5 段
+    assert_eq!(ct.anims.len(), 5, "{:?}", ct.anims.len());
+    // together 同窗（段 3、4）
+    assert_eq!((ct.anims[3].start, ct.anims[4].start), (39, 39));
+
+    // 几何断言：compile 后基线已推进到 to 态（目标与框同步右移 40），
+    // 圈选框仍罩住目标 bbox ± 10（目标 (140,50)~(240,100)）
+    let frame_item = &ct.items[frame as usize];
+    assert_eq!(frame_item.bbox(), Rect::new(130.0, 40.0, 250.0, 110.0));
+    // 下划线 = 底部（y1=100）下方 8px 等宽线
+    let ul_bb = ct.items[ul as usize].bbox();
+    assert_eq!(ul_bb, Rect::new(100.0, 108.0, 200.0, 108.0), "{ul_bb:?}");
+    // 背景板 = 外扩 12
+    assert_eq!(
+        ct.items[bg as usize].bbox(),
+        Rect::new(88.0, 38.0, 212.0, 112.0)
+    );
+
+    // 同步平移后（段末）：框与目标一起右移 40
+    let after = render_frame(&ct, ct.duration_frames);
+    let frame_t = after
+        .items
+        .iter()
+        .find(|it| it.id == frame)
+        .unwrap()
+        .transform;
+    assert_eq!(
+        frame_t,
+        ffanim::kurbo::Affine::translate((40.0, 0.0)),
+        "{frame_t:?}"
+    );
+}

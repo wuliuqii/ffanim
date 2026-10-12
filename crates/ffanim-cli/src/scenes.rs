@@ -18,6 +18,7 @@ pub const SCENES: &[&str] = &[
     "layout_demo",
     "emphasize_demo",
     "sugar_demo",
+    "annotate_demo",
 ];
 
 /// 构建场景时间轴。
@@ -34,6 +35,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "layout_demo" => Ok(layout_demo(theme, fps)),
         "emphasize_demo" => Ok(emphasize_demo(theme, fps)),
         "sugar_demo" => Ok(sugar_demo(theme, fps)),
+        "annotate_demo" => annotate_demo(theme, fps),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -537,4 +539,112 @@ fn sugar_demo(theme: &Theme, fps: u32) -> Timeline {
         0.15,
     );
     tl
+}
+
+/// manim 对齐 P1-7 验收场景：标注复合件（圈选框/下划线/叉/背景板）。
+///
+/// 四个标注几何构造器均基于目标 bbox（含 transform）计算；标注基于注册基线，
+/// 目标有位姿动画时需与标注同步挂相同位姿（第 1 段演示）。
+fn annotate_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
+    use ffanim_typst::{FormulaOptions, TextOptions, TypstEngine, find_cjk_font};
+
+    let fg = theme.foreground().unwrap();
+    let accent = theme.accent().unwrap();
+    let sw = f64::from(theme.style.stroke_width);
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    let mut engine = TypstEngine::new(16);
+    if let Some(font) = find_cjk_font() {
+        engine.add_font(&font)?;
+    }
+    let fopts = FormulaOptions {
+        font_size_pt: 26.0,
+        text_color: fg,
+    };
+    let topt = |size: f64, color: ffanim_core::Color| TextOptions::new(size, color);
+
+    // 排版产物注册 helper：散件注册（返回句柄，供字形级动画）+ 拼组（仅几何用途，不注册）
+    let reg = |tl: &mut Timeline, f: &ffanim_typst::Formula, place: Affine| -> (Vec<_>, Item) {
+        let pieces: Vec<Item> = f
+            .to_items()
+            .into_iter()
+            .map(|it| it.with_transform(place))
+            .collect();
+        let grp = Item::group(pieces.clone());
+        (tl.add_group(pieces), grp)
+    };
+
+    // 1) 公式圈选：公式淡入 → surrounding_rect 描边生长 → 公式+框同步右移
+    //    （标注基于注册基线，目标平移则标注挂相同 shift_to）
+    let f = engine.formula("e^{i pi} + 1 = 0", &fopts)?;
+    let (f_ids, f_grp) = reg(&mut tl, &f, f.fit_transform(f64::from(w) / 2.0, 120.0, 2.0));
+    tl.group(f_ids.iter().map(|&id| Anim::fade_in(id).during(0.8)), 0.0);
+    tl.wait(0.3);
+    let frame = tl.add(
+        Item::surrounding_rect(&f_grp, 18.0)
+            .with_stroke(accent)
+            .with_stroke_width(sw),
+    );
+    tl.play(Anim::create(frame).during(0.7));
+    tl.wait(0.3);
+    let mut sync = vec![Anim::shift_to(frame, 180.0, 0.0).during(0.8)];
+    sync.extend(
+        f_ids
+            .iter()
+            .map(|&id| Anim::shift_to(id, 180.0, 0.0).during(0.8)),
+    );
+    tl.together(sync);
+
+    // 2) 下划线：单词淡入 → 底线描边
+    let word = engine.text("underlined", &topt(24.0, fg))?;
+    let (w_ids, w_grp) = reg(&mut tl, &word, word.fit_transform(240.0, 300.0, 2.0));
+    tl.group(w_ids.iter().map(|&id| Anim::fade_in(id).during(0.6)), 0.0);
+    tl.wait(0.2);
+    let ul = tl.add(
+        Item::underline(&w_grp, 10.0)
+            .with_stroke(accent)
+            .with_stroke_width(sw),
+    );
+    tl.play(Anim::create(ul).during(0.5));
+    tl.wait(0.2);
+
+    // 3) 叉：错误式子淡入 → 对角双线划掉
+    let wrong = engine.text("2 + 2 = 5", &topt(24.0, fg))?;
+    let (c_ids, c_grp) = reg(&mut tl, &wrong, wrong.fit_transform(700.0, 300.0, 2.0));
+    tl.group(c_ids.iter().map(|&id| Anim::fade_in(id).during(0.6)), 0.0);
+    tl.wait(0.3);
+    let cross = tl.add(
+        Item::cross(&c_grp, 12.0)
+            .with_stroke(accent)
+            .with_stroke_width(sw),
+    );
+    tl.play(Anim::create(cross).during(0.5));
+    tl.wait(0.2);
+
+    // 4) 背景板：先注册背景矩形（画在下）再注册文字（画在上），同窗淡入
+    let cap = engine.text("背景板", &topt(28.0, fg))?;
+    let cap_place = cap.fit_transform(f64::from(w) / 2.0, 450.0, 2.0);
+    let cap_grp = Item::group(
+        cap.to_items()
+            .into_iter()
+            .map(|it| it.with_transform(cap_place))
+            .collect(),
+    );
+    let bg = tl.add(
+        Item::background_rect(&cap_grp, 16.0).with_fill(ffanim_core::Color { a: 90, ..accent }),
+    );
+    let cap_ids = tl.add_group(
+        cap.to_items()
+            .into_iter()
+            .map(|it| it.with_transform(cap_place))
+            .collect(),
+    );
+    tl.together(
+        [Anim::fade_in(bg).during(0.7)]
+            .into_iter()
+            .chain(cap_ids.iter().map(|&id| Anim::fade_in(id).during(0.7))),
+    );
+    tl.wait(0.5);
+    Ok(tl)
 }

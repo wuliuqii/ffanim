@@ -53,7 +53,7 @@
 | P1-4 | MoveAlongPath 沿路径移动 | MoveAlongPath | 需逐帧路径采样求值（TransformTo 不够），中等 | M |
 | P1-5 | 公式以外的结构匹配形变 | TransformMatchingShapes | match_formulas 基座已有（M9.1 diff 升级），扩展到任意路径文本缺失（SVG 字形无 source 文本） | M |
 | P1-6 | 数字滚动 DecimalNumber | DecimalNumber + tracker | tracker+updater+Typst 组合已可行，缺"每帧改文本"的示范与便利封装（Typst LRU 缓存使逐帧排版可行） | S~M |
-| P1-7 | 标注复合件：SurroundingRectangle/Underline/Cross/BackgroundRect | 同名 | P0-1 基元 + P0-2 布局落地后多为薄糖 | S |
+| P1-7 | 标注复合件：SurroundingRectangle/Underline/Cross/BackgroundRect | 同名 | ✅ 已落地（M9.8）：`Item::surrounding_rect/underline/cross/background_rect`（基于注册基线 bbox + `Item::group` 拼组标注），annotate_demo 场景验收 | S |
 | P1-8 | Brace 花括号 + 括注文本 | Brace | 图形 brace 需形状生成（Typst 侧可排 brace 字符过渡） | M |
 | P1-9 | GIF / WebM 输出 + 画质预设 | -ql/-qm/-qh/-qk | M9 已列（GIF 循环、WebM 编码参数）， EncodeOptions 质量预设 | M |
 | P1-10 | VGroup 语义糖：批量注册 + 整体动画 | VGroup | ✅ 已落地（M9.7）：`tl.add_group(Vec<Item>) -> Vec<ItemId>`（注册侧；组级动画配 `tl.group`/`together`） | S |

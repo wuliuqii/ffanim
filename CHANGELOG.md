@@ -47,6 +47,22 @@
 - 验收：demo_anim 5.8s 全片导出 1..3s 片段，ffprobe 实测 2.0s；3 解析单测 + 1 集成测试
 - 顺手修复 ci-gpu 配方存量编译损坏（peniko `Blob::new` 需 `Arc<dyn AsRef<[u8]>>`，改拷贝进 `Arc<Vec<u8>>`）
 
+### M9.8 manim 对齐第五批：P1-7 标注复合件 surrounding_rect / underline / cross / background_rect（2026-10-12）
+
+- feat(core): 四个标注复合件几何构造器（P0-1 基元 + P0-2 布局落地后的薄糖，docs/05 P1-7）：
+  `Item::surrounding_rect(&target, buff)`（bbox 四边外扩 buff 的圈选框）/
+  `Item::underline(&target, buff)`（视觉底部下方 buff 处等宽横线）/
+  `Item::cross(&target, buff)`（外扩框对角双线，单路径双子路径，create 逐条描出）/
+  `Item::background_rect(&target, buff)`（背景板，注册须先于目标 = 画在下）
+- 新增 `Item::group(items)`（manim VGroup 构造侧）：公式等排版散件拼组后整体标注/布局；
+  拼组仅作几何用途时不注册（Shape::Group 此前只能手拼 struct 字面量）
+- 语义要点：标注基于**注册基线** bbox（含 transform）；目标有位姿动画时标注挂相同
+  shift_to 同步（annotate_demo 第 1 段演示）；半透明背景板用 `Color { a, ..accent }`
+- 验收：annotate_demo 场景（公式圈选+同步平移 / 下划线 / 叉划错误式子 / 背景板，
+  7.2s/216 帧/41 动画）出片目检 4 帧通过；埋点核对（目标 bbox → buff → 结果几何）；
+  单测 +6 项 + 集成 `annotate_标注复合件编排`（含"compile 后基线推进到 to 态、
+  框仍罩目标 ±buff"断言）；SKILL.md 词汇表同步
+
 ### M9.7 manim 对齐第四批：P1 薄糖批 Uncreate / Together / Succession / 方向家族 / add_group / save_state·restore（2026-10-12）
 
 - feat(core): docs/05 差距清单 P1-1/2/3/10/11 五项同批落地（全部构建期薄糖，求值路径仅新增
