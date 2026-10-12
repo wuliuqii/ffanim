@@ -2,6 +2,7 @@
 //! 与 `info`（主题加载验证），后续里程碑补全 strip / onion / inspect / snapshot。
 
 mod demo;
+mod scaffold;
 mod scenes;
 mod tools;
 
@@ -204,6 +205,20 @@ enum Command {
         theme: PathBuf,
     },
 
+    /// 生成脚手架项目（空目录 → 最小可跑工程）
+    New {
+        /// 项目目录（最后一段作为项目名）
+        dir: PathBuf,
+
+        /// 场景模板
+        #[arg(long, default_value = "minimal")]
+        template: String,
+
+        /// ffanim 依赖指向本仓库源码（本机验证用，免 crates.io 发布）
+        #[arg(long)]
+        dev: bool,
+    },
+
     /// 音频诊断：时长/电平/削波/静音段（agent 排查音轨）
     Audio {
         /// 音频文件路径
@@ -230,6 +245,19 @@ fn main() -> ffanim::Result<()> {
 
     let cli = Cli::parse();
     match cli.command {
+        Command::New { dir, template, dev } => {
+            let files = scaffold::generate(&dir, &template, dev)?;
+            println!("已生成项目 {}（模板 {template}）:", dir.display());
+            for f in &files {
+                println!("  {}", f.display());
+            }
+            println!(
+                "\n下一步: cd {} && cargo run（产物 out/demo.mp4）",
+                dir.display()
+            );
+            Ok(())
+        }
+
         Command::Audio { input, json } => {
             let report = ffanim_audio::analyze(&input)?;
             if json {

@@ -58,6 +58,11 @@ pub fn encode_video(
     frames: &(impl Fn(usize) -> Vec<u8> + Sync),
 ) -> Result<()> {
     check_ffmpeg()?;
+    // 输出父目录不存在则创建（脚手架项目首次运行时 out/ 尚不存在）
+    if let Some(parent) = out.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| Error::Encode(format!("创建输出目录 {parent:?} 失败: {e}")))?;
+    }
     // yuv420p 要求偶数尺寸
     assert!(
         width.is_multiple_of(2) && height.is_multiple_of(2),

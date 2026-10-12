@@ -11,3 +11,5 @@ workspace = true
 
 [dependencies]
 ffanim-core = { workspace = true }
+ffanim-encode = { path = "../ffanim-encode" }
+ffanim-render = { path = "../ffanim-render" }
