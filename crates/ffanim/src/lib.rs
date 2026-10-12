@@ -13,7 +13,8 @@ pub use ffanim_core::{
 /// 公式/富文本排版子系统（Typst 嵌入）：TypstEngine / Formula / Text / match_formulas。
 pub mod typst {
     pub use ffanim_typst::{
-        Formula, FormulaOptions, TextOptions, TypstEngine, find_cjk_font, match_formulas,
+        CodeOptions, CodeTheme, Formula, FormulaOptions, TextOptions, TypstEngine, find_cjk_font,
+        match_formulas,
     };
 }
 

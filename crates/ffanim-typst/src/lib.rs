@@ -6,11 +6,13 @@
 //!
 //! 坐标约定：Formula 内部为 pt 单位、y 向下（与 Typst Frame 一致），
 //! 缩放/居中由调用方通过 `Item::with_transform` 完成。
+mod code;
 mod engine;
 mod formula;
 mod matching;
 mod text;
 
+pub use code::{CodeOptions, CodeTheme};
 pub use engine::TypstEngine;
 pub use formula::{Formula, FormulaOptions, FormulaPiece};
 pub use matching::{MatchPlan, match_formulas};
@@ -251,5 +253,136 @@ mod tests {
                 .is_some_and(|t| t.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)))),
             "应有中文字形片段"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // 代码块（P1-13）
+    // -----------------------------------------------------------------------
+
+    fn code_opts(size: f64) -> CodeOptions {
+        CodeOptions::new(size)
+    }
+
+    const RUST_SNIPPET: &str = "// 注释 comment\nfn main() {\n    let x = 42;\n    let s = \"hello\";\n    println!(\"{}\", x);\n}";
+
+    /// 语法高亮生效：关键字/字符串/数字/注释应呈多种颜色（深色主题）。
+    #[test]
+    fn code_语法高亮多色() {
+        let mut engine = TypstEngine::new(8);
+        let f = engine.code(RUST_SNIPPET, "rust", &code_opts(13.0)).unwrap();
+        assert!(!f.pieces.is_empty());
+        assert!(f.width_pt > 0.0 && f.height_pt > 0.0);
+        let fills: std::collections::HashSet<String> = f
+            .pieces
+            .iter()
+            .filter_map(|p| {
+                p.fill
+                    .map(|c| format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b))
+            })
+            .collect();
+        assert!(
+            fills.len() >= 3,
+            "rust 片段应至少 3 种 token 色，实际 {fills:?}"
+        );
+        // 深色主题前景色应出现（普通标识符，piece fill 为小写 hex）
+        assert!(
+            fills.contains("#e6edf3"),
+            "应含 ffanim-dark 前景色，实际 {fills:?}"
+        );
+    }
+
+    /// 浅色主题：前景色为深色系（浅底语义）。
+    #[test]
+    fn code_浅色主题() {
+        let mut engine = TypstEngine::new(8);
+        let o = CodeOptions {
+            theme: CodeTheme::Light,
+            ..code_opts(13.0)
+        };
+        let f = engine.code("let x = 1;", "rust", &o).unwrap();
+        let fills: Vec<String> = f
+            .pieces
+            .iter()
+            .filter_map(|p| {
+                p.fill
+                    .map(|c| format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b))
+            })
+            .collect();
+        assert!(
+            fills.iter().any(|h| h == "#1f2328"),
+            "应含 ffanim-light 前景色，实际 {fills:?}"
+        );
+    }
+
+    /// 缓存：同 body/lang/theme 二次排版返回同一 Arc；换语言不串缓存。
+    #[test]
+    fn code_缓存与键隔离() {
+        let mut engine = TypstEngine::new(8);
+        let a = engine.code("let x = 1;", "rust", &code_opts(13.0)).unwrap();
+        let b = engine.code("let x = 1;", "rust", &code_opts(13.0)).unwrap();
+        assert!(Arc::ptr_eq(&a, &b), "缓存命中应返回同一 Arc");
+        // 换主题 → 不同产物
+        let c = engine
+            .code(
+                "let x = 1;",
+                "rust",
+                &CodeOptions {
+                    theme: CodeTheme::Light,
+                    ..code_opts(13.0)
+                },
+            )
+            .unwrap();
+        assert!(!Arc::ptr_eq(&a, &c), "主题不同缓存应隔离");
+    }
+
+    /// 正文含三反引号时围栏自动升级，排版不破块。
+    #[test]
+    fn code_围栏升级() {
+        let mut engine = TypstEngine::new(8);
+        let body = "a ```inline``` b\nfn x() {}";
+        let f = engine.code(body, "text", &code_opts(12.0)).unwrap();
+        assert!(!f.pieces.is_empty());
+        // 行内容完整保留（verbatim）：含反引号子串的字形应存在
+        let text: String = f.pieces.iter().filter_map(|p| p.text.as_deref()).collect();
+        assert!(text.contains("```"), "反引号应原样保留: {text:?}");
+    }
+
+    /// 无语言标签 = 纯文本块，单一前景色。
+    #[test]
+    fn code_无语言纯文本() {
+        let mut engine = TypstEngine::new(8);
+        let f = engine.code("plain text 123", "", &code_opts(12.0)).unwrap();
+        let fills: std::collections::HashSet<String> = f
+            .pieces
+            .iter()
+            .filter_map(|p| {
+                p.fill
+                    .map(|c| format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b))
+            })
+            .collect();
+        assert_eq!(fills.len(), 1, "纯文本应只有前景色: {fills:?}");
+    }
+
+    /// 渲染冒烟：代码块 → CPU 后端 PNG（人工核验高亮观感）。
+    #[test]
+    fn code_渲染出图() {
+        use ffanim_core::DrawList;
+
+        let mut engine = TypstEngine::new(8);
+        let f = engine.code(RUST_SNIPPET, "rust", &code_opts(13.0)).unwrap();
+
+        let (w, h) = (960u32, 540u32);
+        let mut draw = DrawList::new(w, h, Color::new(14, 17, 22, 255));
+        let t = f.center_transform(f64::from(w) / 2.0, f64::from(h) / 2.0) * Affine::scale(3.0);
+        for item in f.to_items() {
+            let transform = item.transform;
+            draw.push(item.with_transform(t * transform));
+        }
+
+        use ffanim_render::RenderBackend;
+        let mut cpu = ffanim_render::CpuBackend::new();
+        let rgba = cpu.render(&draw);
+        let out = std::path::Path::new("../../frames/code_smoke.png");
+        ffanim_render::save_png(out, w, h, &rgba).unwrap();
     }
 }

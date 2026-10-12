@@ -19,6 +19,7 @@ pub const SCENES: &[&str] = &[
     "emphasize_demo",
     "sugar_demo",
     "annotate_demo",
+    "code_demo",
 ];
 
 /// 构建场景时间轴。
@@ -36,6 +37,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "emphasize_demo" => Ok(emphasize_demo(theme, fps)),
         "sugar_demo" => Ok(sugar_demo(theme, fps)),
         "annotate_demo" => annotate_demo(theme, fps),
+        "code_demo" => code_demo(theme, fps),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -646,5 +648,68 @@ fn annotate_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
             .chain(cap_ids.iter().map(|&id| Anim::fade_in(id).during(0.7))),
     );
     tl.wait(0.5);
+    Ok(tl)
+}
+
+/// M9.9 验收场景（P1-13）：代码块语法高亮。
+///
+/// 标题淡入 → Rust 代码块逐字形写出（Dark 主题）→ Python 代码块淡入，
+/// 演示 `engine.code` + 内嵌深色 tmTheme 的多色高亮。
+fn code_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
+    use ffanim_typst::{CodeOptions, TextOptions, TypstEngine, find_cjk_font};
+
+    let fg = theme.foreground().unwrap();
+    let accent = theme.accent().unwrap();
+    let sw = f64::from(theme.style.stroke_width);
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    let mut engine = TypstEngine::new(16);
+    if let Some(font) = find_cjk_font() {
+        engine.add_font(&font)?;
+    }
+
+    // 排版产物注册 helper：散件注册（供逐字形动画）+ 拼组（仅几何用途）
+    let reg = |tl: &mut Timeline, f: &ffanim_typst::Formula, place: Affine| -> (Vec<_>, Item) {
+        let pieces: Vec<Item> = f
+            .to_items()
+            .into_iter()
+            .map(|it| it.with_transform(place))
+            .collect();
+        let grp = Item::group(pieces.clone());
+        (tl.add_group(pieces), grp)
+    };
+
+    // 1) 标题淡入
+    let title = engine.text("代码块高亮", &TextOptions::new(32.0, fg))?;
+    let (t_ids, _) = reg(
+        &mut tl,
+        &title,
+        title.fit_transform(f64::from(w) / 2.0, 70.0, 2.0),
+    );
+    tl.group(t_ids.iter().map(|&id| Anim::fade_in(id).during(0.8)), 0.0);
+
+    // 2) Rust 代码块：逐字形写出（深色主题，关键字/字符串/数字/类型多色）
+    let rust_code = "fn fib(n: u64) -> u64 {\n    match n {\n        0 | 1 => n,\n        _ => fib(n - 1) + fib(n - 2),\n    }\n}";
+    let opts = CodeOptions::new(13.0);
+    let code = engine.code(rust_code, "rust", &opts)?;
+    let (c_ids, c_grp) = reg(&mut tl, &code, code.fit_transform(300.0, 280.0, 2.0));
+    tl.group(c_ids.iter().map(|&id| Anim::create(id).during(1.6)), 0.0);
+    tl.wait(0.3);
+
+    // 3) 代码框标注（surrounding_rect）圈出代码块
+    let frame = tl.add(
+        Item::surrounding_rect(&c_grp, 20.0)
+            .with_stroke(accent)
+            .with_stroke_width(sw),
+    );
+    tl.play(Anim::create(frame).during(0.6));
+
+    // 4) Python 代码块：右下方淡入（同为深色主题，多语言高亮演示）
+    let py_code = "def greet(name: str) -> str:\n    return f\"hello, {name}\"";
+    let py = engine.code(py_code, "python", &opts)?;
+    let (p_ids, _) = reg(&mut tl, &py, py.fit_transform(620.0, 445.0, 2.0));
+    tl.group(p_ids.iter().map(|&id| Anim::fade_in(id).during(0.9)), 0.0);
+    tl.wait(0.6);
     Ok(tl)
 }

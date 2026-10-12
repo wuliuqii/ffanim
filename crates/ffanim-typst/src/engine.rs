@@ -6,6 +6,7 @@
 //!
 //! 坐标约定：Formula 内部为 pt 单位、y 向下（与 Typst Frame 一致），
 //! 缩放/居中由调用方通过 `Item::with_transform` 完成。
+use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, LazyLock};
 
@@ -22,12 +23,13 @@ use typst::{Library, LibraryExt, World, WorldExt};
 use ffanim_core::outline_glyph;
 use ffanim_core::{Color, Error, Result};
 
+use crate::code::{CodeOptions, CodeTheme};
+use crate::formula::{Formula, FormulaOptions, FormulaPiece};
+use crate::text::TextOptions;
+
 // ---------------------------------------------------------------------------
 // 静态资源：字体 / 标准库 / 主文件 id（进程内只建一次）
 // ---------------------------------------------------------------------------
-
-use crate::formula::{Formula, FormulaOptions, FormulaPiece};
-use crate::text::TextOptions;
 
 /// 主源文件 id（全局 intern，稳定不变）。
 static MAIN_FILE: LazyLock<FileId> = LazyLock::new(|| {
@@ -58,18 +60,31 @@ static LIBRARY: LazyLock<LazyHash<Library>> =
 // ---------------------------------------------------------------------------
 
 /// 进程内排版 World：无文件系统，主源为内存字符串，字体集可注入。
+/// `assets` 为虚拟文件（代码高亮 tmTheme 等），按虚拟路径名提供。
 struct MathWorld {
     text: String,
     /// 基础字体（typst-assets）+ 用户注入字体（`add_font`）。
     fonts: Arc<Vec<Font>>,
     /// 与 `fonts` 一一对应的字体簿。
     book: Arc<LazyHash<FontBook>>,
+    /// 虚拟文件（名 → 内容），供 `raw.theme` 等按路径加载。
+    assets: Arc<HashMap<String, String>>,
 }
 
 impl MathWorld {
     /// 以源码与字体集构造 World。
-    fn new(text: String, fonts: Arc<Vec<Font>>, book: Arc<LazyHash<FontBook>>) -> Self {
-        Self { text, fonts, book }
+    fn new(
+        text: String,
+        fonts: Arc<Vec<Font>>,
+        book: Arc<LazyHash<FontBook>>,
+        assets: Arc<HashMap<String, String>>,
+    ) -> Self {
+        Self {
+            text,
+            fonts,
+            book,
+            assets,
+        }
     }
 }
 
@@ -96,10 +111,14 @@ impl World for MathWorld {
 
     fn file(&self, id: FileId) -> typst::diag::FileResult<Bytes> {
         if id == *MAIN_FILE {
-            Ok(Bytes::from_string(self.text.clone()))
-        } else {
-            Err(FileError::NotFound(id.vpath().get_without_slash().into()))
+            return Ok(Bytes::from_string(self.text.clone()));
         }
+        // 虚拟资产文件（高亮主题等）
+        let name = id.vpath().get_without_slash();
+        if let Some(content) = self.assets.get(name) {
+            return Ok(Bytes::from_string(content.clone()));
+        }
+        Err(FileError::NotFound(name.into()))
     }
 
     fn font(&self, index: usize) -> Option<Font> {
@@ -125,7 +144,7 @@ pub struct TypstEngine {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct CacheKey {
-    /// 排版模式（0 = math 公式，1 = markup 文本），防同文互串。
+    /// 排版模式（0 = math 公式，1 = markup 文本，2 = raw 代码块），防同文互串。
     mode: u8,
     body: String,
     font_size_pt: u32, // f64 不可哈希，以 0.01pt 粒度量化
@@ -133,6 +152,8 @@ struct CacheKey {
     fonts_gen: u64,
     wrap_pt: u32,      // 限宽（0.01pt 量化）；公式恒 0
     leading_x100: u32, // 行距（0.01em 量化）；公式恒 0
+    lang: String,      // 代码语言标签；公式/文本恒空
+    theme: u8,         // 高亮主题代号（0/1）；公式/文本恒 0
 }
 
 impl TypstEngine {
@@ -185,6 +206,8 @@ impl TypstEngine {
             fonts_gen: self.fonts_gen,
             wrap_pt: 0,
             leading_x100: 0,
+            lang: String::new(),
+            theme: 0,
         };
         if let Some(hit) = self.cache.get(&key) {
             log::debug!("公式缓存命中: {body:?}");
@@ -215,6 +238,8 @@ impl TypstEngine {
             fonts_gen: self.fonts_gen,
             wrap_pt: (opts.wrap_width_pt.unwrap_or(f64::INFINITY) * 100.0).round() as u32,
             leading_x100: (opts.leading_em * 100.0).round() as u32,
+            lang: String::new(),
+            theme: 0,
         };
         if let Some(hit) = self.cache.get(&key) {
             log::debug!("文本缓存命中: {body:?}");
@@ -225,6 +250,60 @@ impl TypstEngine {
         let formula = Arc::new(compile_text(body, opts, &self.fonts, &self.book)?);
         log::debug!(
             "文本排版完成: {body:?}（{:.1}ms）",
+            t0.elapsed().as_secs_f64() * 1000.0
+        );
+        self.cache.put(key, Arc::clone(&formula));
+        Ok(formula)
+    }
+
+    /// 排版代码块（Typst raw 块 + syntect 语法高亮，P1-13）。
+    ///
+    /// `lang` 为语言标签（如 `"rust"`，空串 = 纯文本）；高亮主题见
+    /// [`CodeTheme`]（内嵌 tmTheme 经 `World::file` 虚拟文件加载）。
+    /// 正文含连续反引号时自动升级围栏级数，不会破块。
+    /// 产物与公式同为 [`Formula`]，`to_items` / `fit_transform` 原样复用。
+    pub fn code(&mut self, body: &str, lang: &str, opts: &CodeOptions) -> Result<Arc<Formula>> {
+        let lang = crate::code::sanitize_lang(lang);
+        let theme_code = match opts.theme {
+            CodeTheme::Dark => 0u8,
+            CodeTheme::Light => 1u8,
+        };
+        let key = CacheKey {
+            mode: 2,
+            body: body.into(),
+            font_size_pt: (opts.font_size_pt * 100.0).round() as u32,
+            text_color: String::new(), // 前景色由高亮主题 foreground 决定
+            fonts_gen: self.fonts_gen,
+            wrap_pt: 0,
+            leading_x100: 0,
+            lang: lang.clone(),
+            theme: theme_code,
+        };
+        if let Some(hit) = self.cache.get(&key) {
+            log::debug!("代码缓存命中: {lang:?} {} 行", body.lines().count());
+            return Ok(Arc::clone(hit));
+        }
+
+        let t0 = std::time::Instant::now();
+        let formula = Arc::new(compile_code(body, &lang, opts, &self.fonts, &self.book)?);
+        let colors = formula
+            .pieces
+            .iter()
+            .filter_map(|p| {
+                p.fill
+                    .map(|c| format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b))
+            })
+            .collect::<std::collections::HashSet<_>>();
+        // 埋点：输入（语言/行数/字号/主题）→ 结果（宽高/片段数/着色种类）+ 时序
+        log::info!(
+            "code: lang={lang:?} {} 行 {}pt 主题={:?} → {:.1}x{:.1}pt {} 片段 {} 色（{:.1}ms）",
+            body.lines().count(),
+            opts.font_size_pt,
+            opts.theme,
+            formula.width_pt,
+            formula.height_pt,
+            formula.pieces.len(),
+            colors.len(),
             t0.elapsed().as_secs_f64() * 1000.0
         );
         self.cache.put(key, Arc::clone(&formula));
@@ -249,7 +328,7 @@ fn compile_formula(
          $ {body} $",
         opts.font_size_pt
     );
-    compile_source(source, fonts, book)
+    compile_source(source, fonts, book, &Default::default())
 }
 
 /// 编译 markup 富文本（限宽时页面宽度 = 内容宽 + 左右 margin，恰好换行）。
@@ -274,7 +353,33 @@ fn compile_text(
          {body}",
         opts.font_size_pt, opts.leading_em
     );
-    compile_source(source, fonts, book)
+    compile_source(source, fonts, book, &Default::default())
+}
+
+/// 编译 raw 代码块（语法高亮主题以虚拟 tmTheme 文件提供）。
+fn compile_code(
+    body: &str,
+    lang: &str,
+    opts: &CodeOptions,
+    fonts: &Arc<Vec<Font>>,
+    book: &Arc<LazyHash<FontBook>>,
+) -> Result<Formula> {
+    let fence = crate::code::fence_for(body);
+    let theme_name = opts.theme.file_name();
+    // 普通文本（未命中 scope）继承外层 text fill，须显式设为主题前景色
+    //（Typst raw 高亮只对命中 token 设 fill，见 typst-library raw.rs styled()）
+    let fg = opts.theme.foreground_hex();
+    // 虚拟文件：raw.theme 按路径经 World::file 加载内嵌 tmTheme
+    let mut assets = HashMap::new();
+    assets.insert(theme_name.to_string(), opts.theme.tm_theme());
+    let source = format!(
+        "#set page(width: auto, height: auto, margin: 4pt, fill: none)\n\
+         #set text(size: {}pt, fill: rgb(\"{fg}\"))\n\
+         #set raw(theme: \"{theme_name}\")\n\
+         {fence}{lang}\n{body}\n{fence}",
+        opts.font_size_pt
+    );
+    compile_source(source, fonts, book, &Arc::new(assets))
 }
 
 /// 编译 Typst 源码为 [`Formula`]（页宽/字号/颜色/行距由调用方拼入源码）。
@@ -282,8 +387,9 @@ fn compile_source(
     source: String,
     fonts: &Arc<Vec<Font>>,
     book: &Arc<LazyHash<FontBook>>,
+    assets: &Arc<HashMap<String, String>>,
 ) -> Result<Formula> {
-    let world = MathWorld::new(source, fonts.clone(), book.clone());
+    let world = MathWorld::new(source, fonts.clone(), book.clone(), assets.clone());
     let warned = typst::compile::<typst_layout::PagedDocument>(&world);
     // 警告不致命，记日志；错误才是编译失败
     for w in &warned.warnings {

@@ -108,6 +108,14 @@ Typst 公式（依赖 `ffanim-typst`，公式排版有 LRU 缓存）：
 `TypstEngine::formula("x^2 + y^2 = 0", &opts)` → 逐字形动画、`TransformMatchingTex` 结构匹配形变。
 注意：符号 `integral`（不是 `int`）。
 
+代码块高亮（P1-13，manim Code 对应）：
+`TypstEngine::code(body, "rust", &CodeOptions::new(13.0))` → syntect 多色高亮的逐字形 `Formula`
+（`to_items`/`fit_transform` 与公式原样复用）。主题 `CodeTheme::Dark/Light`（内嵌 GitHub 色板
+tmTheme，token 色属排版引擎资产不走场景主题 JSON）；`lang` 空串 = 纯文本，正文含 ``` 时围栏自动升级。
+**前景色语义：Typst raw 高亮只给命中 token 设 fill，普通文本继承外层 `#set text(fill:)`——
+引擎已自动填入主题前景色（`CodeTheme::foreground_hex()`），画布配色可据此对齐**。
+code 带埋点（RUST_LOG=info 查语言/行数/主题 → 宽高/片段数/着色种数/耗时）。
+
 ## Agent 验证循环（无人工看片）
 
 写完场景后按序执行，全部机器可判定：

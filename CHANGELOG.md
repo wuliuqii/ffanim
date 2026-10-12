@@ -47,6 +47,20 @@
 - 验收：demo_anim 5.8s 全片导出 1..3s 片段，ffprobe 实测 2.0s；3 解析单测 + 1 集成测试
 - 顺手修复 ci-gpu 配方存量编译损坏（peniko `Blob::new` 需 `Arc<dyn AsRef<[u8]>>`，改拷贝进 `Arc<Vec<u8>>`）
 
+### M9.9 manim 对齐第六批：P1-13 代码块高亮 code（2026-10-12）
+
+- feat(typst): `TypstEngine::code(body, lang, &CodeOptions)`——Typst raw 块 + syntect 语法高亮，
+  产物复用 Formula 管线（to_items/fit_transform/逐字形动画原样可用）；LRU 缓存键加 lang/theme
+  代号防同文互串；`lang` 白名单清洗 + 正文含反引号串时围栏自动升级（至少 3 级）防破块
+- 内嵌深/浅两套 tmTheme（`CodeTheme::Dark/Light`，GitHub Dark/Light 色板，经 `World::file`
+  虚拟文件加载，token 色属排版引擎资产不走场景主题 JSON）
+- **关键语义（typst-library raw.rs styled()）：raw 高亮只给命中 scope 的 token 设显式 fill，
+  普通文本继承外层 `#set text(fill:)`（默认黑，深色画布不可见）——compile_code 显式填入
+  `CodeTheme::foreground_hex()` 作正文前景色**
+- code 带 log::info 埋点：语言/行数/字号/主题 → 宽高/片段数/着色种数/耗时
+- 验收：code_demo 场景（Rust fib 逐字形写出 + surrounding_rect 圈选 + Python 块淡入）
+  4.8s 出片目检（关键字/函数/类型/数字/字符串多色 + 前景色白正确）；单测 9 项 + 集成 1 项
+
 ### M9.8 manim 对齐第五批：P1-7 标注复合件 surrounding_rect / underline / cross / background_rect（2026-10-12）
 
 - feat(core): 四个标注复合件几何构造器（P0-1 基元 + P0-2 布局落地后的薄糖，docs/05 P1-7）：

@@ -512,3 +512,64 @@ fn annotate_标注复合件编排() {
         "{frame_t:?}"
     );
 }
+
+/// P1-13 代码块高亮编排：engine.code（门面 re-export CodeOptions/CodeTheme）
+/// + 逐字形写出 + surrounding_rect 圈选。
+#[test]
+fn code_代码块高亮编排() {
+    use ffanim::kurbo::Rect;
+    use ffanim::typst::{CodeOptions, CodeTheme};
+
+    let mut eng = TypstEngine::new(8);
+    let src = "fn main() { let x = 1; }";
+    let opts = CodeOptions::new(13.0);
+    let f = eng.code(src, "rust", &opts).unwrap();
+
+    // 多色高亮：至少 3 种 token 色，含深色主题前景色（piece fill 为小写 hex）
+    let fills: std::collections::HashSet<String> = f
+        .pieces
+        .iter()
+        .filter_map(|p| {
+            p.fill
+                .map(|c| format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b))
+        })
+        .collect();
+    assert!(fills.len() >= 3, "应至少 3 种 token 色，实际 {fills:?}");
+    assert_eq!(CodeTheme::Dark.foreground_hex().to_lowercase(), "#e6edf3");
+    assert!(
+        fills.contains(&CodeTheme::Dark.foreground_hex().to_lowercase()),
+        "应含主题前景色，实际 {fills:?}"
+    );
+
+    // 编排：代码块淡入 → 圈选框描边生长（框应罩住代码 bbox ± buff）
+    let mut tl = Timeline::new(960, 540, 30, BG);
+    let scale = 2.0;
+    let place = f.fit_transform(480.0, 270.0, scale);
+    let pieces: Vec<Item> = f
+        .to_items()
+        .into_iter()
+        .map(|it| it.with_transform(place))
+        .collect();
+    let grp = Item::group(pieces.clone());
+    let ids = tl.add_group(pieces);
+    tl.group(ids.iter().map(|&id| Anim::fade_in(id).during(0.8)), 0.0);
+    let frame = tl.add(Item::surrounding_rect(&grp, 20.0).with_stroke(FG));
+    tl.play(Anim::create(frame).during(0.6));
+
+    let ct = tl.compile();
+    assert_eq!(ct.anims.len(), ids.len() + 1);
+
+    // 框 bbox = 代码组 bbox ± 20（标注基于注册基线，fade_in 不改位姿）
+    let code_bb = grp.bbox();
+    let frame_bb = ct.items[frame as usize].bbox();
+    assert_eq!(
+        frame_bb,
+        Rect::new(
+            code_bb.x0 - 20.0,
+            code_bb.y0 - 20.0,
+            code_bb.x1 + 20.0,
+            code_bb.y1 + 20.0
+        ),
+        "代码 {code_bb:?} vs 框 {frame_bb:?}"
+    );
+}
