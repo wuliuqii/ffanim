@@ -47,6 +47,21 @@
 - 验收：demo_anim 5.8s 全片导出 1..3s 片段，ffprobe 实测 2.0s；3 解析单测 + 1 集成测试
 - 顺手修复 ci-gpu 配方存量编译损坏（peniko `Blob::new` 需 `Arc<dyn AsRef<[u8]>>`，改拷贝进 `Arc<Vec<u8>>`）
 
+### M9.10 manim 对齐第七批：P1-4 MoveAlongPath 沿路径移动（2026-10-12）
+
+- feat(core): `Anim::move_along_path(id, &BezPath)`（AnimKind::MoveAlongPath）——弧长匀速
+  参数化采样（kurbo ParamCurveArclen + inv_arclen，曲线段精确反解），缓动作用于进度
+- **语义**：位移 = 弧长采样点 - 路径起点（起点对齐，与对象初始位置无关，manim
+  MoveAlongPath 同义）；段后驻停路径终点；prepare 基线快进到路径终点偏移，后续动画以
+  终点接续；路径保留在编译表内逐帧求值（无法烘焙为 TransformTo 直线插值）
+- **存量 bug 根修（transform_at）**：段前取 from 的分支此前无条件执行，顺序串接两段位姿
+  动画时后段 from 覆盖前段全程插值（实证：两段 shift_to，frame0 x 应为 0 实为 90）——
+  加 touched 标记，段前回退仅对该对象首个生效动画生效
+- path_util 新增 `sample_path`（弧长比例采样）/`path_length`；带 log::info 埋点两条
+  （构建期"解析"：轨迹长/bbox/起终点/基线推进/dur；"时序"：生效窗口）
+- 验收：move_demo 场景（S 形贝塞尔轨迹 create + 小球贴线移动）5.2s 出片目检；
+  path_util 单测 4 项 + eval 三相/接续单测 3 项 + 集成 1 项（折线弧长逐帧断言）
+
 ### M9.9 manim 对齐第六批：P1-13 代码块高亮 code（2026-10-12）
 
 - feat(typst): `TypstEngine::code(body, lang, &CodeOptions)`——Typst raw 块 + syntect 语法高亮，

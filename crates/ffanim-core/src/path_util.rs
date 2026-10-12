@@ -248,6 +248,53 @@ pub fn lerp_path(a: &BezPath, b: &BezPath, t: f64) -> Option<BezPath> {
     Some(out)
 }
 
+/// 各段与其累计弧长（段序即路径顺序；MoveTo 不产生段）。
+fn cumulative_arclens(path: &BezPath) -> (Vec<(kurbo::PathSeg, f64)>, f64) {
+    use kurbo::ParamCurveArclen;
+    const ACCURACY: f64 = 1e-6;
+    let mut segs = Vec::new();
+    let mut total = 0.0;
+    for seg in path.segments() {
+        total += seg.arclen(ACCURACY);
+        segs.push((seg, total));
+    }
+    (segs, total)
+}
+
+/// 路径总弧长（pt；空路径 / 纯 MoveTo 返回 0）。
+pub fn path_length(path: &BezPath) -> f64 {
+    cumulative_arclens(path).1
+}
+
+/// 路径按弧长比例采样点（`alpha` ∈ \[0,1\]，**匀速参数化**，manim
+/// `point_at_length` 对应；MoveAlongPath 逐帧位移的基础）。
+///
+/// 空路径 / 零长路径返回 (0,0)；`alpha` 超界钳制。
+pub fn sample_path(path: &BezPath, alpha: f64) -> Point {
+    use kurbo::{ParamCurve, ParamCurveArclen};
+    const ACCURACY: f64 = 1e-6;
+    let target_len = alpha.clamp(0.0, 1.0);
+    let (segs, _) = cumulative_arclens(path);
+    let Some(&(_, grand)) = segs.last() else {
+        return Point::ZERO;
+    };
+    if grand <= ACCURACY {
+        return segs[0].0.eval(0.0);
+    }
+    // 目标弧长所在段（首个累计弧长 ≥ 目标；alpha=1 命中末段）
+    let idx = segs
+        .partition_point(|&(_, cum)| cum < target_len * grand)
+        .min(segs.len() - 1);
+    let (seg, cum) = segs[idx];
+    let prev = if idx == 0 { 0.0 } else { segs[idx - 1].1 };
+    let local = if cum - prev <= ACCURACY {
+        0.0
+    } else {
+        seg.inv_arclen(target_len * grand - prev, ACCURACY)
+    };
+    seg.eval(local.clamp(0.0, 1.0))
+}
+
 /// 仿射矩阵逐系数插值（平移/缩放/旋转小角度场景视觉上足够）。
 pub fn lerp_affine(a: &Affine, b: &Affine, t: f64) -> Affine {
     let (x, y) = (a.as_coeffs(), b.as_coeffs());
@@ -354,5 +401,66 @@ mod tests {
     fn 段级子路径非法区间报错() {
         let t = triangle();
         let _ = span_path(&t, 0.5, 0.5);
+    }
+
+    // ---- M9.10：弧长参数化采样（MoveAlongPath 基础）----
+
+    #[test]
+    fn 弧长采样直线匀速() {
+        let mut p = BezPath::new();
+        p.move_to((10.0, 20.0));
+        p.line_to((110.0, 20.0));
+        assert!((path_length(&p) - 100.0).abs() < 1e-6);
+        // 起点 / 终点 / 中点（弧长 = 线性参数化）
+        assert_eq!(sample_path(&p, 0.0), Point::new(10.0, 20.0));
+        let mid = sample_path(&p, 0.5);
+        assert!((mid.x - 60.0).abs() < 1e-6 && (mid.y - 20.0).abs() < 1e-6);
+        let end = sample_path(&p, 1.0);
+        assert!((end.x - 110.0).abs() < 1e-6);
+        // 超界钳制
+        assert_eq!(sample_path(&p, -1.0), Point::new(10.0, 20.0));
+        assert_eq!(sample_path(&p, 2.0), Point::new(110.0, 20.0));
+    }
+
+    #[test]
+    fn 弧长采样折线按长度占比() {
+        // 两段折线：第一段长 60，第二段长 80，总长 140
+        let mut p = BezPath::new();
+        p.move_to((0.0, 0.0));
+        p.line_to((60.0, 0.0));
+        p.line_to((60.0, 80.0));
+        assert!((path_length(&p) - 140.0).abs() < 1e-3);
+        // alpha = 30/140 ≈ 0.2143：恰在第一段中点（30,0）——匀速而非按段数
+        let q = sample_path(&p, 30.0 / 140.0);
+        assert!((q.x - 30.0).abs() < 1e-3 && q.y.abs() < 1e-3, "{q:?}");
+        // alpha = 100/140：落在第二段已走 40 处 → (60, 40)
+        let q = sample_path(&p, 100.0 / 140.0);
+        assert!(
+            (q.x - 60.0).abs() < 1e-3 && (q.y - 40.0).abs() < 1e-3,
+            "{q:?}"
+        );
+    }
+
+    #[test]
+    fn 弧长采样空路径与零长() {
+        assert_eq!(sample_path(&BezPath::new(), 0.5), Point::ZERO);
+        let mut dot = BezPath::new();
+        dot.move_to((5.0, 5.0)); // 纯 MoveTo 无段
+        assert!((path_length(&dot)).abs() < 1e-9);
+        assert_eq!(sample_path(&dot, 0.5), Point::ZERO);
+    }
+
+    #[test]
+    fn 弧长采样曲线段() {
+        // 三次贝塞尔 (0,0)→(100,0) 控制点拉高：中点弧长参数化不等于参数中点，
+        // 但应落在曲线上（y > 0）且端点精确
+        let mut p = BezPath::new();
+        p.move_to((0.0, 0.0));
+        p.curve_to((30.0, -90.0), (70.0, -90.0), (100.0, 0.0));
+        assert_eq!(sample_path(&p, 0.0), Point::new(0.0, 0.0));
+        let end = sample_path(&p, 1.0);
+        assert!((end.x - 100.0).abs() < 1e-6 && end.y.abs() < 1e-6);
+        let mid = sample_path(&p, 0.5);
+        assert!(mid.y < -10.0, "弧长中点应在鼓出段上: {mid:?}");
     }
 }

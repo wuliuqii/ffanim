@@ -4,13 +4,13 @@
 //! 天然可并行。这是两阶段模型的"渲染期"半边。
 
 use crate::anim::AnimKind;
-use crate::path_util::{lerp_affine, lerp_path, partial_path};
+use crate::path_util::{lerp_affine, lerp_path, partial_path, sample_path};
 use crate::rate::lerp;
 use crate::timeline::ScheduledAnim;
 use crate::tracker::TrackerId;
 use crate::{Color, DrawList, Item, ItemId, Paint, Shape};
 use kurbo::Shape as _;
-use kurbo::{Affine, Vec2}; // bounding_box
+use kurbo::{Affine, BezPath, Vec2}; // bounding_box
 
 /// 编译后的不可变时间轴（渲染期唯一输入）。
 pub struct CompiledTimeline {
@@ -181,23 +181,54 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
     draw
 }
 
-/// 对象在帧 f 的变换：TransformTo 活跃段线性插值，段前取 from，段后取存储基线（= 目标）。
+/// 对象在帧 f 的变换：变换类动画（TransformTo / MoveAlongPath）按调度表求值。
+///
+/// 每段动画的三相语义：
+/// - 活跃段（start ≤ f < end）：插值/采样；
+/// - 段前（f < start）：取该段 from（基线已被构建期快进到 to，段前须回起点）——
+///   **仅对该对象首个生效动画**（`touched` 标记），否则后段的 from 会覆盖
+///   前段的段中插值（顺序串接场景，回归测试 `transform_at_顺序段不互相覆盖`）；
+/// - 段后（f ≥ end）：基线即终态，不再覆盖。
 fn transform_at(tl: &CompiledTimeline, id: ItemId, base: Affine, f: usize) -> Affine {
     let mut t = base;
+    let mut touched = false; // 已有动画为该帧设定状态（活跃段或首个段前）
     for anim in &tl.anims {
-        let AnimKind::TransformTo { id: tid, from, to } = &anim.kind else {
-            continue;
-        };
-        if *tid != id {
-            continue;
-        }
-        if let Some(a) = anim.alpha_at(f) {
-            t = lerp_affine(from, to, a);
-        } else if f < anim.start {
-            t = *from;
+        match &anim.kind {
+            AnimKind::TransformTo { id: tid, from, to } if *tid == id => {
+                if let Some(a) = anim.alpha_at(f) {
+                    t = lerp_affine(from, to, a);
+                    touched = true;
+                } else if f < anim.start && !touched {
+                    t = *from;
+                    touched = true;
+                }
+            }
+            AnimKind::MoveAlongPath {
+                id: mid,
+                path,
+                base: from,
+            } if *mid == id => {
+                if let Some(a) = anim.alpha_at(f) {
+                    // 活跃段：沿路径弧长采样位移（起点对齐）
+                    t = Affine::translate(move_offset(path, a)) * *from;
+                    touched = true;
+                } else if f < anim.start && !touched {
+                    t = *from;
+                    touched = true;
+                }
+                // 段后：基线已快进到路径终点，保持
+            }
+            _ => {}
         }
     }
     t
+}
+
+/// MoveAlongPath 在进度 `h`（已缓动）的位移向量：路径采样点 − 路径起点。
+fn move_offset(path: &BezPath, h: f64) -> Vec2 {
+    let s0 = sample_path(path, 0.0);
+    let p = sample_path(path, h);
+    Vec2::new(p.x - s0.x, p.y - s0.y)
 }
 
 /// 值跟踪器在帧 f 的值：活跃段插值，历史段取终值（确定性纯函数；段间不重叠）。
@@ -820,5 +851,115 @@ mod tests {
         // （绕中心 (20,20) 缩放 0.95 → tx 补 20×0.05 = 1.0）→ 合计 31
         let mid = render_frame(&c, 15).items[0].transform.as_coeffs();
         assert!((mid[4] - 31.0).abs() < 1e-6, "{mid:?}");
+    }
+
+    // ---- M9.10：P1-4 MoveAlongPath + transform_at 顺序段根修 ----
+
+    /// 回归：顺序两段 TransformTo 的段中/段前求值不得被后段 from 覆盖
+    ///（存量 bug：`f < start → from` 无条件覆盖，段中插值与段前状态全错）。
+    #[test]
+    fn transform_at_顺序段不互相覆盖() {
+        let mut tl = make_tl();
+        let id = tl.add(rect_item(Color::new(255, 0, 0, 255))); // 基线 = 单位阵
+        tl.play(
+            Anim::shift_to(id, 90.0, 0.0)
+                .during(1.0)
+                .rate(RateFunc::Linear),
+        );
+        tl.play(
+            Anim::shift_to(id, 90.0, 80.0)
+                .during(1.0)
+                .rate(RateFunc::Linear),
+        );
+        let c = tl.compile();
+        let xy_of = |f: usize| {
+            let t = render_frame(&c, f).items[0].transform.as_coeffs();
+            (t[4], t[5])
+        };
+        // 段前（第 0 帧）：应为基线原点，而非后段 from（90,0）
+        assert_eq!(xy_of(0), (0.0, 0.0), "段前应取首段 from（基线）");
+        // 前段中点：线性插值 (45, 0)
+        assert_eq!(xy_of(15), (45.0, 0.0), "前段段中应插值");
+        // 前段末帧：(87, 0)
+        assert_eq!(xy_of(29), (87.0, 0.0));
+        // 后段中点：shift_to 相对前段终点 (90,0) 平移 (90,80) → to=(180,80)，
+        // 插值半程 = (135, 40)
+        assert_eq!(xy_of(45), (135.0, 40.0), "后段段中应插值");
+        // 段后：驻停终点（基线已快进）
+        assert_eq!(xy_of(60), (180.0, 80.0));
+    }
+
+    fn line_path(from: (f64, f64), to: (f64, f64)) -> kurbo::BezPath {
+        let mut p = kurbo::BezPath::new();
+        p.move_to(from);
+        p.line_to(to);
+        p
+    }
+
+    #[test]
+    fn move_along_path_直线匀速与三相() {
+        let mut tl = make_tl();
+        let id = tl.add(rect_item(Color::new(255, 0, 0, 255))); // 基线 = 单位阵
+        tl.wait(0.5); // 段前留白：验证段前不移动
+        // 轨迹 (10,20)→(110,60)：位移相对路径起点；线性 1s @30fps
+        tl.play(
+            Anim::move_along_path(id, &line_path((10.0, 20.0), (110.0, 60.0)))
+                .during(1.0)
+                .rate(RateFunc::Linear),
+        );
+        tl.wait(0.5); // 段后驻停
+        let c = tl.compile();
+        let xy_of = |f: usize| {
+            let t = render_frame(&c, f).items[0].transform.as_coeffs();
+            (t[4], t[5])
+        };
+        // 段前：位移 0（起点对齐语义——对象停在初始位置）
+        assert_eq!(xy_of(0), (0.0, 0.0));
+        assert_eq!(xy_of(14), (0.0, 0.0));
+        // 段中 1/2（第 15 帧，窗口 15..45）：弧长半程 = (50, 20)
+        assert_eq!(xy_of(30), (50.0, 20.0), "段中应为弧长半程位移");
+        // 窗口末帧（第 44 帧，alpha = 29/30）：(96.67, 38.67)
+        let t = render_frame(&c, 44).items[0].transform.as_coeffs();
+        assert!((t[4] - 290.0 / 3.0).abs() < 1e-6 && (t[5] - 116.0 / 3.0).abs() < 1e-6);
+        // 段后：驻停终点
+        assert_eq!(xy_of(45), (100.0, 40.0));
+        assert_eq!(xy_of(60), (100.0, 40.0));
+        // prepare 基线推进：编译表基线 = 终点偏移（后续动画基于终点接续）
+        assert_eq!(
+            c.items[id as usize].transform,
+            Affine::translate((100.0, 40.0))
+        );
+    }
+
+    #[test]
+    fn move_along_path_基线位移叠加与后续接续() {
+        let mut tl = make_tl();
+        // 对象有初始基线位移（30,10）：路径位移应叠加在基线上
+        let id = tl.add(
+            rect_item(Color::new(255, 0, 0, 255)).with_transform(Affine::translate((30.0, 10.0))),
+        );
+        tl.play(
+            Anim::move_along_path(id, &line_path((0.0, 0.0), (40.0, 0.0)))
+                .during(1.0)
+                .rate(RateFunc::Linear),
+        );
+        // 终点接续：move 结束后 shift_to 相对"路径终点"位姿
+        tl.play(
+            Anim::shift_to(id, 0.0, 50.0)
+                .during(1.0)
+                .rate(RateFunc::Linear),
+        );
+        let c = tl.compile();
+        let xy_of = |f: usize| {
+            let t = render_frame(&c, f).items[0].transform.as_coeffs();
+            (t[4], t[5])
+        };
+        // 段前：(30,10)；段中 1/2：(30+20, 10)；段后 move 终点：(70, 10)
+        assert_eq!(xy_of(0), (30.0, 10.0));
+        assert_eq!(xy_of(15), (50.0, 10.0));
+        assert_eq!(xy_of(30), (70.0, 10.0));
+        // 后续 shift_to 段中：(70, 35)；段后：(70, 60)——基于 move 终点而非原位
+        assert_eq!(xy_of(45), (70.0, 35.0), "后续动画应基于路径终点接续");
+        assert_eq!(xy_of(60), (70.0, 60.0));
     }
 }

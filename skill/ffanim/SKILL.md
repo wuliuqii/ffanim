@@ -79,6 +79,7 @@ ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4")?;
 | `Anim::move_to(id, 点)` | 平移至 bbox 中心落在目标点 |
 | `Anim::rotate_to(id, 弧度)` | 绕 bbox 中心旋转（正 = **视觉逆时针**） |
 | `Anim::scale_to(id, 系数)` | 绕 bbox 中心缩放 |
+| `Anim::move_along_path(id, &path)` | 沿路径移动（manim MoveAlongPath）：弧长匀速采样 + 缓动作用于进度，位移 = 采样点 − 路径起点（**起点对齐**，与对象初始位置无关），段后驻停路径终点 |
 | `Anim::set_value(tracker, to)` | tracker 值动画 |
 | `.during(s)` | 时长（秒）；`.shift(dx, dy)` 位移修饰；`RateFunc` 缓动（Linear/Smooth/EaseIn/EaseOut/ThereAndBack） |
 

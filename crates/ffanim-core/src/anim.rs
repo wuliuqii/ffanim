@@ -6,7 +6,8 @@
 use crate::layout::Direction;
 use crate::rate::RateFunc;
 use crate::{ItemId, tracker::TrackerId};
-use kurbo::{Affine, Point, Vec2};
+use kurbo::{Affine, BezPath, Point, Vec2};
+use std::sync::Arc;
 
 /// 动画类型。
 #[derive(Debug, Clone)]
@@ -63,6 +64,20 @@ pub enum AnimKind {
         id: ItemId,
         /// 相对位姿变化。
         delta: PoseDelta,
+    },
+    /// 沿路径移动（manim `MoveAlongPath` 对应）：位移 = 弧长采样点 − 路径起点
+    /// （**匀速参数化** + 缓动作用于进度），段后驻停路径终点。
+    ///
+    /// 渲染期逐帧采样求值（[`crate::path_util::sample_path`]），无法烘焙为
+    /// TransformTo 直线插值，故保留在编译表内。`base` 由 Timeline 填充为
+    /// 构建期基线，对象基线同步快进到路径终点（后续动画基于终点接续）。
+    MoveAlongPath {
+        /// 目标对象。
+        id: ItemId,
+        /// 运动轨迹（位移相对路径起点，与对象初始位置无关）。
+        path: Arc<BezPath>,
+        /// 构建期基线变换（由 Timeline 填充）。
+        base: Affine,
     },
 }
 
@@ -135,6 +150,9 @@ impl AnimKind {
                 PoseDelta::Rotate(a) => format!("Pose(item#{id}, rotate={a:.2}rad)"),
                 PoseDelta::Scale(k) => format!("Pose(item#{id}, scale={k:.2})"),
             },
+            AnimKind::MoveAlongPath { id, path, .. } => {
+                format!("MoveAlongPath(item#{id}, {} 段)", path.segments().count())
+            }
         }
     }
 }
@@ -275,6 +293,17 @@ impl Anim {
         Self::of(AnimKind::Pose {
             id,
             delta: PoseDelta::Scale(factor),
+        })
+    }
+
+    /// 沿路径移动（manim `MoveAlongPath` 对应）：对象沿 `path` 匀速滑行
+    /// （弧长参数化 + 缓动），位移相对**路径起点**（与对象初始位置无关，
+    /// 起点对齐语义）；段后驻停路径终点，后续动画基于终点接续。
+    pub fn move_along_path(id: ItemId, path: &BezPath) -> Self {
+        Self::of(AnimKind::MoveAlongPath {
+            id,
+            path: Arc::new(path.clone()),
+            base: Affine::IDENTITY, // 由 Timeline::prepare 填充（构建期当前变换）
         })
     }
 

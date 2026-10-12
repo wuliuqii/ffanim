@@ -573,3 +573,75 @@ fn code_代码块高亮编排() {
         "代码 {code_bb:?} vs 框 {frame_bb:?}"
     );
 }
+
+/// P1-4 沿路径移动编排：`Anim::move_along_path` 弧长匀速采样
+/// + prepare 基线推进到路径终点 + 段中逐帧求值。
+#[test]
+fn move_沿路径移动编排() {
+    use ffanim::kurbo::{Affine, BezPath, Circle};
+    use ffanim::{RateFunc, render_frame};
+
+    let mut tl = Timeline::new(960, 540, 30, BG);
+    // 折线轨迹：(100,400) → (300,400) → (300,200)，两段各 200pt，总弧长 400
+    let mut track = BezPath::new();
+    track.move_to((100.0, 400.0));
+    track.line_to((300.0, 400.0));
+    track.line_to((300.0, 200.0));
+    let ball = tl.add(Item::circle(Circle::new((100.0, 400.0), 12.0)).with_fill(FG));
+    // 显式 Linear：隔离缓动变量，纯验证弧长匀速采样
+    tl.play(
+        Anim::move_along_path(ball, &track)
+            .during(1.0)
+            .rate(RateFunc::Linear),
+    );
+
+    let ct = tl.compile();
+    assert_eq!(ct.duration_frames, 30);
+    // prepare 基线快进到路径终点偏移 (200,-200)（后续动画以此为接续基线）
+    let ball_t = ct.items[ball as usize].transform;
+    assert_eq!(ball_t, Affine::translate((200.0, -200.0)), "{ball_t:?}");
+
+    // 段中求值：弧长比例采样（Linear 缓动）
+    // frame 15（alpha=0.5）走完第一段 → 偏移 (100,0)；
+    // frame 22（alpha=22/30）第二段走 93.3/200 → 偏移 (200,-93.3)；
+    // frame 30（窗口外）→ 基线终点 (200,-200)
+    let tx = |f: usize| {
+        render_frame(&ct, f).items[ball as usize]
+            .transform
+            .as_coeffs()
+    };
+    let start = tx(0);
+    assert!(
+        start[4].abs() < 1e-9 && start[5].abs() < 1e-9,
+        "起点偏移 {start:?}"
+    );
+    let mid = tx(15);
+    assert!(
+        (mid[4] - 200.0).abs() < 1e-6 && mid[5].abs() < 1e-6,
+        "中点偏移（第一段末）= ({},{})",
+        mid[4],
+        mid[5]
+    );
+    let q4 = tx(7); // alpha=7/30 → 第一段走 93.3/200 → 偏移 (93.3,0)
+    assert!(
+        (q4[4] - 7.0 / 30.0 * 400.0).abs() < 1e-6 && q4[5].abs() < 1e-6,
+        "四分位偏移 = ({},{})",
+        q4[4],
+        q4[5]
+    );
+    let q = tx(22);
+    let ey = -(22.0_f64 / 30.0 * 400.0 - 200.0);
+    assert!(
+        (q[4] - 200.0).abs() < 1e-6 && (q[5] - ey).abs() < 1e-6,
+        "22 帧偏移 = ({},{})，期望 y={ey}",
+        q[4],
+        q[5]
+    );
+    let end = tx(30);
+    assert!(
+        (end[4] - 200.0).abs() < 1e-9 && (end[5] + 200.0).abs() < 1e-9,
+        "段后偏移 = ({},{})",
+        end[4],
+        end[5]
+    );
+}

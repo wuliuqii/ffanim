@@ -9,10 +9,11 @@
 use crate::anim::{Anim, AnimKind, PoseDelta};
 use crate::camera::Camera;
 use crate::eval::CompiledTimeline;
+use crate::path_util::{path_length, sample_path};
 use crate::tracker::{TrackerId, Updater};
 use crate::{Color, Item, ItemId, Shape};
 use kurbo::BezPath;
-use kurbo::{Circle, Point, Rect};
+use kurbo::{Affine, Circle, Point, Rect, Shape as _, Vec2};
 
 /// 时间轴构建器（构建期唯一入口）。
 #[derive(Debug, Clone)]
@@ -134,6 +135,13 @@ impl Timeline {
         let overlap = self.pending_overlap_s.take().unwrap_or(0.0);
         self.prepare(&mut anim);
         let start_s = (self.cursor_s - overlap).max(0.0);
+        // 埋点：沿路径移动的时序窗口（配合 prepare 的几何埋点，排错用）
+        if let AnimKind::MoveAlongPath { id, .. } = &anim.kind {
+            log::info!(
+                "move_along_path 时序: item#{id} 窗口=[{start_s:.2},{:.2})",
+                start_s + anim.duration_s
+            );
+        }
         self.anims.push((start_s, anim.clone()));
         self.cursor_s = start_s + anim.duration_s;
         self
@@ -244,6 +252,36 @@ impl Timeline {
             );
             self.items[idx].transform = to;
             anim.kind = AnimKind::TransformTo { id, from, to };
+        }
+        if let AnimKind::MoveAlongPath { id, path, base } = &mut anim.kind {
+            // 沿路径移动：base 取构建期基线，对象基线快进到路径终点
+            //（段后驻停终点 + 后续动画基于终点接续，与 TransformTo 快进语义一致）
+            let idx = *id as usize;
+            assert!(
+                idx < self.items.len(),
+                "MoveAlongPath 目标对象 #{id} 未注册"
+            );
+            *base = self.items[idx].transform;
+            // 起点对齐：位移 = 采样点 − 路径起点（与对象初始位置无关）
+            let start = sample_path(path, 0.0);
+            let end = sample_path(path, 1.0);
+            let end_off = Vec2::new(end.x - start.x, end.y - start.y);
+            let advanced = Affine::translate(end_off) * *base;
+            // 埋点：轨迹几何全链路（弧长/路径范围/基线推进量，坐标计算排查用）
+            log::info!(
+                "move_along_path 解析: item#{id} 轨迹 {:.1}pt（{:?}）起点=({:.1},{:.1}) 终点=({:.1},{:.1}) 终点偏移=({:.1},{:.1}) 基线={:?} → 推进后={advanced:?} dur={:.2}s",
+                path_length(path),
+                path.bounding_box(),
+                start.x,
+                start.y,
+                end.x,
+                end.y,
+                end_off.x,
+                end_off.y,
+                *base,
+                anim.duration_s
+            );
+            self.items[idx].transform = advanced;
         }
     }
 

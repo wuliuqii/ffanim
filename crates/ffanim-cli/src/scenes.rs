@@ -5,7 +5,7 @@
 use crate::demo::load_font;
 use ffanim::Theme;
 use ffanim_core::kurbo::Shape as _;
-use ffanim_core::kurbo::{Affine, Circle, Rect};
+use ffanim_core::kurbo::{Affine, BezPath, Circle, Point, Rect};
 use ffanim_core::{Anim, Font, Item, Timeline};
 
 /// 场景清单（M5 起支持外部场景文件）。
@@ -20,6 +20,7 @@ pub const SCENES: &[&str] = &[
     "sugar_demo",
     "annotate_demo",
     "code_demo",
+    "move_demo",
 ];
 
 /// 构建场景时间轴。
@@ -38,6 +39,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "sugar_demo" => Ok(sugar_demo(theme, fps)),
         "annotate_demo" => annotate_demo(theme, fps),
         "code_demo" => code_demo(theme, fps),
+        "move_demo" => move_demo(theme, fps),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -711,5 +713,49 @@ fn code_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     let (p_ids, _) = reg(&mut tl, &py, py.fit_transform(620.0, 445.0, 2.0));
     tl.group(p_ids.iter().map(|&id| Anim::fade_in(id).during(0.9)), 0.0);
     tl.wait(0.6);
+    Ok(tl)
+}
+
+/// M9.10 验收场景（P1-4）：MoveAlongPath 沿路径移动。
+///
+/// 标题淡入 → S 形轨迹曲线描边画出 → 小球沿轨迹弧长匀速移动，
+/// 演示 `Anim::move_along_path` 的逐帧路径采样求值（匀速参数化 + 缓动）。
+fn move_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
+    let font = load_font(None)?;
+    let fg = theme.foreground().unwrap();
+    let accent = theme.accent().unwrap();
+    let sw = f64::from(theme.style.stroke_width);
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // 1) 标题淡入
+    let text_path = font.outline_text("MoveAlongPath", 64.0).unwrap();
+    let bounds = text_path.bounding_box();
+    let dx = f64::from(w) / 2.0 - (bounds.x0 + bounds.x1) / 2.0;
+    let title = tl.add(
+        Item::from_path(text_path)
+            .with_fill(fg)
+            .with_transform(Affine::translate((dx, f64::from(h) * 0.12))),
+    );
+    tl.play(Anim::fade_in(title).during(0.7));
+
+    // 2) S 形轨迹：三次贝塞尔（起点左下 → 控制点拉出 S 弯 → 终点右侧）
+    let start = Point::new(160.0, 430.0);
+    let mut track = BezPath::new();
+    track.move_to(start);
+    track.curve_to((320.0, 60.0), (640.0, 560.0), (800.0, 170.0));
+    let track_id = tl.add(
+        Item::from_path(track.clone())
+            .with_stroke(accent)
+            .with_stroke_width(sw),
+    );
+    tl.play(Anim::create(track_id).during(1.2));
+
+    // 3) 小球置于轨迹起点，沿轨迹弧长匀速移动
+    let ball = tl.add(Item::circle(Circle::new(start, 14.0)).with_fill(fg));
+    tl.wait(0.2);
+    tl.play(Anim::move_along_path(ball, &track).during(2.4));
+
+    tl.wait(0.7);
     Ok(tl)
 }
