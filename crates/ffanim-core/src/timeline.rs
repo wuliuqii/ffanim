@@ -344,10 +344,8 @@ fn is_visible(tl: &CompiledTimeline, id: ItemId, f: usize) -> bool {
             _ => {}
         }
     }
-    if let Some(s) = appear {
-        if f < s {
-            return false;
-        }
+    if appear.is_some_and(|s| f < s) {
+        return false;
     }
     // 每个隐藏点之后，允许其后的重新出场动画复活对象
     for &h in &hidden_before {
@@ -402,15 +400,15 @@ fn item_center(state: &Item) -> kurbo::Point {
 fn morph_items(a: &Item, b: &Item, t: f64) -> Vec<Item> {
     let transform = lerp_affine(&a.transform, &b.transform, t);
     let paint = lerp_paint(&a.paint, &b.paint, t);
-    if let (Shape::Path(pa), Shape::Path(pb)) = (&a.shape, &b.shape) {
-        if let Some(path) = lerp_path(pa, pb, t) {
-            return vec![Item {
-                id: a.id,
-                shape: Shape::Path(path),
-                paint,
-                transform,
-            }];
-        }
+    if let (Shape::Path(pa), Shape::Path(pb)) = (&a.shape, &b.shape)
+        && let Some(path) = lerp_path(pa, pb, t)
+    {
+        return vec![Item {
+            id: a.id,
+            shape: Shape::Path(path),
+            paint,
+            transform,
+        }];
     }
     // 退化：交叉淡化（过滤完全透明项）
     let fade_a = Item {

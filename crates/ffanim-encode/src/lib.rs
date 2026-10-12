@@ -60,7 +60,7 @@ pub fn encode_video(
     check_ffmpeg()?;
     // yuv420p 要求偶数尺寸
     assert!(
-        width % 2 == 0 && height % 2 == 0,
+        width.is_multiple_of(2) && height.is_multiple_of(2),
         "画布尺寸必须为偶数（yuv420p 限制）"
     );
 
@@ -142,6 +142,7 @@ fn run_segments(
 }
 
 /// 编码一个连续帧段。
+#[allow(clippy::too_many_arguments)]
 fn encode_segment(
     seg_path: PathBuf,
     width: u32,

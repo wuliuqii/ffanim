@@ -768,6 +768,7 @@ dependencies = [
  "ffanim-core",
  "ffanim-encode",
  "ffanim-render",
+ "ffanim-typst",
  "log",
  "serde_json",
 ]

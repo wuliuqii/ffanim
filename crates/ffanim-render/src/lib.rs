@@ -81,6 +81,15 @@ pub fn save_png(
         .map_err(|e| std::io::Error::other(e.to_string()))
 }
 
+/// PNG 文件 → 非预乘 RGBA8（snapshot 基准图读取用）。
+pub fn load_png(path: impl AsRef<std::path::Path>) -> std::io::Result<(u32, u32, Vec<u8>)> {
+    let img = image::open(path.as_ref())
+        .map_err(|e| std::io::Error::other(e.to_string()))?
+        .into_rgba8();
+    let (width, height) = img.dimensions();
+    Ok((width, height, img.into_raw()))
+}
+
 /// kurbo 版本桥接：core 的 kurbo 0.13 与 vello_cpu 的 re-export 同版本，按系数重建。
 pub(crate) fn to_kurbo(a: kurbo::Affine) -> vello_cpu::kurbo::Affine {
     vello_cpu::kurbo::Affine::new(a.as_coeffs())

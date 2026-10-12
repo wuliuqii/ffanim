@@ -1,5 +1,6 @@
 /target
 Cargo.lock.orig
 *.mp4
-frames/
+frames/*
+!frames/baseline/
 *.diff.png
