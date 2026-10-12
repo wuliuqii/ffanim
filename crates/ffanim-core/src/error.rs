@@ -22,6 +22,12 @@ pub enum Error {
     #[error("未找到可用字体，请通过 --font 指定")]
     NoFontFound,
 
+    #[error("ffmpeg 未找到，请安装 ffmpeg 或将其加入 PATH")]
+    FfmpegNotFound(#[source] std::io::Error),
+
+    #[error("编码失败: {0}")]
+    Encode(String),
+
     #[error("{0}")]
     Other(String),
 }
