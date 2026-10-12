@@ -91,6 +91,15 @@ impl Font {
     }
 }
 
+/// 提取单个字形轮廓为贝塞尔路径（字体单位，y-up 坐标系，不做缩放/翻转）。
+///
+/// 公共 API：供 ffanim-typst 的 Typst 字形与本项目文本走同一轮廓提取实现。
+pub fn outline_glyph(face: &ttf_parser::Face, gid: u16) -> Option<BezPath> {
+    let mut path = BezPath::new();
+    face.outline_glyph(ttf_parser::GlyphId(gid), &mut OutlineSink(&mut path))?;
+    Some(path)
+}
+
 /// 先 placement（字体单位）再 to_screen（转屏幕像素）。
 fn apply(to_screen: Affine, placement: Affine, p: Point) -> Point {
     to_screen * placement * p

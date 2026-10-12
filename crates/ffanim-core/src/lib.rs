@@ -15,7 +15,7 @@ pub use item::{DrawList, Item, ItemId, Paint, Shape};
 pub use path_util::{lerp_affine, lerp_path, partial_path};
 pub use rate::RateFunc;
 pub use style::{Color, Style, Theme};
-pub use text::Font;
+pub use text::{Font, outline_glyph};
 pub use timeline::{Anim, AnimKind, CompiledTimeline, ScheduledAnim, Timeline, render_frame};
 
 /// 几何类型重导出（kurbo 全 workspace 锁同版本，路径类型跨 crate 天然一致）。

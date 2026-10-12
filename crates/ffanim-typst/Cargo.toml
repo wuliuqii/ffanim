@@ -10,4 +10,17 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+log = { workspace = true }
 ffanim-core = { workspace = true }
+# Typst 库嵌入（唯一接触面，锁死小版本隔离上游破坏性变更）
+typst = "=0.15.1"
+typst-layout = "=0.15.1"
+# 内嵌默认字体（含数学字体 NewCMMath 等）
+typst-assets = { version = "=0.15.1", features = ["fonts"] }
+comemo = "0.4"
+ecow = "0.2"
+# 排版 LRU 缓存
+lru = "0.16"
+
+[dev-dependencies]
+ffanim-render = { path = "../ffanim-render" }
