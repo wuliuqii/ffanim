@@ -51,11 +51,12 @@
 
 - feat(core): `Item::brace(&target, dir, buff)`——沿目标 bbox 指定侧（Down/Up/Left/Right）
   生成花括号，开口朝对象、中尖角指外；规范形（跨度沿 +x、开口 -y）+ 四方向旋转定位
-- 形状机制 = manim Brace 同款（调研确认：manim = 预置手工 SVG 路径 + 非均匀拉伸到目标
-  宽度 + 旋转，非程序化参数生成；vello 只消费 BezPath，形状质量在路径生成端）：
-  手工调优名义形（规范 100×26，左半边关键点 (0,0)/(5,5.5)/(34,14)/(50,26)，切向角剖面
-  0°/55°/25°/55°——尖端水平出锋 → 钩 → 平滑谷底 → 锐利 V 尖）+ 非均匀拉伸
-  （sx = span/100、sy = depth/26，深度 = 2.2×clamp(span×0.09, 8, 18)）+ 四方向旋转
+- 形状机制 = manim Brace 官方同源（从 manim 0.9 `brace.py` 提取路径模板，MIT；
+  源自 Computer Modern 数学字体花括号轮廓，LaTeX `\left\{` 同源）：**闭合填充字形**
+  （真实粗细过渡：端部细出锋、臂部厚、中尖角垂落），臂部线性直段吸收水平拉伸
+  （manim `linear_section_length`，sharpness=2 曲线压缩恒定、占比与跨度解耦），
+  深度自适应（2.2×clamp(span×0.09, 8, 18)）+ 四方向旋转；
+  首版手绘描边中心线（Hermite 切向角调形）因无粗细过渡、观感不佳被替换
 - `Item::brace_with_text(...)` 返回 (brace, 文本) 散件对——文本置于尖角外沿居中
   （间距 0.45×字号，manim `brace.get_text` 对应）
 - brace / brace_with_text 两条 log::info 埋点（目标 bbox/跨度/钩深/结果 bbox、标签/bbox）
@@ -63,10 +64,9 @@
   形状对称无越界、括注为 CJK 真笔画（此前 load_font 拉丁系统字体无中文字形渲染为
   口占位，brace_demo 改 find_cjk_font 优先注入）；单测 3 项 + 集成 1 项
   （几何断言 + together 编排三相处数）
-- **调形方法论**：临时 ASCII 预览测试采样贝塞尔逐点目检（规避显示层字符污染），3 轮
-  迭代调切向角——切向必须与弦斜率协调（不协调即 S 形鼓包/水平直线段）；镜像段走笔
-  仍沿 +x，切向仅 y 分量取反（x 同取反即反向走笔，控制点甩出）；kurbo bounding_box
-  是参数化精确界，非控制点多边形
+- **调研与获取**：GitHub raw/jsdelivr 均被墙，改走清华 pypi 镜像下载 manim wheel
+  解包提取官方路径模板（模板常量与源文件逐字节比对一致）；像素级剖面实证新字形
+  端钩卷曲、直臂、中尖下探至 bbox 下沿（y=362 vs 363.6 抗锯齿差）
 
 ### M9.11 manim 对齐第八批：P1-5 TransformMatchingShapes 任意片段结构匹配（2026-10-12）
 

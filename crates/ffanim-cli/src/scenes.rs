@@ -848,7 +848,6 @@ fn brace_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
         .unwrap_or_else(|| load_font(None))?;
     let accent = theme.accent().unwrap();
     let fg = theme.foreground().unwrap();
-    let sw = f64::from(theme.style.stroke_width);
     let (w, h) = (960u32, 540u32);
     let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
 
@@ -871,10 +870,7 @@ fn brace_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     // 3) 下方花括号 + 括注“宽度”
     let (brace_d, label_d) =
         Item::brace_with_text(&bar_item, Direction::Down, 14.0, &font, "宽度", 30.0)?;
-    let (bd, ld) = (
-        tl.add(brace_d.with_stroke(fg).with_stroke_width(sw)),
-        tl.add(label_d.with_fill(fg)),
-    );
+    let (bd, ld) = (tl.add(brace_d.with_fill(fg)), tl.add(label_d.with_fill(fg)));
     tl.wait(0.2);
     tl.together(
         [Anim::create(bd).during(1.0)]
@@ -886,7 +882,7 @@ fn brace_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     let (brace_r, label_r) =
         Item::brace_with_text(&bar_item, Direction::Right, 14.0, &font, "高度", 30.0)?;
     let (br, lr) = (
-        tl.add(brace_r.with_stroke(accent).with_stroke_width(sw)),
+        tl.add(brace_r.with_fill(accent)),
         tl.add(label_r.with_fill(accent)),
     );
     tl.wait(0.4);

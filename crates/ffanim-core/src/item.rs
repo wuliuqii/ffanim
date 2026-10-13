@@ -305,9 +305,11 @@ impl Item {
     }
 
     /// 花括号（manim `Brace`）：沿目标包围盒 `dir` 侧、间隔 `buff` 生成，
-    /// 开口朝向目标、中尖角指向外侧。样式由调用方链式设置（建议 `with_stroke`）。
+    /// 开口朝向目标、中尖角指向外侧。形状 = manim 官方 CM 字形轮廓
+    /// （闭合填充路径，含真实粗细过渡），样式建议 `with_fill` 着色。
     ///
-    /// 跨度 = 目标 bbox 对应边长；钩厚/深度随跨度自适应（钳制防过粗/过细）。
+    /// 跨度 = 目标 bbox 对应边长；深度随跨度自适应（钳制防过粗/过细），
+    /// 水平拉伸由臂部直段吸收（sharpness=2，曲线占比与跨度解耦）。
     pub fn brace(target: &Item, dir: Direction, buff: f64) -> Self {
         let b = target.bbox();
         // 规范形：跨度沿 +x（原点 = 逆时针首端），开口朝 -y（对象在上），中尖角 +y
@@ -489,60 +491,32 @@ impl Item {
 
 /// 花括号规范形路径（`Item::brace` 几何生成）。
 ///
-/// manim `Brace` 同机制：手工调优的名义形（跨度沿 +x、宽 100、开口朝 -y、
-/// 中尖角 (50, 26) 指向 +y）→ 非均匀拉伸到目标 span/depth（vello 只负责画
-/// BezPath，形状质量全部在路径生成）。切向角剖面（走笔 tip→cusp，与水平夹角）：
-/// 尖端水平出锋 0° → 钩 65° → 长臂压平 20° → 中尖角 55°，右半边镜像对称。
-fn brace_canonical_path(span: f64, depth: f64) -> BezPath {
-    const W0: f64 = 100.0;
-    const D0: f64 = 26.0;
-    let (sx, sy) = (span / W0, depth / D0);
-    // 名义坐标关键点（左半边）与切向角（度，与 +x 夹角）
-    let pts = [(0.0, 0.0), (5.0, 5.5), (34.0, 14.0), (50.0, 26.0)];
-    let angles = [0.0_f64, 55.0, 25.0, 55.0];
-    let mut path = BezPath::new();
-    path.move_to((pts[0].0 * sx, pts[0].1 * sy));
-    // 左半边 3 段：尖端钩 → 长臂 → 中尖角
-    for i in 0..3 {
-        hermite(
-            &mut path,
-            pts[i],
-            angles[i],
-            pts[i + 1],
-            angles[i + 1],
-            sx,
-            sy,
-        );
-    }
-    // 右半边镜像（x → W0−x，切向角取负，走笔仍沿 +x）
-    let mirror = |p: (f64, f64)| (W0 - p.0, p.1);
-    for i in (0..3).rev() {
-        hermite(
-            &mut path,
-            mirror(pts[i + 1]),
-            -angles[i + 1],
-            mirror(pts[i]),
-            -angles[i],
-            sx,
-            sy,
-        );
-    }
-    path
-}
+/// manim Brace 路径模板（manim 0.9 `brace.py`，MIT 许可；源自 Computer Modern
+/// 数学字体的花括号轮廓，LaTeX `\left\{` 同源——业界成熟的字形拉伸方案）。
+/// y 向下：开口线在 y=0，臂在 y≈0.11–0.17，中尖角垂至 y≈0.273；{0}/{1} 为
+/// 中尖角两侧臂段的线性延长量（等宽直段吸收水平拉伸，端钩与中尖保持字形
+/// 原始比例——manim 构造下曲线水平压缩恒为 1/sharpness，粗细过渡保真）。
+const BRACE_PATH_TEMPLATE: &str = "m0.01216 0c-0.01152 0-0.01216 6.103e-4 -0.01216 0.01311v0.007762c0.06776 0.122 0.1799 0.1455 0.2307 0.1455h{0}c0.03046 3.899e-4 0.07964 0.00449 0.1246 0.02636 0.0537 0.02695 0.07418 0.05816 0.08648 0.07769 0.001562 0.002538 0.004539 0.002563 0.01098 0.002563 0.006444-2e-8 0.009421-2.47e-5 0.01098-0.002563 0.0123-0.01953 0.03278-0.05074 0.08648-0.07769 0.04491-0.02187 0.09409-0.02597 0.1246-0.02636h{0}c0.05077 0 0.1629-0.02346 0.2307-0.1455v-0.007762c-1.78e-6 -0.0125-6.365e-4 -0.01311-0.01216-0.01311-0.006444-3.919e-8 -0.009348 2.448e-5 -0.01091 0.002563-0.0123 0.01953-0.03278 0.05074-0.08648 0.07769-0.04491 0.02187-0.09416 0.02597-0.1246 0.02636h{1}c-0.04786 0-0.1502 0.02094-0.2185 0.1256-0.06833-0.1046-0.1706-0.1256-0.2185-0.1256h{1}c-0.03046-3.899e-4 -0.07972-0.004491-0.1246-0.02636-0.0537-0.02695-0.07418-0.05816-0.08648-0.07769-0.001562-0.002538-0.004467-0.002563-0.01091-0.002563z";
+/// 模板名义宽（L=0，manim `default_min_width`）
+const BRACE_W0: f64 = 0.90552;
+/// 模板名义深（开口线 → 中尖角端点 y）
+const BRACE_H0: f64 = 0.272985;
+/// 曲线水平压缩因子（manim `Brace` 默认 `sharpness=2`：钩形更紧凑锐利）
+const BRACE_SHARPNESS: f64 = 2.0;
 
-/// Hermite 风格三次贝塞尔段（名义坐标 + 切向角 → 拉伸后控制点）。
-/// 控制臂长 = 0.42 × 弦长（约四分之一圆的自然过渡感）。
-fn hermite(path: &mut BezPath, p0: (f64, f64), a0: f64, p1: (f64, f64), a1: f64, sx: f64, sy: f64) {
-    let rad = std::f64::consts::PI / 180.0;
-    let chord = ((p1.0 - p0.0).powi(2) + (p1.1 - p0.1).powi(2)).sqrt();
-    let arm = 0.42 * chord;
-    let c1 = (p0.0 + arm * (a0 * rad).cos(), p0.1 + arm * (a0 * rad).sin());
-    let c2 = (p1.0 - arm * (a1 * rad).cos(), p1.1 - arm * (a1 * rad).sin());
-    path.curve_to(
-        (c1.0 * sx, c1.1 * sy),
-        (c2.0 * sx, c2.1 * sy),
-        (p1.0 * sx, p1.1 * sy),
-    );
+/// 花括号规范形：manim 官方 CM 字形模板 + 臂段线性延长 + 非均匀拉伸。
+/// 输出闭合填充轮廓（非描边中心线）：x ∈ [0, span]，y ∈ [0, depth]。
+fn brace_canonical_path(span: f64, depth: f64) -> BezPath {
+    // 垂直比例由深度定；臂直段延长 L 吸收水平拉伸（manim linear_section_length，
+    // 以深度定标尺使曲线占比随深度、跨度解耦）
+    let sy = depth / BRACE_H0;
+    let l = ((span * BRACE_SHARPNESS / sy - BRACE_W0) / 2.0).max(0.0);
+    let svg = BRACE_PATH_TEMPLATE
+        .replace("{0}", &format!("{l:.9}"))
+        .replace("{1}", &format!("{:.9}", -l));
+    let mut path = BezPath::from_svg(&svg).expect("brace 模板路径必可解析");
+    path.apply_affine(Affine::scale_non_uniform(span / (BRACE_W0 + 2.0 * l), sy));
+    path
 }
 
 /// 一帧的绘制指令（渲染层唯一输入）。
@@ -602,8 +576,9 @@ mod tests {
             "{bb:?}"
         );
         assert!((bb.y1 - 201.6).abs() < 1.0, "深度尖角 {bb:?}");
-        // 单子路径：1 move + 6 curve = 7 元素（create 逐段描出）
-        assert_eq!(path_of(&brace).elements().len(), 7);
+        // 单子路径：1 move + 18 curve + 6 line（4 臂直段 + 2 端帽）+ close = 26 元素
+        // （create 逐段描出：端钩 → 臂 → 中尖角 → 回程轮廓）
+        assert_eq!(path_of(&brace).elements().len(), 26);
     }
 
     #[test]

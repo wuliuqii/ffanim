@@ -55,7 +55,8 @@ ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4")?;
 - Brace 花括号（manim Brace 对应，P1-8）：`Item::brace(&target, dir, buff)`（沿目标 bbox
   四向生成，开口朝对象、中尖角指外，跨度自适应目标侧长）/
   `Item::brace_with_text(..., font, label, size)` 返回 (brace, 文本) 散件对
-  （文本在尖角外沿居中）。样式链式自定。带 log::info 埋点。
+  （文本在尖角外沿居中）。形状 = manim 官方 CM 字形轮廓（闭合填充路径，
+  **用 `with_fill` 着色**，非描边）。带 log::info 埋点。
 - 组编排糖（manim Together/Succession/LaggedStart/VGroup/save_state·restore 对应）：
   `tl.together([...])`（多动画同窗对齐，游标取最长 dur——**规避 overlap 各段 during 必须一致的坑**）/
   `tl.succession([...])`（逐段接续播）/
