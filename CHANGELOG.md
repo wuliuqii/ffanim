@@ -55,8 +55,11 @@
   源自 Computer Modern 数学字体花括号轮廓，LaTeX `\left\{` 同源）：**闭合填充字形**
   （真实粗细过渡：端部细出锋、臂部厚、中尖角垂落），臂部线性直段吸收水平拉伸
   （manim `linear_section_length`，sharpness=2 曲线压缩恒定、占比与跨度解耦），
-  深度自适应（2.2×clamp(span×0.09, 8, 18)）+ 四方向旋转；
-  首版手绘描边中心线（Hermite 切向角调形）因无粗细过渡、观感不佳被替换
+  深度自适应（1.2×clamp(span×0.09, 8, 18)，540p 宽跨度 ≈ 21.6px 贴近 manim 等效
+  深度 18.4px）+ 四方向旋转；
+  首版手绘描边中心线（Hermite 切向角调形）因无粗细过渡、观感不佳被替换；
+  **填充字形不适用 create 描边生长**（可见逐段描轮廓过程），出场改 fade_in
+  （manim 对 Brace 亦用 GrowFromCenter 而非 Create）
 - `Item::brace_with_text(...)` 返回 (brace, 文本) 散件对——文本置于尖角外沿居中
   （间距 0.45×字号，manim `brace.get_text` 对应）
 - brace / brace_with_text 两条 log::info 埋点（目标 bbox/跨度/钩深/结果 bbox、标签/bbox）

@@ -337,12 +337,14 @@ impl Item {
         };
         assert!(span >= 30.0, "brace 跨度过短: {span:.1}pt（目标侧边太窄）");
         let k = (span * 0.09).clamp(8.0, 18.0);
-        let depth = 2.2 * k;
+        // 深度系数 1.2：540p 画布下宽跨度 ≈ 21.6px，贴近 manim 等效深度
+        // （0.273 字形单位 × 画布高/8 ≈ 18.4px）；过大则臂厚失真
+        let depth = 1.2 * k;
         let canonical = brace_canonical_path(span, depth);
         let item = Self::from_path(canonical)
             .with_transform(Affine::translate((anchor.x, anchor.y)) * rot);
         log::info!(
-            "brace: dir={dir:?} 目标 bbox={b:?} buff={buff} → 跨度 {span:.1} 钩 {k:.1} 深 {depth:.1} 结果 bbox={:?}",
+            "brace: dir={dir:?} 目标 bbox={b:?} buff={buff} → 跨度 {span:.1} 深 {depth:.1} 结果 bbox={:?}",
             item.bbox()
         );
         item
@@ -565,8 +567,8 @@ mod tests {
         let target = Item::rect(Rect::new(100.0, 100.0, 300.0, 150.0));
         let brace = Item::brace(&target, Direction::Down, 12.0);
         let bb = brace.bbox();
-        // 跨度 = 目标宽 200；钩 = clamp(200×0.09=18) = 18，深度 = 2.2×18 = 39.6
-        // bbox 为控制点包围盒（kurbo 语义）：控制臂可越出几何点 ~1 钩厚，断言留容差
+        // 跨度 = 目标宽 200；深度 = 1.2×clamp(200×0.09=18) = 21.6
+        // CM 字形闭合轮廓：bbox 即精确几何界（端帽 x=0、尖角 y=depth）
         assert!(
             (bb.x0 - 100.0).abs() < 0.5 && (bb.x1 - 300.0).abs() < 10.0,
             "{bb:?}"
@@ -575,9 +577,8 @@ mod tests {
             (162.0 - bb.y0).abs() < 10.0 && bb.y0 <= 162.0 + 1e-9,
             "{bb:?}"
         );
-        assert!((bb.y1 - 201.6).abs() < 1.0, "深度尖角 {bb:?}");
+        assert!((bb.y1 - 183.6).abs() < 1.0, "深度尖角 {bb:?}");
         // 单子路径：1 move + 18 curve + 6 line（4 臂直段 + 2 端帽）+ close = 26 元素
-        // （create 逐段描出：端钩 → 臂 → 中尖角 → 回程轮廓）
         assert_eq!(path_of(&brace).elements().len(), 26);
     }
 

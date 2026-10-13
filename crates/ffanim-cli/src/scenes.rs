@@ -836,8 +836,9 @@ fn shapes_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
 
 /// M9.12 验收场景（P1-8）：Brace 花括号 + 括注文本。
 ///
-/// 标题淡入 → 横条描边生长 → 下方花括号描出 + 括注“宽度”淡入 →
+/// 标题淡入 → 横条描边生长 → 下方花括号淡入放大 + 括注“宽度”淡入 →
 /// 右侧花括号 + 括注“高度”（manim `Brace` / `brace.get_text` 对应）。
+/// 花括号为填充字形，出场用 fade_in（manim `GrowFromCenter` 对应）而非 create。
 fn brace_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     use ffanim_core::Direction;
 
@@ -873,7 +874,7 @@ fn brace_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     let (bd, ld) = (tl.add(brace_d.with_fill(fg)), tl.add(label_d.with_fill(fg)));
     tl.wait(0.2);
     tl.together(
-        [Anim::create(bd).during(1.0)]
+        [Anim::fade_in(bd).during(1.0)]
             .into_iter()
             .chain([Anim::fade_in(ld).during(0.9)]),
     );
@@ -887,7 +888,7 @@ fn brace_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     );
     tl.wait(0.4);
     tl.together(
-        [Anim::create(br).during(1.0)]
+        [Anim::fade_in(br).during(1.0)]
             .into_iter()
             .chain([Anim::fade_in(lr).during(0.9)]),
     );

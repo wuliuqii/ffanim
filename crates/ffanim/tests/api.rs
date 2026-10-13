@@ -713,21 +713,21 @@ fn brace_花括号括注编排() {
     let font = ffanim::Font::from_index(&path, idx).expect("加载字体");
     let (brace, label) = Item::brace_with_text(&bar, Direction::Down, 12.0, &font, "宽度", 30.0)
         .expect("括注文本构造");
-    // 几何：锚点 = (x0, y1+buff)，深度 = 2.2 × clamp(span×0.09, 8, 18) = 2.2×18
+    // 几何：锚点 = (x0, y1+buff)，深度 = 1.2 × clamp(span×0.09, 8, 18) = 1.2×18
     let bb = brace.bbox();
     assert_eq!(bb.x0, 200.0, "左端对齐目标左边");
     assert_eq!(bb.x1, 600.0, "右端对齐目标右边");
     assert_eq!(bb.y0, 332.0, "开口贴目标下沿 + buff");
-    assert!((bb.y1 - 371.6).abs() < 0.1, "尖角深度 39.6，实际 {bb:?}");
+    assert!((bb.y1 - 353.6).abs() < 0.1, "尖角深度 21.6，实际 {bb:?}");
 
-    // 编排：横条生长 → 花括号描边 + 文本淡入同窗
+    // 编排：横条生长 → 花括号淡入放大（manim GrowFromCenter 对应）+ 文本淡入同窗
     let mut tl = Timeline::new(960, 540, 30, BG);
     let bar_id = tl.add(bar);
     tl.play(Anim::create(bar_id).during(0.8));
     let (bid, lid) = (tl.add(brace), tl.add(label));
     tl.wait(0.2);
     tl.together([
-        Anim::create(bid).during(1.0),
+        Anim::fade_in(bid).during(1.0),
         Anim::fade_in(lid).during(0.9),
     ]);
     let ct = tl.compile();
