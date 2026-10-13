@@ -697,3 +697,45 @@ fn shapes_结构匹配形变编排() {
         tri_tx[4]
     );
 }
+
+#[test]
+fn brace_花括号括注编排() {
+    use ffanim::kurbo::Rect;
+    use ffanim::{Direction, render_frame};
+
+    // 目标横条 + 下方花括号 + 括注文本（与 scenes.rs brace_demo 同构）
+    let bar = Item::rect(Rect::new(200.0, 200.0, 600.0, 320.0)).with_fill(FG);
+    // 无系统字体的环境跳过（与 core 单测同一兜底模式）
+    let Some((path, idx)) = ffanim_core::text::find_system_font(&[]) else {
+        eprintln!("无系统字体，跳过");
+        return;
+    };
+    let font = ffanim::Font::from_index(&path, idx).expect("加载字体");
+    let (brace, label) = Item::brace_with_text(&bar, Direction::Down, 12.0, &font, "宽度", 30.0)
+        .expect("括注文本构造");
+    // 几何：锚点 = (x0, y1+buff)，深度 = 2.2 × clamp(span×0.09, 8, 18) = 2.2×18
+    let bb = brace.bbox();
+    assert_eq!(bb.x0, 200.0, "左端对齐目标左边");
+    assert_eq!(bb.x1, 600.0, "右端对齐目标右边");
+    assert_eq!(bb.y0, 332.0, "开口贴目标下沿 + buff");
+    assert!((bb.y1 - 371.6).abs() < 0.1, "尖角深度 39.6，实际 {bb:?}");
+
+    // 编排：横条生长 → 花括号描边 + 文本淡入同窗
+    let mut tl = Timeline::new(960, 540, 30, BG);
+    let bar_id = tl.add(bar);
+    tl.play(Anim::create(bar_id).during(0.8));
+    let (bid, lid) = (tl.add(brace), tl.add(label));
+    tl.wait(0.2);
+    tl.together([
+        Anim::create(bid).during(1.0),
+        Anim::fade_in(lid).during(0.9),
+    ]);
+    let ct = tl.compile();
+    assert_eq!(ct.anims.len(), 3, "1 生长 + together 2 条");
+    assert_eq!(ct.duration_frames, 60, "0.8 + 0.2 + 1.0 @30fps");
+
+    // 求值：brace 窗口前 1 件 → 同窗中 3 件 → 段后 3 件
+    assert_eq!(render_frame(&ct, 29).items.len(), 1);
+    assert_eq!(render_frame(&ct, 45).items.len(), 3);
+    assert_eq!(render_frame(&ct, 59).items.len(), 3);
+}

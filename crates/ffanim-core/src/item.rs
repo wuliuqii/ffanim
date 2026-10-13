@@ -5,8 +5,10 @@
 //! - 变换挂在 Item 上，不烘焙进点阵，插值 = 属性插值 + 可选路径 morph；
 //! - `DrawList` 是渲染层唯一输入，GPU/CPU 后端消费同一表示。
 
+use crate::layout::Direction;
+use crate::text::Font;
 use crate::{Color, Error, Result};
-use kurbo::{Affine, BezPath, Circle, Rect, Vec2};
+use kurbo::{Affine, BezPath, Circle, Point, Rect, Vec2};
 // kurbo::Shape 与本模块的 Shape 枚举重名，匿名导入
 use kurbo::Shape as _;
 
@@ -302,6 +304,91 @@ impl Item {
         Self::from_path(path)
     }
 
+    /// 花括号（manim `Brace`）：沿目标包围盒 `dir` 侧、间隔 `buff` 生成，
+    /// 开口朝向目标、中尖角指向外侧。样式由调用方链式设置（建议 `with_stroke`）。
+    ///
+    /// 跨度 = 目标 bbox 对应边长；钩厚/深度随跨度自适应（钳制防过粗/过细）。
+    pub fn brace(target: &Item, dir: Direction, buff: f64) -> Self {
+        let b = target.bbox();
+        // 规范形：跨度沿 +x（原点 = 逆时针首端），开口朝 -y（对象在上），中尖角 +y
+        let (span, anchor, rot) = match dir {
+            // 下方：开口朝上（-y），跨度左 → 右
+            Direction::Down => (b.x1 - b.x0, Point::new(b.x0, b.y1 + buff), Affine::IDENTITY),
+            // 上方：旋转 π，跨度右 → 左（等价左右镜像），开口朝下
+            Direction::Up => (
+                b.x1 - b.x0,
+                Point::new(b.x1, b.y0 - buff),
+                Affine::rotate(std::f64::consts::PI),
+            ),
+            // 左侧：旋转 +90°，跨度上 → 下，开口朝右（+x）
+            Direction::Left => (
+                b.y1 - b.y0,
+                Point::new(b.x0 - buff, b.y0),
+                Affine::rotate(std::f64::consts::FRAC_PI_2),
+            ),
+            // 右侧：旋转 -90°，跨度下 → 上，开口朝左（-x）
+            Direction::Right => (
+                b.y1 - b.y0,
+                Point::new(b.x1 + buff, b.y1),
+                Affine::rotate(-std::f64::consts::FRAC_PI_2),
+            ),
+        };
+        assert!(span >= 30.0, "brace 跨度过短: {span:.1}pt（目标侧边太窄）");
+        let k = (span * 0.09).clamp(8.0, 18.0);
+        let depth = 2.2 * k;
+        let canonical = brace_canonical_path(span, depth);
+        let item = Self::from_path(canonical)
+            .with_transform(Affine::translate((anchor.x, anchor.y)) * rot);
+        log::info!(
+            "brace: dir={dir:?} 目标 bbox={b:?} buff={buff} → 跨度 {span:.1} 钩 {k:.1} 深 {depth:.1} 结果 bbox={:?}",
+            item.bbox()
+        );
+        item
+    }
+
+    /// 花括号 + 括注文本（manim `brace.get_text` 对应）：返回 (brace, 文本) 散件对，
+    /// 文本置于中尖角外侧居中（间距 = 0.45 × 字号）。样式由调用方链式设置。
+    pub fn brace_with_text(
+        target: &Item,
+        dir: Direction,
+        buff: f64,
+        font: &Font,
+        label: &str,
+        size: f64,
+    ) -> Result<(Self, Self)> {
+        assert!(!label.is_empty(), "brace 括注文本不能为空");
+        let brace = Self::brace(target, dir, buff);
+        let bb = brace.bbox();
+        let text_path = font.outline_text(label, size)?;
+        let tb = text_path.bounding_box();
+        let gap = 0.45 * size;
+        // 文本中心对齐 brace bbox 中心（沿跨度方向），外沿留 gap
+        let (dx, dy) = match dir {
+            Direction::Down => (
+                (bb.x0 + bb.x1) / 2.0 - (tb.x0 + tb.x1) / 2.0,
+                bb.y1 + gap - tb.y0,
+            ),
+            Direction::Up => (
+                (bb.x0 + bb.x1) / 2.0 - (tb.x0 + tb.x1) / 2.0,
+                bb.y0 - gap - tb.y1,
+            ),
+            Direction::Left => (
+                bb.x0 - gap - tb.x1,
+                (bb.y0 + bb.y1) / 2.0 - (tb.y0 + tb.y1) / 2.0,
+            ),
+            Direction::Right => (
+                bb.x1 + gap - tb.x0,
+                (bb.y0 + bb.y1) / 2.0 - (tb.y0 + tb.y1) / 2.0,
+            ),
+        };
+        let text = Self::from_path(text_path).with_transform(Affine::translate((dx, dy)));
+        log::info!(
+            "brace_with_text: label={label:?} size={size} dir={dir:?} → brace bbox={bb:?} 文本 bbox={:?}",
+            text.bbox()
+        );
+        Ok((brace, text))
+    }
+
     /// 全局包围盒（含自身 transform；`Group` 递归合并子项包围盒）。
     /// 路径取控制点包围盒（kurbo 语义，与 manim 控制点框一致，布局够用）。
     pub fn bbox(&self) -> Rect {
@@ -400,6 +487,64 @@ impl Item {
     }
 }
 
+/// 花括号规范形路径（`Item::brace` 几何生成）。
+///
+/// manim `Brace` 同机制：手工调优的名义形（跨度沿 +x、宽 100、开口朝 -y、
+/// 中尖角 (50, 26) 指向 +y）→ 非均匀拉伸到目标 span/depth（vello 只负责画
+/// BezPath，形状质量全部在路径生成）。切向角剖面（走笔 tip→cusp，与水平夹角）：
+/// 尖端水平出锋 0° → 钩 65° → 长臂压平 20° → 中尖角 55°，右半边镜像对称。
+fn brace_canonical_path(span: f64, depth: f64) -> BezPath {
+    const W0: f64 = 100.0;
+    const D0: f64 = 26.0;
+    let (sx, sy) = (span / W0, depth / D0);
+    // 名义坐标关键点（左半边）与切向角（度，与 +x 夹角）
+    let pts = [(0.0, 0.0), (5.0, 5.5), (34.0, 14.0), (50.0, 26.0)];
+    let angles = [0.0_f64, 55.0, 25.0, 55.0];
+    let mut path = BezPath::new();
+    path.move_to((pts[0].0 * sx, pts[0].1 * sy));
+    // 左半边 3 段：尖端钩 → 长臂 → 中尖角
+    for i in 0..3 {
+        hermite(
+            &mut path,
+            pts[i],
+            angles[i],
+            pts[i + 1],
+            angles[i + 1],
+            sx,
+            sy,
+        );
+    }
+    // 右半边镜像（x → W0−x，切向角取负，走笔仍沿 +x）
+    let mirror = |p: (f64, f64)| (W0 - p.0, p.1);
+    for i in (0..3).rev() {
+        hermite(
+            &mut path,
+            mirror(pts[i + 1]),
+            -angles[i + 1],
+            mirror(pts[i]),
+            -angles[i],
+            sx,
+            sy,
+        );
+    }
+    path
+}
+
+/// Hermite 风格三次贝塞尔段（名义坐标 + 切向角 → 拉伸后控制点）。
+/// 控制臂长 = 0.42 × 弦长（约四分之一圆的自然过渡感）。
+fn hermite(path: &mut BezPath, p0: (f64, f64), a0: f64, p1: (f64, f64), a1: f64, sx: f64, sy: f64) {
+    let rad = std::f64::consts::PI / 180.0;
+    let chord = ((p1.0 - p0.0).powi(2) + (p1.1 - p0.1).powi(2)).sqrt();
+    let arm = 0.42 * chord;
+    let c1 = (p0.0 + arm * (a0 * rad).cos(), p0.1 + arm * (a0 * rad).sin());
+    let c2 = (p1.0 - arm * (a1 * rad).cos(), p1.1 - arm * (a1 * rad).sin());
+    path.curve_to(
+        (c1.0 * sx, c1.1 * sy),
+        (c2.0 * sx, c2.1 * sy),
+        (p1.0 * sx, p1.1 * sy),
+    );
+}
+
 /// 一帧的绘制指令（渲染层唯一输入）。
 #[derive(Debug, Clone)]
 pub struct DrawList {
@@ -439,6 +584,68 @@ mod tests {
             Shape::Path(p) => p,
             other => panic!("应为路径，得 {other:?}"),
         }
+    }
+
+    #[test]
+    fn brace_下方几何与跨度自适应() {
+        let target = Item::rect(Rect::new(100.0, 100.0, 300.0, 150.0));
+        let brace = Item::brace(&target, Direction::Down, 12.0);
+        let bb = brace.bbox();
+        // 跨度 = 目标宽 200；钩 = clamp(200×0.09=18) = 18，深度 = 2.2×18 = 39.6
+        // bbox 为控制点包围盒（kurbo 语义）：控制臂可越出几何点 ~1 钩厚，断言留容差
+        assert!(
+            (bb.x0 - 100.0).abs() < 0.5 && (bb.x1 - 300.0).abs() < 10.0,
+            "{bb:?}"
+        );
+        assert!(
+            (162.0 - bb.y0).abs() < 10.0 && bb.y0 <= 162.0 + 1e-9,
+            "{bb:?}"
+        );
+        assert!((bb.y1 - 201.6).abs() < 1.0, "深度尖角 {bb:?}");
+        // 单子路径：1 move + 6 curve = 7 元素（create 逐段描出）
+        assert_eq!(path_of(&brace).elements().len(), 7);
+    }
+
+    #[test]
+    fn brace_四方向外沿定位() {
+        let target = Item::rect(Rect::new(100.0, 100.0, 300.0, 200.0));
+        // 外沿 = buff 线（控制点可向对象侧越出 ≤ 1 钩厚，span=100 → 钩 9 → 容差 6）
+        let up = Item::brace(&target, Direction::Up, 10.0).bbox();
+        assert!((up.y1 - 90.0).abs() < 6.0, "上方 brace 外沿 y1={}", up.y1);
+        let left = Item::brace(&target, Direction::Left, 10.0).bbox();
+        assert!(
+            (left.x1 - 90.0).abs() < 6.0,
+            "左侧 brace 外沿 x1={}",
+            left.x1
+        );
+        let right = Item::brace(&target, Direction::Right, 10.0).bbox();
+        assert!(
+            (right.x0 - 310.0).abs() < 6.0,
+            "右侧 brace 外沿 x0={}",
+            right.x0
+        );
+        // 沿跨度方向与目标居中对齐（镜像形，控制点外扩 ≤1px 不对称留容差）
+        let down = Item::brace(&target, Direction::Down, 10.0).bbox();
+        assert!((down.x0 + down.x1 - 400.0).abs() < 1.0, "{down:?}");
+    }
+
+    #[test]
+    fn brace_括注文本外沿居中() {
+        let Some((path, idx)) = crate::text::find_system_font(&[]) else {
+            eprintln!("无系统字体，跳过");
+            return;
+        };
+        let font = Font::from_index(&path, idx).unwrap();
+        let target = Item::rect(Rect::new(100.0, 100.0, 300.0, 150.0));
+        let (brace, label) =
+            Item::brace_with_text(&target, Direction::Down, 12.0, &font, "宽度", 28.0).unwrap();
+        let bb = brace.bbox();
+        let lb = label.bbox();
+        assert!(lb.y0 >= bb.y1, "文本应在尖角下方 {lb:?} vs {bb:?}");
+        assert!(
+            (lb.x0 + lb.x1 - bb.x0 - bb.x1).abs() < 1.0,
+            "水平居中 {lb:?} vs {bb:?}"
+        );
     }
 
     #[test]

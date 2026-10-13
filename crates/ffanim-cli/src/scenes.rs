@@ -22,6 +22,7 @@ pub const SCENES: &[&str] = &[
     "code_demo",
     "move_demo",
     "shapes_demo",
+    "brace_demo",
 ];
 
 /// 构建场景时间轴。
@@ -42,6 +43,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "code_demo" => code_demo(theme, fps),
         "move_demo" => move_demo(theme, fps),
         "shapes_demo" => shapes_demo(theme, fps),
+        "brace_demo" => brace_demo(theme, fps),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -828,6 +830,72 @@ fn shapes_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
                 .map(|&k| Anim::fade_in(ids_b[k]).during(dur)),
         );
     tl.together(anims);
+    tl.wait(0.8);
+    Ok(tl)
+}
+
+/// M9.12 验收场景（P1-8）：Brace 花括号 + 括注文本。
+///
+/// 标题淡入 → 横条描边生长 → 下方花括号描出 + 括注“宽度”淡入 →
+/// 右侧花括号 + 括注“高度”（manim `Brace` / `brace.get_text` 对应）。
+fn brace_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
+    use ffanim_core::Direction;
+
+    // 括注为中文：须 CJK 字形（find_cjk_font 优先，缺失时回退系统拉丁字体）
+    let font = ffanim_typst::find_cjk_font()
+        .and_then(|path| ffanim::Font::from_path(&path).ok())
+        .map(Ok)
+        .unwrap_or_else(|| load_font(None))?;
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let sw = f64::from(theme.style.stroke_width);
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // 1) 标题淡入
+    let text_path = font.outline_text("Brace 括注", 56.0).unwrap();
+    let bounds = text_path.bounding_box();
+    let dx = f64::from(w) / 2.0 - (bounds.x0 + bounds.x1) / 2.0;
+    let title = tl.add(
+        Item::from_path(text_path)
+            .with_fill(fg)
+            .with_transform(Affine::translate((dx, f64::from(h) * 0.10))),
+    );
+    tl.play(Anim::fade_in(title).during(0.7));
+
+    // 2) 中央横条描边生长（留未注册副本作 brace 目标：bbox 只看几何）
+    let bar_item = Item::rect(Rect::new(220.0, 200.0, 740.0, 310.0)).with_fill(accent);
+    let bar = tl.add(bar_item.clone());
+    tl.play(Anim::create(bar).during(1.0));
+
+    // 3) 下方花括号 + 括注“宽度”
+    let (brace_d, label_d) =
+        Item::brace_with_text(&bar_item, Direction::Down, 14.0, &font, "宽度", 30.0)?;
+    let (bd, ld) = (
+        tl.add(brace_d.with_stroke(fg).with_stroke_width(sw)),
+        tl.add(label_d.with_fill(fg)),
+    );
+    tl.wait(0.2);
+    tl.together(
+        [Anim::create(bd).during(1.0)]
+            .into_iter()
+            .chain([Anim::fade_in(ld).during(0.9)]),
+    );
+
+    // 4) 右侧花括号 + 括注“高度”
+    let (brace_r, label_r) =
+        Item::brace_with_text(&bar_item, Direction::Right, 14.0, &font, "高度", 30.0)?;
+    let (br, lr) = (
+        tl.add(brace_r.with_stroke(accent).with_stroke_width(sw)),
+        tl.add(label_r.with_fill(accent)),
+    );
+    tl.wait(0.4);
+    tl.together(
+        [Anim::create(br).during(1.0)]
+            .into_iter()
+            .chain([Anim::fade_in(lr).during(0.9)]),
+    );
+
     tl.wait(0.8);
     Ok(tl)
 }

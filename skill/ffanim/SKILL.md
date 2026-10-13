@@ -52,6 +52,10 @@ ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4")?;
   公式等排版散件先 `Item::group(items)` 拼组再标注（**拼组仅作几何用途，不注册**）。
   **标注基于注册基线 bbox：目标有位姿动画时，标注需挂相同 shift_to 同步**（基线不随动画变）。
   四构造器 + group 带 log::info 埋点（RUST_LOG=info 查目标 bbox/外扩框/底线坐标）。
+- Brace 花括号（manim Brace 对应，P1-8）：`Item::brace(&target, dir, buff)`（沿目标 bbox
+  四向生成，开口朝对象、中尖角指外，跨度自适应目标侧长）/
+  `Item::brace_with_text(..., font, label, size)` 返回 (brace, 文本) 散件对
+  （文本在尖角外沿居中）。样式链式自定。带 log::info 埋点。
 - 组编排糖（manim Together/Succession/LaggedStart/VGroup/save_state·restore 对应）：
   `tl.together([...])`（多动画同窗对齐，游标取最长 dur——**规避 overlap 各段 during 必须一致的坑**）/
   `tl.succession([...])`（逐段接续播）/
