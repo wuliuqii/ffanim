@@ -7,6 +7,12 @@
 
 ### Added
 
+- feat(typst): M9.15 数字滚动 DecimalNumber（manim `DecimalNumber` + ValueTracker 对应）——
+  `DecimalNumberOptions`（小数位/正负号/千分位/字号/颜色）+ `TypstEngine::decimal`
+  （单发排版，bbox 中心精确锚定）+ `decimal_signal`（自含 `Mutex<TypstEngine>` 的
+  updater 信号工厂，`Fn(&[f64]) -> Item + Send + Sync`，逐帧 markup 重排：math 模式
+  探针实证降级——逗号/正号带运算空隙 +14/+24px、数字高度随位数波动）；decimal_demo
+  场景验收（千分位滚动 + 带符号滚动，tracker + `Anim::set_value` 驱动，出场 fade_in）
 - feat(core): SVG 导入——`from_svg_str`/`from_svg_file`（usvg 0.45 → kurbo 路径 → `Shape::Group`，渐变/图案/文本 warn 跳过）；`Item::from_image` + `ImageAsset`（预乘 RGBA8，`Arc` 零拷贝共享）；`Paint.opacity` 整体透明度系数（组合递归传导子项，淡入/淡出对组合与图片生效）
 - feat(render): CPU/GPU 双后端图片渲染（vello_cpu `Pixmap::from_parts` + 透明度层；vello `draw_image` + `push_layer`）；组合淡入时按子项包围盒并集取中心（替代原点，消除组合动画变形）
 - feat(examples): `media.rs` 验收示例——SVG 组淡入 + 位图淡入后放大 3×（90 帧，前景像素实证）

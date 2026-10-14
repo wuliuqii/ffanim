@@ -52,7 +52,7 @@
 | P1-3 | FadeIn 方向家族 / GrowFromCenter / SpinIn | GrowFromEdge/Center… | ✅ 已落地（M9.7）：FadeIn 参数化 `{shift, scale_from, spin}`，`fade_in_from/grow_from_center/grow_from_edge/spin_in` 四构造器 | S |
 | P1-4 | MoveAlongPath 沿路径移动 | MoveAlongPath | 需逐帧路径采样求值（TransformTo 不够），中等 | ✅ M9.10（弧长匀速采样 + transform_at 顺序段根修） |
 | P1-5 | 公式以外的结构匹配形变 | TransformMatchingShapes | match_formulas 基座已有（M9.1 diff 升级），扩展到任意路径文本缺失（SVG 字形无 source 文本） | ✅ M9.11（match_shapes 几何签名配对 + MatchPlan 上移统一） |
-| P1-6 | 数字滚动 DecimalNumber | DecimalNumber + tracker | tracker+updater+Typst 组合已可行，缺"每帧改文本"的示范与便利封装（Typst LRU 缓存使逐帧排版可行） | S~M |
+| P1-6 | 数字滚动 DecimalNumber | DecimalNumber + tracker | ✅ 已落地（M9.15）：`DecimalNumberOptions`（小数位/正负号/千分位/字号/颜色）+ `TypstEngine::decimal`（单发排版，中心锚定）+ `decimal_signal`（自含引擎的 updater 信号工厂，逐帧 markup 重排——math 模式探针实证降级：逗号/正号带运算空隙、数字高度波动）；decimal_demo 场景验收 | S~M |
 | P1-7 | 标注复合件：SurroundingRectangle/Underline/Cross/BackgroundRect | 同名 | ✅ 已落地（M9.8）：`Item::surrounding_rect/underline/cross/background_rect`（基于注册基线 bbox + `Item::group` 拼组标注），annotate_demo 场景验收 | S |
 | P1-8 | Brace 花括号 + 括注文本 | Brace | ✅ M9.12+M9.13：`TypstEngine::delimiter(kind,...)` 四类定界符（Delimiter 枚举：brace/bracket/paren/双线同装配）——Typst OpenType MATH 装配（`lr(size: #Npt, \{)` 排拉伸花括号），跨度精确/深度∝字号线性，规范形 + 四向旋转，散件对 | S |
 | M9.14 | Arrow 装配箭头 | Arrow/DoubleArrow | ✅ M9.14：`TypstEngine::arrow(from, to, kind)`（ArrowKind::Single/Double）——Typst MATH `stretch(->)` 装配（跨度精确零偏差），头高随跨度自适应封顶，显式矩阵弦角复合支持斜向；与几何 `Item::arrow`（线+三角头）并存 | S |

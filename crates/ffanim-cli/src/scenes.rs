@@ -25,6 +25,7 @@ pub const SCENES: &[&str] = &[
     "brace_demo",
     "delimiter_demo",
     "arrow_demo",
+    "decimal_demo",
 ];
 
 /// 构建场景时间轴。
@@ -48,6 +49,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "brace_demo" => brace_demo(theme, fps),
         "delimiter_demo" => delimiter_demo(theme, fps),
         "arrow_demo" => arrow_demo(theme, fps),
+        "decimal_demo" => decimal_demo(theme, fps),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -1064,5 +1066,71 @@ fn arrow_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     }
 
     tl.wait(0.8);
+    Ok(tl)
+}
+
+/// M9.15 验收场景：P1-6 数字滚动（manim `DecimalNumber` + ValueTracker 对应）。
+///
+/// 标题淡入 → 主数字 0→1,234.5 千分位滚动（中心锚定不漂移）→ 副数字
+/// 带符号 -40→+40 滚动。数字 = Typst markup 逐帧排版（闭合填充字形，
+/// 出场 fade_in 禁 create）；tracker 值动画驱动，updater 每帧重建形状。
+fn decimal_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
+    use ffanim_typst::{DecimalNumberOptions, TypstEngine};
+
+    // 括注为中文：须 CJK 字形（find_cjk_font 优先，缺失时回退系统拉丁字体）
+    let font = ffanim_typst::find_cjk_font()
+        .and_then(|path| ffanim::Font::from_path(&path).ok())
+        .map(Ok)
+        .unwrap_or_else(|| load_font(None))?;
+    let fg = theme.foreground().unwrap();
+    let accent = theme.accent().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // 1) 标题淡入
+    let text_path = font.outline_text("Decimal 数字滚动", 56.0).unwrap();
+    let bounds = text_path.bounding_box();
+    let dx = f64::from(w) / 2.0 - (bounds.x0 + bounds.x1) / 2.0;
+    let title = tl.add(
+        Item::from_path(text_path)
+            .with_fill(fg)
+            .with_transform(Affine::translate((dx, f64::from(h) * 0.10))),
+    );
+    tl.play(Anim::fade_in(title).during(0.7));
+
+    // 2) 主数字：0 → 1,234.5 千分位滚动（中心锚定，updater 每帧重排）
+    let anchor = Point::new(f64::from(w) / 2.0, 250.0);
+    let sig = TypstEngine::decimal_signal(
+        anchor,
+        DecimalNumberOptions {
+            decimals: 1,
+            group_with_commas: true,
+            include_sign: false,
+            font_size_pt: 36.0,
+            text_color: fg,
+        },
+    )?;
+    let t = tl.add_tracker(0.0);
+    let num = tl.add_updater(&[t], sig);
+    tl.play(Anim::fade_in(num).during(0.6));
+    tl.play(Anim::set_value(t, 1234.5).during(2.5));
+    tl.wait(0.5);
+
+    // 3) 副数字：-40 → +40 带符号滚动（include_sign：正数显 +）
+    let sig2 = TypstEngine::decimal_signal(
+        Point::new(f64::from(w) / 2.0, 380.0),
+        DecimalNumberOptions {
+            decimals: 0,
+            include_sign: true,
+            group_with_commas: false,
+            font_size_pt: 28.0,
+            text_color: accent,
+        },
+    )?;
+    let t2 = tl.add_tracker(-40.0);
+    let num2 = tl.add_updater(&[t2], sig2);
+    tl.play(Anim::fade_in(num2).during(0.6));
+    tl.play(Anim::set_value(t2, 40.0).during(2.0));
+    tl.wait(0.6);
     Ok(tl)
 }

@@ -8,6 +8,7 @@
 //! 缩放/居中由调用方通过 `Item::with_transform` 完成。
 mod arrow;
 mod code;
+mod decimal;
 mod delimiter;
 mod engine;
 mod formula;
@@ -17,6 +18,7 @@ mod text;
 
 pub use arrow::ArrowKind;
 pub use code::{CodeOptions, CodeTheme};
+pub use decimal::DecimalNumberOptions;
 pub use delimiter::Delimiter;
 pub use engine::TypstEngine;
 pub use formula::{Formula, FormulaOptions, FormulaPiece};
