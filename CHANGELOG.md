@@ -7,6 +7,13 @@
 
 ### Added
 
+- feat(encode): M9.17 GIF/WebM 输出 + 画质预设（manim `-ql/-qm/-qh/-qk` 对应）——
+  `Quality` 预设表（ql=854×480@15 / qm=720p30 / qh=1080p60 / qk=2160p60：
+  定输出分辨率 + fps（时间轴按预设 fps 重建）+ 分格式 CRF）+ 输出扩展名路由
+  `.mp4/.gif/.webm`：GIF = 并行编中转 mp4 → palettegen/paletteuse 两遍调色
+  （diff 调色 + bayer 抖动）+ `-loop 0` 无限循环；WebM = libvpx-vp9 分段直编 +
+  concat 流复制（`-row-mt`/`-cpu-used 4`）；CLI `--quality` + GIF×音轨互斥校验；
+  验收 ffprobe 实证三格式分辨率/fps/帧数 + GIF NETSCAPE2.0 循环扩展
 - feat(typst): M9.16 按词着色 t2c（manim `Text(t2c=…)` 对应）——`build_t2c_markup`
   纯函数（全出现/对序优先/非重叠匹配，`#text(fill: rgb()) [词]` 局部色覆盖全局
   `#set text(fill:)`，markup 特殊字符保守转义视觉原样）+ `TypstEngine::text_t2c`

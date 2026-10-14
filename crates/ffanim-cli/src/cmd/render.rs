@@ -5,20 +5,24 @@ use clap::Args;
 use std::path::PathBuf;
 use std::time::Instant;
 
-/// 渲染场景为 mp4 视频
+/// 渲染场景为视频（mp4/gif/webm，画质预设对齐 manim -ql/-qm/-qh/-qk）
 #[derive(Args)]
 pub struct RenderArgs {
     /// 场景名（见 scenes.rs 注册表）
     #[arg(long, short)]
     pub scene: String,
 
-    /// 输出 mp4 路径
+    /// 输出路径（扩展名定格式：.mp4 / .gif / .webm）
     #[arg(long, short, default_value = "out/demo.mp4")]
     pub out: PathBuf,
 
-    /// 帧率
+    /// 帧率（--quality 给定时被预设 fps 覆盖）
     #[arg(long, default_value_t = 30)]
     pub fps: u32,
+
+    /// 画质预设 ql/qm/qh/qk（manim 对应）：定输出分辨率 + fps + 各格式 CRF
+    #[arg(long)]
+    pub quality: Option<String>,
 
     /// 并行分段数（默认 = CPU 核数）
     #[arg(long)]
@@ -81,17 +85,44 @@ pub struct FrameArgs {
     pub theme: PathBuf,
 }
 
-/// 渲染场景为 mp4。
+/// 渲染场景为视频（格式按输出扩展名路由，P1-9）。
 pub fn render(args: RenderArgs) -> ffanim::Result<()> {
     let RenderArgs {
         scene,
         out,
         fps,
+        quality,
         segments,
         audio,
         section,
         theme,
     } = args;
+    // 画质预设：定输出分辨率/fps（manim 语义：质量档定 fps，时间轴按预设重建）
+    let quality = quality
+        .as_deref()
+        .map(ffanim_encode::Quality::parse)
+        .transpose()?;
+    let (fps, quality) = match quality {
+        Some(q) => {
+            let s = q.spec();
+            println!(
+                "画质预设 {q:?}: 输出 {}×{} @{}fps（覆盖 --fps，时间轴按预设 fps 重建）",
+                s.width, s.height, s.fps
+            );
+            (s.fps, Some(q))
+        }
+        None => (fps, None),
+    };
+    // GIF 不支持音轨（容器无音频流语义）
+    if audio.is_some()
+        && out
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("gif"))
+    {
+        return Err(ffanim::Error::Other(
+            "GIF 输出不支持 --audio 音轨混入（容器限制），请改用 mp4/webm".into(),
+        ));
+    }
     let theme = ffanim::Theme::from_path(&theme)?;
     let mut tl = scenes::build(&scene, &theme, fps)?.compile();
 
@@ -148,6 +179,7 @@ pub fn render(args: RenderArgs) -> ffanim::Result<()> {
 
     let opts = ffanim_encode::EncodeOptions {
         segments,
+        quality,
         ..Default::default()
     };
     let start = Instant::now();
