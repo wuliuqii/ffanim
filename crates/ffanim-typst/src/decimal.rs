@@ -11,11 +11,11 @@
 //! 中心锚定：每帧产物 bbox 中心精确落到 `anchor`——数字位数变化时
 //! 视觉中心不漂移（manim DecimalNumber 居中语义对齐）。
 
-use ffanim_core::kurbo::{Affine, BezPath, Point, Shape as _};
+use ffanim_core::kurbo::{Affine, Point, Shape as _};
 use ffanim_core::{Color, Error, Item, Result};
 
+use super::assemble::assemble;
 use super::engine::TypstEngine;
-use super::formula::Formula;
 use super::geom::PT_TO_PX;
 use super::text::TextOptions;
 
@@ -93,20 +93,8 @@ pub(crate) fn format_decimal(value: f64, o: &DecimalNumberOptions) -> String {
     }
 }
 
-/// 装配片合并单路径（数字为纯填充字形，同色不透明重叠区无瑕疵）。
-fn assemble(f: &Formula) -> Result<BezPath> {
-    let mut out = BezPath::new();
-    for p in &f.pieces {
-        for el in p.path.elements() {
-            out.push(*el);
-        }
-    }
-    if out.elements().is_empty() {
-        return Err(Error::Other("数字装配片为空".into()));
-    }
-    Ok(out)
-}
-
+/// 值 → 数字串：先按 `10^decimals` 缩放取整（消除 `{:.N$}` 的 -0.0 与
+/// 半偶歧义），`-0.0` 归零；符号与千分位按选项。
 fn text_opts(o: &DecimalNumberOptions) -> TextOptions {
     let mut t = TextOptions::new(o.font_size_pt, o.text_color);
     t.wrap_width_pt = None; // 单行数字，禁换行
@@ -128,7 +116,7 @@ impl TypstEngine {
     ) -> Result<Item> {
         let body = format_decimal(value, opts);
         let f = self.text(&body, &text_opts(opts))?;
-        let mut path = assemble(&f)?;
+        let mut path = assemble(&f, "数字")?;
         // 归一化：bbox 中心 → anchor（pt y 向下 → px 同向缩放，无翻转；
         // kurbo 列序 `A * B` = 先 B 后 A）
         let bb = path.bounding_box();
@@ -256,11 +244,7 @@ mod tests {
             (heights[0] - heights[1]).abs() < 0.5 && (heights[1] - heights[2]).abs() < 0.5,
             "数字字形高度应稳定 {heights:?}"
         );
-        let w0 = engine
-            .decimal(0.0, anchor, &plain)
-            .unwrap()
-            .bbox()
-            .width();
+        let w0 = engine.decimal(0.0, anchor, &plain).unwrap().bbox().width();
         let w2 = engine
             .decimal(1234.5, anchor, &plain)
             .unwrap()
@@ -288,11 +272,7 @@ mod tests {
             .unwrap()
             .bbox()
             .height();
-        let comma_h = engine
-            .decimal(1234.5, anchor, &o)
-            .unwrap()
-            .bbox()
-            .height();
+        let comma_h = engine.decimal(1234.5, anchor, &o).unwrap().bbox().height();
         assert!(
             comma_h - plain_h < plain_h * 0.3,
             "逗号下降部增量 {:.2} 应 < 行高 30% ({:.2})",
@@ -320,17 +300,8 @@ mod tests {
             .unwrap()
             .bbox()
             .width();
-        let comma_w = engine
-            .decimal(12345.6, anchor, &o)
-            .unwrap()
-            .bbox()
-            .width();
-        let digit_w = engine
-            .decimal(0.0, anchor, &o)
-            .unwrap()
-            .bbox()
-            .width()
-            / 3.0; // "0.0" ≈ 数字×2 + 点，取 1/3 为单数字宽上界
+        let comma_w = engine.decimal(12345.6, anchor, &o).unwrap().bbox().width();
+        let digit_w = engine.decimal(0.0, anchor, &o).unwrap().bbox().width() / 3.0; // "0.0" ≈ 数字×2 + 点，取 1/3 为单数字宽上界
         assert!(
             comma_w - plain_w < digit_w,
             "逗号增量 {:.1} 应小于单数字宽 {:.1}",
@@ -361,17 +332,8 @@ mod tests {
             .unwrap()
             .bbox()
             .width();
-        let signed = engine
-            .decimal(45.6, anchor, &o)
-            .unwrap()
-            .bbox()
-            .width();
-        let digit_w = engine
-            .decimal(0.0, anchor, &o)
-            .unwrap()
-            .bbox()
-            .width()
-            / 3.0;
+        let signed = engine.decimal(45.6, anchor, &o).unwrap().bbox().width();
+        let digit_w = engine.decimal(0.0, anchor, &o).unwrap().bbox().width() / 3.0;
         assert!(
             signed - unsigned < digit_w,
             "正号增量 {:.1} 应小于单数字宽 {:.1}",

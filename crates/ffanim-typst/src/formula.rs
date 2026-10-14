@@ -39,6 +39,14 @@ pub struct Formula {
     pub pieces: Vec<FormulaPiece>,
 }
 
+/// 共享排版选项构造：白填充（颜色不影响轮廓几何，探针装配用）。
+pub(crate) fn formula_opts(font_size_pt: f64) -> FormulaOptions {
+    FormulaOptions {
+        font_size_pt,
+        text_color: Color::new(255, 255, 255, 255),
+    }
+}
+
 impl Formula {
     /// 适配为 ffanim 对象列表（坐标原点即公式左上角，位置由场景层摆放）。
     pub fn to_items(&self) -> Vec<Item> {

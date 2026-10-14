@@ -22,11 +22,12 @@
 
 use ffanim_core::kurbo::{Affine, BezPath, Point, Rect, Shape as _};
 use ffanim_core::text::Font;
-use ffanim_core::{Color, Direction, Error, Item, Result};
+use ffanim_core::{Direction, Error, Item, Result};
 
-use crate::engine::TypstEngine;
+use super::assemble::assemble;
 use super::geom::{PT_TO_PX, PX_TO_PT};
-use crate::formula::FormulaOptions;
+use crate::engine::TypstEngine;
+use crate::formula::formula_opts;
 
 /// 深度探针跨度（pt）：远超自然字号，保证命中最深装配档。
 const PROBE_SPAN_PT: f64 = 750.0;
@@ -68,14 +69,6 @@ impl Delimiter {
     }
 }
 
-/// 探针/装配排版选项（白色填充，颜色不影响轮廓几何）。
-fn formula_opts(font_size_pt: f64) -> FormulaOptions {
-    FormulaOptions {
-        font_size_pt,
-        text_color: Color::new(255, 255, 255, 255),
-    }
-}
-
 /// 公式全部片段路径的联合包围盒（pt，控制点界）。
 fn formula_outline_bbox(f: &crate::Formula) -> Rect {
     f.pieces
@@ -88,20 +81,20 @@ fn formula_outline_bbox(f: &crate::Formula) -> Rect {
 /// 装配片合并为单路径；双线对按 x 中线拆取左半（左半片 bbox 完全在
 /// 中线一侧——对称配对的中线必落片间隙，断言探针实证）。
 fn assemble_pieces(kind: Delimiter, f: &crate::Formula) -> Result<BezPath> {
-    let mut path = BezPath::new();
-    if kind == Delimiter::DoubleBracket {
+    let path = if kind == Delimiter::DoubleBracket {
         let all = formula_outline_bbox(f);
         let mid = (all.x0 + all.x1) / 2.0;
+        let mut half = BezPath::new();
         for p in &f.pieces {
             if p.path.bounding_box().x1 <= mid {
-                path.extend(p.path.elements().iter().copied());
+                half.extend(p.path.elements().iter().copied());
             }
         }
+        half
     } else {
-        for p in &f.pieces {
-            path.extend(p.path.elements().iter().copied());
-        }
-    }
+        // 全合并走共享装配管线（arrow / decimal 同件；空校验文案见下）
+        assemble(f, "delimiter")?
+    };
     if path.elements().is_empty() {
         return Err(Error::Other(
             "delimiter 装配片为空（配对拆分失败？）".into(),

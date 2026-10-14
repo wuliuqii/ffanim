@@ -9,12 +9,13 @@
 //! 单位约定与 delimiter 同族：排版内部 pt（y 向下）、画布 px（y 向下）、
 //! 归一化规范形杆沿 +x、中线 y=0、头在 +x 端（bbox 精确铺满 [from, to]）。
 
-use ffanim_core::kurbo::{Affine, BezPath, Point, Shape as _};
-use ffanim_core::{Color, Error, Item, Result};
+use ffanim_core::kurbo::{Affine, Point, Shape as _};
+use ffanim_core::{Error, Item, Result};
 
+use super::assemble::assemble;
 use super::engine::TypstEngine;
-use super::geom::{chord_affine, pt_y_down_to_px, PX_TO_PT, PT_TO_PX};
-use super::formula::{Formula, FormulaOptions};
+use super::formula::formula_opts;
+use super::geom::{PT_TO_PX, PX_TO_PT, chord_affine, pt_y_down_to_px};
 
 /// 头高/字号比（pt 空间，探针实证：32pt 字号 → 16.64pt 头高，精确线性）。
 const HEAD_PER_FONT: f64 = 0.520;
@@ -45,27 +46,6 @@ impl ArrowKind {
             Self::Double => "<->",
         }
     }
-}
-
-fn formula_opts(font_size_pt: f64) -> FormulaOptions {
-    FormulaOptions {
-        font_size_pt,
-        text_color: Color::new(255, 255, 255, 255),
-    }
-}
-
-/// 装配片合并单路径（头 1-2 片 + 杆 N 片；同色不透明填充重叠区无瑕疵）。
-fn assemble(f: &Formula) -> Result<BezPath> {
-    let mut out = BezPath::new();
-    for p in &f.pieces {
-        for el in p.path.elements() {
-            out.push(*el);
-        }
-    }
-    if out.elements().is_empty() {
-        return Err(Error::Other("箭头装配片为空".into()));
-    }
-    Ok(out)
 }
 
 impl TypstEngine {
@@ -99,7 +79,7 @@ impl TypstEngine {
         let body = format!("stretch({}, size: #{}pt)", kind.sym(), span * PX_TO_PT);
         let f = self.formula(&body, &formula_opts(font_pt))?;
         // ③ 装配片合并（单头 1+N 片 / 双头 2+N 片）
-        let mut path = assemble(&f)?;
+        let mut path = assemble(&f, "箭头")?;
         // ④ 归一化：原点 = from、杆沿 +x、中线 y=0、头在 +x 端
         //    （原始 pt 空间 y 向下：X = (x−x0)·PT_TO_PX，Y = (y_m−y)·PT_TO_PX）
         let bb = path.bounding_box();
@@ -108,8 +88,7 @@ impl TypstEngine {
         }
         let y_mid = (bb.y0 + bb.y1) / 2.0;
         path.apply_affine(
-            Affine::translate((-PT_TO_PX * bb.x0, PT_TO_PX * y_mid))
-                * pt_y_down_to_px(),
+            Affine::translate((-PT_TO_PX * bb.x0, PT_TO_PX * y_mid)) * pt_y_down_to_px(),
         );
         // ⑤ 弦角旋转 + 平移到 from：单一显式矩阵（c=dx/span, s=dy/span，
         //    画布 y 向下系顺时针正角；kurbo 列序 x'=a·x+c·y+e / y'=b·x+d·y+f）
