@@ -5,6 +5,11 @@
 
 ## [Unreleased]
 
+## [v0.4.0] - 2026-10-14
+
+M9 manim 功能对齐收官：P1 差距清单 14 项全部落地（M9.1~M9.18），
+渲染/编码/工具链同步强化。
+
 ### Added
 
 - feat(core): M9.18 表格（manim `Table` 对应）——`ffanim::table(headers, rows_data, &Font,
@@ -14,17 +19,6 @@
   `cell_rects` + `row_rect`/`col_rect` 并集（高亮底板与 `surrounding_rect` 圈注定位）；
   z 序 = 注册序（高亮底板先于行组注册垫底）；table_demo 场景验收（行组错峰淡入 +
   第二行高亮 + 示例格圈注，末帧像素探针三要素实证）
-
-### Fixed
-
-- fix(typst): 中文字体选择错误——`find_cjk_font` 改返回 `(路径, face 序号)` 且
-  `fc-list` 排序修正：原仅按文件名排 bold/italic，在本机会选中
-  `NotoSansCJK-Black.ttc`（文件名不含 bold）且其 face 0 为**日文 JP Black**，
-  复/沿等字用日文写法 + 超粗重量渲染（table_demo/delimiter_demo 目检实证）。
-  现排序键 = 常规体（族名/样式无重量后缀）→ SC 简体族 → 非等宽变体（选中
-  Sarasa UI SC Regular）→ 路径字典序；新增 `TypstEngine::add_font_face`（单
-  face 精确注入，CJK fallback 结果确定，避免 ttc 全量注入时选错 face）；全部
-  调用点迁移 `Font::from_index` / `add_font_face`
 - feat(encode): M9.17 GIF/WebM 输出 + 画质预设（manim `-ql/-qm/-qh/-qk` 对应）——
   `Quality` 预设表（ql=854×480@15 / qm=720p30 / qh=1080p60 / qk=2160p60：
   定输出分辨率 + fps（时间轴按预设 fps 重建）+ 分格式 CRF）+ 输出扩展名路由
@@ -48,7 +42,18 @@
 - feat(render): CPU/GPU 双后端图片渲染（vello_cpu `Pixmap::from_parts` + 透明度层；vello `draw_image` + `push_layer`）；组合淡入时按子项包围盒并集取中心（替代原点，消除组合动画变形）
 - feat(examples): `media.rs` 验收示例——SVG 组淡入 + 位图淡入后放大 3×（90 帧，前景像素实证）
 
-### 新增（M8：功能补齐，进行中）
+### Fixed
+
+- fix(typst): 中文字体选择错误——`find_cjk_font` 改返回 `(路径, face 序号)` 且
+  `fc-list` 排序修正：原仅按文件名排 bold/italic，在本机会选中
+  `NotoSansCJK-Black.ttc`（文件名不含 bold）且其 face 0 为**日文 JP Black**，
+  复/沿等字用日文写法 + 超粗重量渲染（table_demo/delimiter_demo 目检实证）。
+  现排序键 = 常规体（族名/样式无重量后缀）→ SC 简体族 → 非等宽变体（选中
+  Sarasa UI SC Regular）→ 路径字典序；新增 `TypstEngine::add_font_face`（单
+  face 精确注入，CJK fallback 结果确定，避免 ttc 全量注入时选错 face）；全部
+  调用点迁移 `Font::from_index` / `add_font_face`
+
+### 新增（M8：功能补齐）
 
 - feat(core): M8.1 相机系统——`Camera`（center/zoom/rotation）+ 相机即 Item
   （不可见对象，transform 即 world→screen 仿射，docs/02 §3.4 兑现）+
