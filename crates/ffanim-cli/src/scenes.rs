@@ -23,6 +23,7 @@ pub const SCENES: &[&str] = &[
     "move_demo",
     "shapes_demo",
     "brace_demo",
+    "delimiter_demo",
 ];
 
 /// 构建场景时间轴。
@@ -44,6 +45,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "move_demo" => move_demo(theme, fps),
         "shapes_demo" => shapes_demo(theme, fps),
         "brace_demo" => brace_demo(theme, fps),
+        "delimiter_demo" => delimiter_demo(theme, fps),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -895,6 +897,70 @@ fn brace_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
             .into_iter()
             .chain([Anim::fade_in(lr).during(0.9)]),
     );
+
+    tl.wait(0.8);
+    Ok(tl)
+}
+
+/// M9.13 验收场景：Delimiter 四类定界符统一 Typst MATH 装配。
+///
+/// 标题淡入 → 横条生长 → 花括号↓ / 方括号↑ / 圆括号← / 双线方括号→
+/// 依次淡入贴四侧 + 中文括注（manim `Brace`/`Bracket`/`Parenthesis`/
+/// `DoubleBracket` 对应；四类共用同一装配核心，仅符号与深度比不同）。
+fn delimiter_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
+    use ffanim_core::Direction;
+    use ffanim_typst::{Delimiter, TypstEngine};
+
+    // 括注为中文：须 CJK 字形（find_cjk_font 优先，缺失时回退系统拉丁字体）
+    let font = ffanim_typst::find_cjk_font()
+        .and_then(|path| ffanim::Font::from_path(&path).ok())
+        .map(Ok)
+        .unwrap_or_else(|| load_font(None))?;
+    // 定界符 = Typst MATH 装配（NewCMMath GlyphAssembly），与公式排版同引擎
+    let mut engine = TypstEngine::new(8);
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // 1) 标题淡入
+    let text_path = font.outline_text("Delimiter 定界符", 56.0).unwrap();
+    let bounds = text_path.bounding_box();
+    let dx = f64::from(w) / 2.0 - (bounds.x0 + bounds.x1) / 2.0;
+    let title = tl.add(
+        Item::from_path(text_path)
+            .with_fill(fg)
+            .with_transform(Affine::translate((dx, f64::from(h) * 0.10))),
+    );
+    tl.play(Anim::fade_in(title).during(0.7));
+
+    // 2) 中央横条描边生长（留未注册副本作定界符目标：bbox 只看几何）
+    let bar_item = Item::rect(Rect::new(280.0, 210.0, 680.0, 310.0)).with_fill(accent);
+    let bar = tl.add(bar_item.clone());
+    tl.play(Anim::create(bar).during(1.0));
+
+    // 3) 四类定界符依次贴四侧 + 括注（交替前景/强调色；每类同窗淡入）
+    let specs: [(Delimiter, Direction, &str); 4] = [
+        (Delimiter::Brace, Direction::Down, "宽度"),
+        (Delimiter::Bracket, Direction::Up, "上沿"),
+        (Delimiter::Paren, Direction::Left, "左沿"),
+        (Delimiter::DoubleBracket, Direction::Right, "右沿"),
+    ];
+    for (i, (kind, dir, label)) in specs.into_iter().enumerate() {
+        let (delim, text) =
+            engine.delimiter_with_text(&bar_item, kind, dir, 14.0, &font, label, 30.0)?;
+        let color = if i % 2 == 0 { fg } else { accent };
+        let (d, t) = (
+            tl.add(delim.with_fill(color)),
+            tl.add(text.with_fill(color)),
+        );
+        tl.wait(0.15);
+        tl.together(
+            [Anim::fade_in(d).during(0.6)]
+                .into_iter()
+                .chain([Anim::fade_in(t).during(0.5)]),
+        );
+    }
 
     tl.wait(0.8);
     Ok(tl)

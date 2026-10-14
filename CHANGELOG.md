@@ -47,6 +47,16 @@
 - 验收：demo_anim 5.8s 全片导出 1..3s 片段，ffprobe 实测 2.0s；3 解析单测 + 1 集成测试
 - 顺手修复 ci-gpu 配方存量编译损坏（peniko `Blob::new` 需 `Arc<dyn AsRef<[u8]>>`，改拷贝进 `Arc<Vec<u8>>`）
 
+### M9.13 定界符统一：bracket / parenthesis / 双线 bracket 迁 Typst MATH 装配（2026-10-14）
+
+- feat(typst): `brace.rs` → `delimiter.rs`——`Delimiter` 枚举（Brace/Bracket/Paren/DoubleBracket）
+  + 共享装配核心（深度探针/归一化仿射/精调缩放/LRU 缓存），`brace`/`brace_with_text` 保留别名
+- 新实证：bracket `\[`、paren `\(`、双线 `⟦⟧` 配对语法进 `lr(size:)` 触发 NewCMMath
+  GlyphAssembly 装配；装配档位离散（bracket 最深预组档恰 3em，跨度差 ~0.6%）→
+  归一化后按实测 bbox 非均匀精调精确落到 [0,span]×[0,depth]
+- 验收：delimiter_demo 场景（四类定界符贴横条四侧 + 中文括注）+ ffanim-typst 单测 9 +
+  ffanim 集成 1（workspace 172 测全绿）
+
 ### M9.12 manim 对齐第九批：P1-8 Brace 花括号 + 括注文本（2026-10-13，2026-10-14 改 Typst 装配机制）
 
 - feat(typst): `TypstEngine::brace(&target, dir, buff)`——沿目标 bbox 指定侧

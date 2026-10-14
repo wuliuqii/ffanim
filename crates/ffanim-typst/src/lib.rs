@@ -6,14 +6,15 @@
 //!
 //! 坐标约定：Formula 内部为 pt 单位、y 向下（与 Typst Frame 一致），
 //! 缩放/居中由调用方通过 `Item::with_transform` 完成。
-mod brace;
 mod code;
+mod delimiter;
 mod engine;
 mod formula;
 mod matching;
 mod text;
 
 pub use code::{CodeOptions, CodeTheme};
+pub use delimiter::Delimiter;
 pub use engine::TypstEngine;
 pub use formula::{Formula, FormulaOptions, FormulaPiece};
 pub use matching::{MatchPlan, match_formulas};

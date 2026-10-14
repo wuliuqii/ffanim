@@ -742,3 +742,67 @@ fn brace_花括号括注编排() {
     assert_eq!(render_frame(&ct, 45).items.len(), 3);
     assert_eq!(render_frame(&ct, 59).items.len(), 3);
 }
+
+#[test]
+fn delimiter_四类定界符编排() {
+    use ffanim::kurbo::Rect;
+    use ffanim::typst::Delimiter;
+    use ffanim::{Direction, render_frame};
+
+    // 目标横条 + 四类定界符（与 scenes.rs delimiter_demo 同构）
+    let bar = Item::rect(Rect::new(200.0, 200.0, 600.0, 320.0)).with_fill(FG);
+    // 无系统字体的环境跳过（与 typst 单测同一兜底模式）
+    // 无系统字体的环境跳过（与 typst 单测同一兜底模式）
+    if ffanim_core::text::find_system_font(&[]).is_none() {
+        eprintln!("无系统字体，跳过");
+        return;
+    }
+    let mut engine = TypstEngine::new(8);
+
+    // 几何：brace 下方（锚 = (x0, y1+buff)，深度 = 1.2×clamp(span×0.09,8,18) = 1.2×18）
+    let brace = engine
+        .delimiter(&bar, Delimiter::Brace, Direction::Down, 12.0)
+        .expect("brace 构造");
+    let bb = brace.bbox();
+    assert_eq!(bb.x0, 200.0, "左端对齐目标左边");
+    assert_eq!(bb.x1, 600.0, "右端对齐目标右边");
+    assert!((bb.y0 - 332.0).abs() < 0.5, "开口贴目标下沿 + buff");
+    assert!((bb.y1 - 353.6).abs() < 1.0, "尖角深度 21.6，实际 {bb:?}");
+
+    // 其余三类构造冒烟（四方向各一）
+    let bracket = engine
+        .delimiter(&bar, Delimiter::Bracket, Direction::Up, 12.0)
+        .expect("bracket 构造");
+    let paren = engine
+        .delimiter(&bar, Delimiter::Paren, Direction::Left, 12.0)
+        .expect("paren 构造");
+    let dbl = engine
+        .delimiter(&bar, Delimiter::DoubleBracket, Direction::Right, 12.0)
+        .expect("双线构造");
+    // bracket 上方：开口贴目标上沿 − buff（Up = rotate(π)，锚 (x1, y0−buff)）
+    let ub = bracket.bbox();
+    assert!((ub.y1 - 188.0).abs() < 0.5, "开口贴目标上沿 − buff {ub:?}");
+    for (name, d) in [("paren", &paren), ("双线", &dbl)] {
+        let b = d.bbox();
+        assert!(b.width() > 0.0 && b.height() > 0.0, "{name} 非空 {b:?}");
+    }
+
+    // 编排：横条生长 → brace/bracket 同窗淡入（manim GrowFromCenter 对应）
+    let mut tl = Timeline::new(960, 540, 30, BG);
+    let bar_id = tl.add(bar);
+    tl.play(Anim::create(bar_id).during(0.8));
+    let (bid, kid) = (tl.add(brace), tl.add(bracket));
+    tl.wait(0.2);
+    tl.together([
+        Anim::fade_in(bid).during(1.0),
+        Anim::fade_in(kid).during(1.0),
+    ]);
+    let ct = tl.compile();
+    assert_eq!(ct.anims.len(), 3, "1 生长 + together 2 条");
+    assert_eq!(ct.duration_frames, 60, "0.8 + 0.2 + 1.0 @30fps");
+
+    // 求值：brace 窗口前 1 件 → 同窗中 3 件 → 段后 3 件
+    assert_eq!(render_frame(&ct, 29).items.len(), 1);
+    assert_eq!(render_frame(&ct, 45).items.len(), 3);
+    assert_eq!(render_frame(&ct, 59).items.len(), 3);
+}
