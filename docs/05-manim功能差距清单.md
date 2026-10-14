@@ -59,7 +59,7 @@
 | P1-9 | GIF / WebM 输出 + 画质预设 | -ql/-qm/-qh/-qk | M9 已列（GIF 循环、WebM 编码参数）， EncodeOptions 质量预设 | M |
 | P1-10 | VGroup 语义糖：批量注册 + 整体动画 | VGroup | ✅ 已落地（M9.7）：`tl.add_group(Vec<Item>) -> Vec<ItemId>`（注册侧；组级动画配 `tl.group`/`together`） | S |
 | P1-11 | save_state / restore | mobject.save_state() | ✅ 已落地（M9.7）：`tl.save_state(id) -> Item` + `tl.restore(id, &snap) -> ItemId`（快照 + 完整 morph，返回新句柄） | S |
-| P1-12 | 按词/按段着色 t2c | Text(t2c=…) | Typst markup 手写可绕（`#text(fill: …)`) | S |
+| P1-12 | 按词/按段着色 t2c | Text(t2c=…) | ✅ 已落地（M9.16）：`TypstEngine::text_t2c(body, &[(词, Color)], &TextOptions)`（markup 注入 `#text(fill:)[词]`，全出现/对序优先/非重叠，特殊字符自动转义，走 LRU 缓存），t2c_demo 场景验收 | S |
 | P1-13 | 代码块高亮 | Code | ✅ 已落地（M9.9）：`TypstEngine::code(body, lang, &CodeOptions)`（Typst raw + syntect 高亮，内嵌 Dark/Light tmTheme，普通文本前景色显式填入 `foreground_hex`），code_demo 场景验收 | M |
 | P1-14 | 表格 | Table/MathTable | 手拼 grid_item + 文本可绕 | M |
 

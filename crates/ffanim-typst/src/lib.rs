@@ -14,6 +14,7 @@ mod engine;
 mod formula;
 mod geom;
 mod matching;
+mod t2c;
 mod text;
 
 pub use arrow::ArrowKind;
@@ -23,6 +24,7 @@ pub use delimiter::Delimiter;
 pub use engine::TypstEngine;
 pub use formula::{Formula, FormulaOptions, FormulaPiece};
 pub use matching::{MatchPlan, match_formulas};
+pub use t2c::{build_t2c_markup, escape_markup};
 pub use text::{TextOptions, find_cjk_font};
 
 #[cfg(test)]

@@ -26,6 +26,7 @@ pub const SCENES: &[&str] = &[
     "delimiter_demo",
     "arrow_demo",
     "decimal_demo",
+    "t2c_demo",
 ];
 
 /// 构建场景时间轴。
@@ -50,6 +51,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "delimiter_demo" => delimiter_demo(theme, fps),
         "arrow_demo" => arrow_demo(theme, fps),
         "decimal_demo" => decimal_demo(theme, fps),
+        "t2c_demo" => t2c_demo(theme, fps),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -1132,5 +1134,70 @@ fn decimal_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     tl.play(Anim::fade_in(num2).during(0.6));
     tl.play(Anim::set_value(t2, 40.0).during(2.0));
     tl.wait(0.6);
+    Ok(tl)
+}
+
+/// M9.16 验收场景：P1-12 按词着色（manim `Text(t2c=…)` 对应）。
+///
+/// 标题淡入 → 中文句重复词全出现着色（数学/动画各两处）→ 英文句
+/// 混合色 span（Palette 三色派生第二高亮：lerp(前景, 强调, 0.55)）
+/// → 结论行。着色文本 = Typst markup 注入 `#text(fill:)[词]`，
+/// 出场 fade_in（闭合填充字形禁 create）。
+fn t2c_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
+    use ffanim_typst::{TextOptions, TypstEngine, find_cjk_font};
+
+    let fg = theme.foreground().unwrap();
+    let accent = theme.accent().unwrap();
+    // Palette 仅三色：第二高亮色由主题色派生（数据驱动，不硬编码色值）
+    let mid = ffanim::Color::lerp(fg, accent, 0.55);
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // 中文正文须 CJK 字形（缺失时回退拉丁字体，中文会口占位但仍出片）
+    let mut engine = TypstEngine::new(16);
+    if let Some(font) = find_cjk_font() {
+        engine.add_font(&font)?;
+    }
+
+    let show = |tl: &mut Timeline, f: &ffanim_typst::Formula, cy: f64, dur: f64| {
+        let place = f.fit_transform(f64::from(w) / 2.0, cy, 2.0); // pt → px
+        let ids: Vec<_> = f
+            .to_items()
+            .into_iter()
+            .map(|item| tl.add(item.with_transform(place)))
+            .collect();
+        tl.group(ids.iter().map(|&id| Anim::fade_in(id).during(dur)), 0.0);
+    };
+
+    // 标题
+    let title = engine.text("ffanim *按词着色* t2c", &TextOptions::new(28.0, fg))?;
+    show(&mut tl, &title, 100.0, 0.8);
+    tl.wait(0.4);
+
+    // 中文句：重复词全出现着色（数学 ×2、动画 ×2）
+    let cn = engine.text_t2c(
+        "数学驱动动画，动画承载数学。",
+        &[("数学", accent), ("动画", mid)],
+        &TextOptions::new(24.0, fg),
+    )?;
+    show(&mut tl, &cn, 250.0, 0.8);
+    tl.wait(0.4);
+
+    // 英文句：特殊字符（括号/等号）自动转义 + 双 span
+    let en = engine.text_t2c(
+        "Text(t2c = every match gets its color)",
+        &[("t2c", accent), ("color", mid)],
+        &TextOptions::new(22.0, fg),
+    )?;
+    show(&mut tl, &en, 370.0, 0.8);
+    tl.wait(0.4);
+
+    // 结论行
+    let cap = engine.text(
+        "全出现 · 对序优先 · 非重叠 · 主题色驱动",
+        &TextOptions::new(18.0, accent),
+    )?;
+    show(&mut tl, &cap, 480.0, 0.8);
+    tl.wait(0.8);
     Ok(tl)
 }

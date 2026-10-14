@@ -7,6 +7,12 @@
 
 ### Added
 
+- feat(typst): M9.16 按词着色 t2c（manim `Text(t2c=…)` 对应）——`build_t2c_markup`
+  纯函数（全出现/对序优先/非重叠匹配，`#text(fill: rgb()) [词]` 局部色覆盖全局
+  `#set text(fill:)`，markup 特殊字符保守转义视觉原样）+ `TypstEngine::text_t2c`
+  （经 `text()` 走 LRU 缓存，同输入 0 开销）；词未在原文出现报错（重叠让位合法）；
+  t2c_demo 场景验收（中文重复词全着色 + 英文特殊字符句，第二高亮色
+  `Color::lerp(前景, 强调)` 派生）
 - feat(typst): M9.15 数字滚动 DecimalNumber（manim `DecimalNumber` + ValueTracker 对应）——
   `DecimalNumberOptions`（小数位/正负号/千分位/字号/颜色）+ `TypstEngine::decimal`
   （单发排版，bbox 中心精确锚定）+ `decimal_signal`（自含 `Mutex<TypstEngine>` 的
