@@ -287,6 +287,7 @@ fn text_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
 /// 前半段基元逐个描边生长（group 错开），后半段演示 `shift_to / rotate_to /
 /// scale_to / move_to` 四个相对位姿动作（构建期解析为绝对 TransformTo）。
 fn primitives_demo(theme: &Theme, fps: u32) -> Timeline {
+    use ffanim_typst::{ArrowKind, TypstEngine};
     let accent = theme.accent().unwrap();
     let fg = theme.foreground().unwrap();
     let sw = f64::from(theme.style.stroke_width);
@@ -299,9 +300,16 @@ fn primitives_demo(theme: &Theme, fps: u32) -> Timeline {
             .with_stroke(fg)
             .with_stroke_width(sw),
     );
+    // 箭头 = Typst MATH stretch 装配（闭合填充字形，with_fill 着色）
+    let mut engine = TypstEngine::new(8);
     let arrow = tl.add(
-        Item::arrow((380.0, 120.0), (560.0, 120.0))
-            .with_stroke(accent)
+        engine
+            .arrow(
+                Point::new(380.0, 120.0),
+                Point::new(560.0, 120.0),
+                ArrowKind::Single,
+            )
+            .expect("装配箭头")
             .with_fill(accent),
     );
     let dash = tl.add(
@@ -319,8 +327,10 @@ fn primitives_demo(theme: &Theme, fps: u32) -> Timeline {
             .with_stroke(fg)
             .with_stroke_width(sw),
     );
-    let ids = [line, arrow, dash, arc, ell];
+    // 基元描边生长 create；装配箭头为填充字形，单独 fade_in（禁 create）
+    let ids = [line, dash, arc, ell];
     tl.group(ids.iter().map(|&id| Anim::create(id).during(0.8)), 0.15);
+    tl.play(Anim::fade_in(arrow).during(0.8));
     tl.wait(0.4);
 
     // —— 位姿动作糖：相对目标在 play 时按基线解析为绝对 TransformTo ——
@@ -460,6 +470,7 @@ fn emphasize_demo(theme: &Theme, fps: u32) -> Timeline {
 /// add_group / save_state-restore）。
 fn sugar_demo(theme: &Theme, fps: u32) -> Timeline {
     use ffanim_core::Direction;
+    use ffanim_typst::{ArrowKind, TypstEngine};
 
     let accent = theme.accent().unwrap();
     let fg = theme.foreground().unwrap();
@@ -494,21 +505,27 @@ fn sugar_demo(theme: &Theme, fps: u32) -> Timeline {
         Anim::fade_in(circle_b).during(1.0),
     ]);
 
-    // 3) Succession：三支箭头依次描边生长
+    // 3) Succession：三支箭头依次淡入（装配字形禁 create）
+    // 箭头 = Typst MATH stretch 装配（闭合填充字形，with_fill 着色）
+    let mut engine = TypstEngine::new(8);
     let arrows: Vec<Item> = (0..3)
         .map(|i: i32| {
             let x = f64::from(i) * 200.0;
-            Item::arrow((150.0 + x, 280.0), (260.0 + x, 280.0))
-                .with_stroke(fg)
+            engine
+                .arrow(
+                    Point::new(150.0 + x, 280.0),
+                    Point::new(260.0 + x, 280.0),
+                    ArrowKind::Single,
+                )
+                .expect("装配箭头")
                 .with_fill(fg)
-                .with_stroke_width(sw)
         })
         .collect();
     let arrow_ids = tl.add_group(arrows);
     tl.succession([
-        Anim::create(arrow_ids[0]).during(0.4),
-        Anim::create(arrow_ids[1]).during(0.4),
-        Anim::create(arrow_ids[2]).during(0.4),
+        Anim::fade_in(arrow_ids[0]).during(0.4),
+        Anim::fade_in(arrow_ids[1]).during(0.4),
+        Anim::fade_in(arrow_ids[2]).during(0.4),
     ]);
 
     // 4) 方向家族：中心长出菱形 → 旋转进入三角 → 从左滑入方块
