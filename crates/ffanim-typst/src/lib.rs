@@ -11,6 +11,7 @@ mod code;
 mod delimiter;
 mod engine;
 mod formula;
+mod geom;
 mod matching;
 mod text;
 

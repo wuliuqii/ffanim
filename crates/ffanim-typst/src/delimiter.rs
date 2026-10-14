@@ -25,12 +25,9 @@ use ffanim_core::text::Font;
 use ffanim_core::{Color, Direction, Error, Item, Result};
 
 use crate::engine::TypstEngine;
+use super::geom::{PT_TO_PX, PX_TO_PT};
 use crate::formula::FormulaOptions;
 
-/// pt → px（Typst 排版 pt 空间 → ffanim 画布 px 空间）。
-const PT_TO_PX: f64 = 96.0 / 72.0;
-/// px → pt（Typst 无 `px` 单位，跨度以 pt 表达）。
-const PX_TO_PT: f64 = 72.0 / 96.0;
 /// 深度探针跨度（pt）：远超自然字号，保证命中最深装配档。
 const PROBE_SPAN_PT: f64 = 750.0;
 /// 探针字号（pt）。

@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, LazyLock};
 
-use ffanim_core::kurbo::{Affine, BezPath, PathEl, Point};
+use ffanim_core::kurbo::{Affine, BezPath, Point};
 use typst::diag::FileError;
 use typst::foundations::{Bytes, Datetime};
 use typst::layout::{Frame, FrameItem};
@@ -463,7 +463,7 @@ fn convert_text(
         if let Some(mut path) = outline_glyph(text.font.ttf(), glyph.id) {
             // 字体单位 y-up → pt y-down：[s, 0, 0, -s, x_off, -y_off]
             let affine = t * Affine::new([scale, 0.0, 0.0, -scale, x_off, -y_off]);
-            transform_path(&mut path, affine);
+            path.apply_affine(affine);
             let span = glyph.span.0;
             // 片段源文本：字形在 run 文本中的切片（供结构匹配）
             let piece_text = text.text.get(glyph.range()).map(str::to_owned);
@@ -513,7 +513,7 @@ fn convert_shape(shape: &typst::visualize::Shape, t: Affine, out: &mut Vec<Formu
     if path.elements().is_empty() {
         return;
     }
-    transform_path(&mut path, t);
+    path.apply_affine(t);
     let stroke = shape
         .stroke
         .as_ref()
@@ -525,21 +525,6 @@ fn convert_shape(shape: &typst::visualize::Shape, t: Affine, out: &mut Vec<Formu
         source_range: None,
         text: None,
     });
-}
-
-/// 对路径所有控制点应用仿射变换（原地）。
-fn transform_path(path: &mut BezPath, affine: Affine) {
-    for el in path.elements_mut() {
-        match *el {
-            PathEl::MoveTo(p) => *el = PathEl::MoveTo(affine * p),
-            PathEl::LineTo(p) => *el = PathEl::LineTo(affine * p),
-            PathEl::QuadTo(c, p) => *el = PathEl::QuadTo(affine * c, affine * p),
-            PathEl::CurveTo(c1, c2, p) => {
-                *el = PathEl::CurveTo(affine * c1, affine * c2, affine * p)
-            }
-            _ => {}
-        }
-    }
 }
 
 /// Typst 填充色 → ffanim Color（Solid 经 hex 转换；渐变/平铺暂不支持）。

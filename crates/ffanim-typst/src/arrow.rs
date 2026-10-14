@@ -13,12 +13,9 @@ use ffanim_core::kurbo::{Affine, BezPath, Point, Shape as _};
 use ffanim_core::{Color, Error, Item, Result};
 
 use super::engine::TypstEngine;
+use super::geom::{chord_affine, pt_y_down_to_px, PX_TO_PT, PT_TO_PX};
 use super::formula::{Formula, FormulaOptions};
 
-/// pt → px（Typst 排版 pt 空间 → 画布 px 空间）。
-const PT_TO_PX: f64 = 96.0 / 72.0;
-/// px → pt（stretch size 参数以 pt 表达，Typst 无 px 单位）。
-const PX_TO_PT: f64 = 72.0 / 96.0;
 /// 头高/字号比（pt 空间，探针实证：32pt 字号 → 16.64pt 头高，精确线性）。
 const HEAD_PER_FONT: f64 = 0.520;
 /// 杆厚/字号比（探针实证：1.536pt @ 32pt 字号，自动跟随无需参数）。
@@ -112,13 +109,13 @@ impl TypstEngine {
         let y_mid = (bb.y0 + bb.y1) / 2.0;
         path.apply_affine(
             Affine::translate((-PT_TO_PX * bb.x0, PT_TO_PX * y_mid))
-                * Affine::new([PT_TO_PX, 0.0, 0.0, -PT_TO_PX, 0.0, 0.0]),
+                * pt_y_down_to_px(),
         );
         // ⑤ 弦角旋转 + 平移到 from：单一显式矩阵（c=dx/span, s=dy/span，
         //    画布 y 向下系顺时针正角；kurbo 列序 x'=a·x+c·y+e / y'=b·x+d·y+f）
         //    头尖 (span,0) → (from.x+dx, from.y+dy) = to 精确闭合。
-        let (c, s) = (d.x / span, d.y / span);
-        let affine = Affine::new([c, s, -s, c, from.x, from.y]);
+        // ⑤ 弦角复合（显式 6 元矩阵语义见 geom::chord_affine；头尖精确闭合 to）
+        let affine = chord_affine(from, to);
         Ok(Item::from_path(path).with_transform(affine))
     }
 }
