@@ -5,10 +5,8 @@
 //! - 变换挂在 Item 上，不烘焙进点阵，插值 = 属性插值 + 可选路径 morph；
 //! - `DrawList` 是渲染层唯一输入，GPU/CPU 后端消费同一表示。
 
-use crate::layout::Direction;
-use crate::text::Font;
 use crate::{Color, Error, Result};
-use kurbo::{Affine, BezPath, Circle, Point, Rect, Vec2};
+use kurbo::{Affine, BezPath, Circle, Rect, Vec2};
 // kurbo::Shape 与本模块的 Shape 枚举重名，匿名导入
 use kurbo::Shape as _;
 
@@ -304,95 +302,6 @@ impl Item {
         Self::from_path(path)
     }
 
-    /// 花括号（manim `Brace`）：沿目标包围盒 `dir` 侧、间隔 `buff` 生成，
-    /// 开口朝向目标、中尖角指向外侧。形状 = manim 官方 CM 字形轮廓
-    /// （闭合填充路径，含真实粗细过渡），样式建议 `with_fill` 着色。
-    ///
-    /// 跨度 = 目标 bbox 对应边长；深度随跨度自适应（钳制防过粗/过细），
-    /// 水平拉伸由臂部直段吸收（sharpness=2，曲线占比与跨度解耦）。
-    pub fn brace(target: &Item, dir: Direction, buff: f64) -> Self {
-        let b = target.bbox();
-        // 规范形：跨度沿 +x（原点 = 逆时针首端），开口朝 -y（对象在上），中尖角 +y
-        let (span, anchor, rot) = match dir {
-            // 下方：开口朝上（-y），跨度左 → 右
-            Direction::Down => (b.x1 - b.x0, Point::new(b.x0, b.y1 + buff), Affine::IDENTITY),
-            // 上方：旋转 π，跨度右 → 左（等价左右镜像），开口朝下
-            Direction::Up => (
-                b.x1 - b.x0,
-                Point::new(b.x1, b.y0 - buff),
-                Affine::rotate(std::f64::consts::PI),
-            ),
-            // 左侧：旋转 +90°，跨度上 → 下，开口朝右（+x）
-            Direction::Left => (
-                b.y1 - b.y0,
-                Point::new(b.x0 - buff, b.y0),
-                Affine::rotate(std::f64::consts::FRAC_PI_2),
-            ),
-            // 右侧：旋转 -90°，跨度下 → 上，开口朝左（-x）
-            Direction::Right => (
-                b.y1 - b.y0,
-                Point::new(b.x1 + buff, b.y1),
-                Affine::rotate(-std::f64::consts::FRAC_PI_2),
-            ),
-        };
-        assert!(span >= 30.0, "brace 跨度过短: {span:.1}pt（目标侧边太窄）");
-        let k = (span * 0.09).clamp(8.0, 18.0);
-        // 深度系数 1.2：540p 画布下宽跨度 ≈ 21.6px，贴近 manim 等效深度
-        // （0.273 字形单位 × 画布高/8 ≈ 18.4px）；过大则臂厚失真
-        let depth = 1.2 * k;
-        let canonical = brace_canonical_path(span, depth);
-        let item = Self::from_path(canonical)
-            .with_transform(Affine::translate((anchor.x, anchor.y)) * rot);
-        log::info!(
-            "brace: dir={dir:?} 目标 bbox={b:?} buff={buff} → 跨度 {span:.1} 深 {depth:.1} 结果 bbox={:?}",
-            item.bbox()
-        );
-        item
-    }
-
-    /// 花括号 + 括注文本（manim `brace.get_text` 对应）：返回 (brace, 文本) 散件对，
-    /// 文本置于中尖角外侧居中（间距 = 0.45 × 字号）。样式由调用方链式设置。
-    pub fn brace_with_text(
-        target: &Item,
-        dir: Direction,
-        buff: f64,
-        font: &Font,
-        label: &str,
-        size: f64,
-    ) -> Result<(Self, Self)> {
-        assert!(!label.is_empty(), "brace 括注文本不能为空");
-        let brace = Self::brace(target, dir, buff);
-        let bb = brace.bbox();
-        let text_path = font.outline_text(label, size)?;
-        let tb = text_path.bounding_box();
-        let gap = 0.45 * size;
-        // 文本中心对齐 brace bbox 中心（沿跨度方向），外沿留 gap
-        let (dx, dy) = match dir {
-            Direction::Down => (
-                (bb.x0 + bb.x1) / 2.0 - (tb.x0 + tb.x1) / 2.0,
-                bb.y1 + gap - tb.y0,
-            ),
-            Direction::Up => (
-                (bb.x0 + bb.x1) / 2.0 - (tb.x0 + tb.x1) / 2.0,
-                bb.y0 - gap - tb.y1,
-            ),
-            Direction::Left => (
-                bb.x0 - gap - tb.x1,
-                (bb.y0 + bb.y1) / 2.0 - (tb.y0 + tb.y1) / 2.0,
-            ),
-            Direction::Right => (
-                bb.x1 + gap - tb.x0,
-                (bb.y0 + bb.y1) / 2.0 - (tb.y0 + tb.y1) / 2.0,
-            ),
-        };
-        let text = Self::from_path(text_path).with_transform(Affine::translate((dx, dy)));
-        log::info!(
-            "brace_with_text: label={label:?} size={size} dir={dir:?} → brace bbox={bb:?} 文本 bbox={:?}",
-            text.bbox()
-        );
-        Ok((brace, text))
-    }
-
     /// 全局包围盒（含自身 transform；`Group` 递归合并子项包围盒）。
     /// 路径取控制点包围盒（kurbo 语义，与 manim 控制点框一致，布局够用）。
     pub fn bbox(&self) -> Rect {
@@ -491,36 +400,6 @@ impl Item {
     }
 }
 
-/// 花括号规范形路径（`Item::brace` 几何生成）。
-///
-/// manim Brace 路径模板（manim 0.9 `brace.py`，MIT 许可；源自 Computer Modern
-/// 数学字体的花括号轮廓，LaTeX `\left\{` 同源——业界成熟的字形拉伸方案）。
-/// y 向下：开口线在 y=0，臂在 y≈0.11–0.17，中尖角垂至 y≈0.273；{0}/{1} 为
-/// 中尖角两侧臂段的线性延长量（等宽直段吸收水平拉伸，端钩与中尖保持字形
-/// 原始比例——manim 构造下曲线水平压缩恒为 1/sharpness，粗细过渡保真）。
-const BRACE_PATH_TEMPLATE: &str = "m0.01216 0c-0.01152 0-0.01216 6.103e-4 -0.01216 0.01311v0.007762c0.06776 0.122 0.1799 0.1455 0.2307 0.1455h{0}c0.03046 3.899e-4 0.07964 0.00449 0.1246 0.02636 0.0537 0.02695 0.07418 0.05816 0.08648 0.07769 0.001562 0.002538 0.004539 0.002563 0.01098 0.002563 0.006444-2e-8 0.009421-2.47e-5 0.01098-0.002563 0.0123-0.01953 0.03278-0.05074 0.08648-0.07769 0.04491-0.02187 0.09409-0.02597 0.1246-0.02636h{0}c0.05077 0 0.1629-0.02346 0.2307-0.1455v-0.007762c-1.78e-6 -0.0125-6.365e-4 -0.01311-0.01216-0.01311-0.006444-3.919e-8 -0.009348 2.448e-5 -0.01091 0.002563-0.0123 0.01953-0.03278 0.05074-0.08648 0.07769-0.04491 0.02187-0.09416 0.02597-0.1246 0.02636h{1}c-0.04786 0-0.1502 0.02094-0.2185 0.1256-0.06833-0.1046-0.1706-0.1256-0.2185-0.1256h{1}c-0.03046-3.899e-4 -0.07972-0.004491-0.1246-0.02636-0.0537-0.02695-0.07418-0.05816-0.08648-0.07769-0.001562-0.002538-0.004467-0.002563-0.01091-0.002563z";
-/// 模板名义宽（L=0，manim `default_min_width`）
-const BRACE_W0: f64 = 0.90552;
-/// 模板名义深（开口线 → 中尖角端点 y）
-const BRACE_H0: f64 = 0.272985;
-/// 曲线水平压缩因子（manim `Brace` 默认 `sharpness=2`：钩形更紧凑锐利）
-const BRACE_SHARPNESS: f64 = 2.0;
-
-/// 花括号规范形：manim 官方 CM 字形模板 + 臂段线性延长 + 非均匀拉伸。
-/// 输出闭合填充轮廓（非描边中心线）：x ∈ [0, span]，y ∈ [0, depth]。
-fn brace_canonical_path(span: f64, depth: f64) -> BezPath {
-    // 垂直比例由深度定；臂直段延长 L 吸收水平拉伸（manim linear_section_length，
-    // 以深度定标尺使曲线占比随深度、跨度解耦）
-    let sy = depth / BRACE_H0;
-    let l = ((span * BRACE_SHARPNESS / sy - BRACE_W0) / 2.0).max(0.0);
-    let svg = BRACE_PATH_TEMPLATE
-        .replace("{0}", &format!("{l:.9}"))
-        .replace("{1}", &format!("{:.9}", -l));
-    let mut path = BezPath::from_svg(&svg).expect("brace 模板路径必可解析");
-    path.apply_affine(Affine::scale_non_uniform(span / (BRACE_W0 + 2.0 * l), sy));
-    path
-}
-
 /// 一帧的绘制指令（渲染层唯一输入）。
 #[derive(Debug, Clone)]
 pub struct DrawList {
@@ -560,68 +439,6 @@ mod tests {
             Shape::Path(p) => p,
             other => panic!("应为路径，得 {other:?}"),
         }
-    }
-
-    #[test]
-    fn brace_下方几何与跨度自适应() {
-        let target = Item::rect(Rect::new(100.0, 100.0, 300.0, 150.0));
-        let brace = Item::brace(&target, Direction::Down, 12.0);
-        let bb = brace.bbox();
-        // 跨度 = 目标宽 200；深度 = 1.2×clamp(200×0.09=18) = 21.6
-        // CM 字形闭合轮廓：bbox 即精确几何界（端帽 x=0、尖角 y=depth）
-        assert!(
-            (bb.x0 - 100.0).abs() < 0.5 && (bb.x1 - 300.0).abs() < 10.0,
-            "{bb:?}"
-        );
-        assert!(
-            (162.0 - bb.y0).abs() < 10.0 && bb.y0 <= 162.0 + 1e-9,
-            "{bb:?}"
-        );
-        assert!((bb.y1 - 183.6).abs() < 1.0, "深度尖角 {bb:?}");
-        // 单子路径：1 move + 18 curve + 6 line（4 臂直段 + 2 端帽）+ close = 26 元素
-        assert_eq!(path_of(&brace).elements().len(), 26);
-    }
-
-    #[test]
-    fn brace_四方向外沿定位() {
-        let target = Item::rect(Rect::new(100.0, 100.0, 300.0, 200.0));
-        // 外沿 = buff 线（控制点可向对象侧越出 ≤ 1 钩厚，span=100 → 钩 9 → 容差 6）
-        let up = Item::brace(&target, Direction::Up, 10.0).bbox();
-        assert!((up.y1 - 90.0).abs() < 6.0, "上方 brace 外沿 y1={}", up.y1);
-        let left = Item::brace(&target, Direction::Left, 10.0).bbox();
-        assert!(
-            (left.x1 - 90.0).abs() < 6.0,
-            "左侧 brace 外沿 x1={}",
-            left.x1
-        );
-        let right = Item::brace(&target, Direction::Right, 10.0).bbox();
-        assert!(
-            (right.x0 - 310.0).abs() < 6.0,
-            "右侧 brace 外沿 x0={}",
-            right.x0
-        );
-        // 沿跨度方向与目标居中对齐（镜像形，控制点外扩 ≤1px 不对称留容差）
-        let down = Item::brace(&target, Direction::Down, 10.0).bbox();
-        assert!((down.x0 + down.x1 - 400.0).abs() < 1.0, "{down:?}");
-    }
-
-    #[test]
-    fn brace_括注文本外沿居中() {
-        let Some((path, idx)) = crate::text::find_system_font(&[]) else {
-            eprintln!("无系统字体，跳过");
-            return;
-        };
-        let font = Font::from_index(&path, idx).unwrap();
-        let target = Item::rect(Rect::new(100.0, 100.0, 300.0, 150.0));
-        let (brace, label) =
-            Item::brace_with_text(&target, Direction::Down, 12.0, &font, "宽度", 28.0).unwrap();
-        let bb = brace.bbox();
-        let lb = label.bbox();
-        assert!(lb.y0 >= bb.y1, "文本应在尖角下方 {lb:?} vs {bb:?}");
-        assert!(
-            (lb.x0 + lb.x1 - bb.x0 - bb.x1).abs() < 1.0,
-            "水平居中 {lb:?} vs {bb:?}"
-        );
     }
 
     #[test]

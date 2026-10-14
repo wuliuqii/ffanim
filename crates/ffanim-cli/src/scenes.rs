@@ -841,12 +841,15 @@ fn shapes_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
 /// 花括号为填充字形，出场用 fade_in（manim `GrowFromCenter` 对应）而非 create。
 fn brace_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     use ffanim_core::Direction;
+    use ffanim_typst::TypstEngine;
 
     // 括注为中文：须 CJK 字形（find_cjk_font 优先，缺失时回退系统拉丁字体）
     let font = ffanim_typst::find_cjk_font()
         .and_then(|path| ffanim::Font::from_path(&path).ok())
         .map(Ok)
         .unwrap_or_else(|| load_font(None))?;
+    // 花括号 = Typst MATH 装配（NewCMMath），与公式排版同引擎
+    let mut engine = TypstEngine::new(8);
     let accent = theme.accent().unwrap();
     let fg = theme.foreground().unwrap();
     let (w, h) = (960u32, 540u32);
@@ -870,7 +873,7 @@ fn brace_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
 
     // 3) 下方花括号 + 括注“宽度”
     let (brace_d, label_d) =
-        Item::brace_with_text(&bar_item, Direction::Down, 14.0, &font, "宽度", 30.0)?;
+        engine.brace_with_text(&bar_item, Direction::Down, 14.0, &font, "宽度", 30.0)?;
     let (bd, ld) = (tl.add(brace_d.with_fill(fg)), tl.add(label_d.with_fill(fg)));
     tl.wait(0.2);
     tl.together(
@@ -881,7 +884,7 @@ fn brace_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
 
     // 4) 右侧花括号 + 括注“高度”
     let (brace_r, label_r) =
-        Item::brace_with_text(&bar_item, Direction::Right, 14.0, &font, "高度", 30.0)?;
+        engine.brace_with_text(&bar_item, Direction::Right, 14.0, &font, "高度", 30.0)?;
     let (br, lr) = (
         tl.add(brace_r.with_fill(accent)),
         tl.add(label_r.with_fill(accent)),

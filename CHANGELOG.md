@@ -47,26 +47,31 @@
 - 验收：demo_anim 5.8s 全片导出 1..3s 片段，ffprobe 实测 2.0s；3 解析单测 + 1 集成测试
 - 顺手修复 ci-gpu 配方存量编译损坏（peniko `Blob::new` 需 `Arc<dyn AsRef<[u8]>>`，改拷贝进 `Arc<Vec<u8>>`）
 
-### M9.12 manim 对齐第九批：P1-8 Brace 花括号 + 括注文本（2026-10-13）
+### M9.12 manim 对齐第九批：P1-8 Brace 花括号 + 括注文本（2026-10-13，2026-10-14 改 Typst 装配机制）
 
-- feat(core): `Item::brace(&target, dir, buff)`——沿目标 bbox 指定侧（Down/Up/Left/Right）
-  生成花括号，开口朝对象、中尖角指外；规范形（跨度沿 +x、开口 -y）+ 四方向旋转定位
-- 形状机制 = manim Brace 官方同源（从 manim 0.9 `brace.py` 提取路径模板，MIT；
-  源自 Computer Modern 数学字体花括号轮廓，LaTeX `\left\{` 同源）：**闭合填充字形**
-  （真实粗细过渡：端部细出锋、臂部厚、中尖角垂落），臂部线性直段吸收水平拉伸
-  （manim `linear_section_length`，sharpness=2 曲线压缩恒定、占比与跨度解耦），
-  深度自适应（1.2×clamp(span×0.09, 8, 18)，540p 宽跨度 ≈ 21.6px 贴近 manim 等效
-  深度 18.4px）+ 四方向旋转；
-  首版手绘描边中心线（Hermite 切向角调形）因无粗细过渡、观感不佳被替换；
-  **填充字形不适用 create 描边生长**（可见逐段描轮廓过程），出场改 fade_in
+- feat(typst): `TypstEngine::brace(&target, dir, buff)`——沿目标 bbox 指定侧
+  （Down/Up/Left/Right）生成花括号，开口朝对象、中尖角指外；规范形（跨度沿 +x、
+  开口 -y）+ 四方向旋转定位
+- 形状机制 = **Typst OpenType MATH 装配**（NewCMMath 字体 GlyphAssembly：顶钩 +
+  可重复延长臂 + 中尖角 + 底钩，`lr(size: #Npt, \{)` 排拉伸花括号，片间按 MATH 表
+  MinConnectorOverlap 重叠防接缝）：跨度由 `lr(size:)` **精确到像素**（装配延长臂
+  吸收），深度 ∝ 字号严格线性（深度/字号比运行时探针实测，零硬编码魔数；字号随
+  深度定标 → 钩/尖角比例保真）；**闭合填充字形**（真实粗细过渡），装配片合并为
+  单路径（同色不透明填充重叠区无瑕疵），归一化仿射（pt→px + 旋转 -90° + 平移）；
+  产物坐标语义与首版一致（x∈[0,span]、y∈[0,depth]、开口线 y=0）
+- 演进史：v1 手绘描边中心线（无粗细过渡，弃）→ v2 manim CM 模板移植（manim 0.9
+  brace.py 路径模板 + 线性段拉伸，字形质量达标但深度为近似公式）→ v3 Typst 装配
+  （跨度/深度完全解耦、拼接质量由字体表保证、删 ~50 行几何代码与模板字符串）；
+  三版均为 CM 系字形（manim/LaTeX/Typst 同源）
+- **填充字形不适用 create 描边生长**（可见逐段描轮廓过程），出场用 fade_in
   （manim 对 Brace 亦用 GrowFromCenter 而非 Create）
-- `Item::brace_with_text(...)` 返回 (brace, 文本) 散件对——文本置于尖角外沿居中
-  （间距 0.45×字号，manim `brace.get_text` 对应）
-- brace / brace_with_text 两条 log::info 埋点（目标 bbox/跨度/钩深/结果 bbox、标签/bbox）
-- 验收：brace_demo 场景（横条 + 下方"宽度"+ 右侧"高度"）5.1s 出片；像素级剖面实证
-  形状对称无越界、括注为 CJK 真笔画（此前 load_font 拉丁系统字体无中文字形渲染为
-  口占位，brace_demo 改 find_cjk_font 优先注入）；单测 3 项 + 集成 1 项
-  （几何断言 + together 编排三相处数）
+- `TypstEngine::brace_with_text(...)` 返回 (brace, 文本) 散件对——文本置于尖角
+  外沿居中（间距 0.45×字号，manim `brace.get_text` 对应）
+- brace / brace_with_text 两条 log::info 埋点（目标 bbox/跨度/深度/结果 bbox、标签/bbox）
+- 语法要点（探针实证）：`{` 在 math 里是分组符须写 `\{`；`lr(size:)` 必须加 `#`
+  且用绝对长度（em/pt；百分比被忽略）；Typst **无 `px` 单位**（px→pt 换算 ×0.75）
+- 验收：单测 4 项（下方几何 0.5px 容差/四方向外沿/括注居中/缓存命中零成本）+
+  集成 1 项（几何断言 + together 编排三相处数）；brace_demo 场景 5.1s 出片
 - **调研与获取**：GitHub raw/jsdelivr 均被墙，改走清华 pypi 镜像下载 manim wheel
   解包提取官方路径模板（模板常量与源文件逐字节比对一致）；像素级剖面实证新字形
   端钩卷曲、直臂、中尖下探至 bbox 下沿（y=362 vs 363.6 抗锯齿差）

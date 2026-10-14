@@ -1,6 +1,6 @@
 //! 任意片段的结构匹配形变（manim `TransformMatchingShapes` 对应）。
 //!
-//! 与 [`crate::match_formulas`]（源文本 diff 配对）互补：文本缺失的路径片段
+//! 与 `match_formulas`（ffanim-typst，源文本 diff 配对）互补：文本缺失的路径片段
 //! （SVG 字形、几何图形）按**几何签名**配对——签名 = 平移归零 + 0.01pt 精度
 //! 序列化，同形异位必配对（位置烘进坐标或挂 transform 均可），异形不配对。
 //!

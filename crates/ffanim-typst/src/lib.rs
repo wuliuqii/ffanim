@@ -6,6 +6,7 @@
 //!
 //! 坐标约定：Formula 内部为 pt 单位、y 向下（与 Typst Frame 一致），
 //! 缩放/居中由调用方通过 `Item::with_transform` 完成。
+mod brace;
 mod code;
 mod engine;
 mod formula;
