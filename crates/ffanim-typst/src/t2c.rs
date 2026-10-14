@@ -93,7 +93,11 @@ impl TypstEngine {
         opts: &TextOptions,
     ) -> Result<Arc<Formula>> {
         let markup = build_t2c_markup(body, spans)?;
-        log::info!("t2c: {} 个着色词 → markup {} 字节", spans.len(), markup.len());
+        log::info!(
+            "t2c: {} 个着色词 → markup {} 字节",
+            spans.len(),
+            markup.len()
+        );
         self.text(&markup, opts)
     }
 }
@@ -109,10 +113,7 @@ mod tests {
     #[test]
     fn markup构建_单词() {
         let m = build_t2c_markup("the quick brown fox", &[("quick", RED)]).unwrap();
-        assert_eq!(
-            m,
-            "the #text(fill: rgb(\"#ff0000\"))[quick] brown fox"
-        );
+        assert_eq!(m, "the #text(fill: rgb(\"#ff0000\"))[quick] brown fox");
     }
 
     /// 全出现语义：重复词全部着色。
@@ -140,10 +141,7 @@ mod tests {
     #[test]
     fn markup构建_转义() {
         let m = build_t2c_markup("a*b_c", &[("b", RED)]).unwrap();
-        assert_eq!(
-            m,
-            "a\\*#text(fill: rgb(\"#ff0000\"))[b]\\_c"
-        );
+        assert_eq!(m, "a\\*#text(fill: rgb(\"#ff0000\"))[b]\\_c");
         let m = escape_markup("x #y [z]");
         assert_eq!(m, "x \\#y \\[z\\]");
     }
@@ -169,7 +167,8 @@ mod tests {
             .pieces
             .iter()
             .filter_map(|p| {
-                p.fill.map(|c| format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b))
+                p.fill
+                    .map(|c| format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b))
             })
             .collect();
         assert!(fills.contains("#ff0000"), "应含红色 span，实际 {fills:?}");
@@ -182,8 +181,12 @@ mod tests {
     fn t2c_缓存命中() {
         let mut engine = TypstEngine::new(8);
         let o = TextOptions::new(24.0, Color::new(240, 240, 240, 255));
-        let a = engine.text_t2c("hello world", &[("world", RED)], &o).unwrap();
-        let b = engine.text_t2c("hello world", &[("world", RED)], &o).unwrap();
+        let a = engine
+            .text_t2c("hello world", &[("world", RED)], &o)
+            .unwrap();
+        let b = engine
+            .text_t2c("hello world", &[("world", RED)], &o)
+            .unwrap();
         assert!(Arc::ptr_eq(&a, &b), "缓存命中应返回同一 Arc");
     }
 

@@ -1225,14 +1225,12 @@ fn table_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     // 1) 标题淡入（描边路径文本）
     let title_path = font.outline_text("复杂度对照表", 52.0)?;
     let bounds = title_path.bounding_box();
-    let title = tl.add(
-        Item::from_path(title_path)
-            .with_fill(fg)
-            .with_transform(Affine::translate((
-                f64::from(w) / 2.0 - (bounds.x0 + bounds.x1) / 2.0,
-                f64::from(h) * 0.10,
-            ))),
-    );
+    let title = tl.add(Item::from_path(title_path).with_fill(fg).with_transform(
+        Affine::translate((
+            f64::from(w) / 2.0 - (bounds.x0 + bounds.x1) / 2.0,
+            f64::from(h) * 0.10,
+        )),
+    ));
     tl.play(Anim::fade_in(title).during(0.7));
     tl.wait(0.2);
 

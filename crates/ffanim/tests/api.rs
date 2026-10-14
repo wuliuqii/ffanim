@@ -874,3 +874,41 @@ fn arrow_两点式编排() {
     assert_eq!(render_frame(&ct, 45).items.len(), 2);
     assert_eq!(render_frame(&ct, 59).items.len(), 2);
 }
+
+#[test]
+fn table_拼装与行列几何() {
+    // 门面公开项覆盖（规则 B）：table / TableOptions / TableSpec
+    use ffanim::{Font, TableOptions, TableSpec, table};
+
+    let font = Font::from_system(Option::<&str>::None).expect("系统字体");
+    let o = TableOptions::new(24.0, FG);
+    // 2 行数据 + 表头 = 3 行 × 2 列
+    let spec: TableSpec = table(
+        &["运算", "成本"],
+        &[vec!["求和", "O(n)"], vec!["排序", "O(n log n)"]],
+        &font,
+        &o,
+    )
+    .expect("表格拼装");
+
+    // 行列几何：3×2，格子互不越界
+    assert_eq!(spec.cell_rects.len(), 3, "表头 + 2 数据行");
+    let r1 = spec.cell(1, 0);
+    let r2 = spec.cell(1, 1);
+    assert!(r1.width() > 0.0 && r2.width() > 0.0, "格子非空");
+    assert!(r1.x1 <= r2.x0, "同行列先左后右不重叠");
+
+    // 行并集覆盖该行两格
+    let row = spec.row_rect(1);
+    assert!(
+        row.width() >= r1.width() + r2.width(),
+        "行并集 ≥ 两格宽度和"
+    );
+
+    // 整表可注册进时间轴并淡入（动画句柄语义）
+    let mut tl = Timeline::new(960, 540, 30, BG);
+    let id = tl.add(spec.table);
+    tl.play(Anim::fade_in(id).during(1.0));
+    let ct = tl.compile();
+    assert_eq!(ct.anims.len(), 1);
+}

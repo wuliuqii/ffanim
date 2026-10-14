@@ -145,13 +145,7 @@ pub fn table<S: AsRef<str>>(
             w.clone()
         }
         None => (0..ncols)
-            .map(|c| {
-                bboxes
-                    .iter()
-                    .map(|r| r[c].width())
-                    .fold(0.0_f64, f64::max)
-                    + 2.0 * o.padding
-            })
+            .map(|c| bboxes.iter().map(|r| r[c].width()).fold(0.0_f64, f64::max) + 2.0 * o.padding)
             .collect(),
     };
     // 行高：指定 > 自动（max 文本高 + 2×padding）
@@ -302,9 +296,10 @@ mod tests {
         let spec = table(&HEADERS, &rows(), &font, &o).unwrap();
         // 列 1 的 "O(n log n)" 显著比 "cost" 宽 → 自动宽应容纳最宽文本
         let long = font.outline_text("O(n log n)", o.font_size).unwrap();
-        assert!((spec.cell_rects[0][1].width() - (long.bounding_box().width() + 2.0 * o.padding))
-            .abs()
-            < 1e-9);
+        assert!(
+            (spec.cell_rects[0][1].width() - (long.bounding_box().width() + 2.0 * o.padding)).abs()
+                < 1e-9
+        );
         // 全部格等高（统一行高）
         for row in &spec.cell_rects {
             for cell in row {
@@ -338,8 +333,11 @@ mod tests {
                 panic!("行应为 Group");
             };
             // 无底色配置下：带填充的子项即文本（网格线仅描边，被滤除）
-        let text_items: Vec<&Item> = children.iter().filter(|it| it.paint.fill.is_some()).collect();
-        for (c, child) in text_items.iter().enumerate() {
+            let text_items: Vec<&Item> = children
+                .iter()
+                .filter(|it| it.paint.fill.is_some())
+                .collect();
+            for (c, child) in text_items.iter().enumerate() {
                 let b = child.bbox();
                 let cell = spec.cell_rects[r][c];
                 assert!(
@@ -356,7 +354,9 @@ mod tests {
     fn 网格线内外开关() {
         let Some(font) = test_font() else { return };
         let count_lines = |it: &Item| -> usize {
-            let Shape::Group(children) = &it.shape else { panic!("应为 Group") };
+            let Shape::Group(children) = &it.shape else {
+                panic!("应为 Group")
+            };
             // 整表 Group 的直接子项是行组，需下钻一层计数描边线
             children
                 .iter()

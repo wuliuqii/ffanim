@@ -414,13 +414,17 @@ fn encode_segment(
 ///
 /// 画质预设定缩放（None = 源尺寸）；diff 模式调色对动画渐变更友好，
 /// bayer 抖动无图案漂移且编码快。
-fn gif_convert(mid: &Path, out: &Path, width: u32, height: u32, opts: &EncodeOptions) -> Result<()> {
-    let (w, h) = opts
-        .quality
-        .map_or((width, height), |q| {
-            let s = q.spec();
-            (s.width, s.height)
-        });
+fn gif_convert(
+    mid: &Path,
+    out: &Path,
+    width: u32,
+    height: u32,
+    opts: &EncodeOptions,
+) -> Result<()> {
+    let (w, h) = opts.quality.map_or((width, height), |q| {
+        let s = q.spec();
+        (s.width, s.height)
+    });
     let vf = format!(
         "scale={w}:{h}:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5"
     );
@@ -447,7 +451,9 @@ fn concat_segments(tmp: &Path, out: &Path, n: usize, ext: &str) -> Result<()> {
     // 埋点：concat 拼接（info）
     log::info!("concat 拼接 {n} 段（流复制，无重编码）");
     let list = tmp.join("concat.txt");
-    let body: String = (0..n).map(|i| format!("file 'seg_{i:04}.{ext}'\n")).collect();
+    let body: String = (0..n)
+        .map(|i| format!("file 'seg_{i:04}.{ext}'\n"))
+        .collect();
     std::fs::write(&list, body).map_err(|e| Error::Encode(e.to_string()))?;
 
     let output = Command::new("ffmpeg")
@@ -663,7 +669,11 @@ mod tests {
         encode_video(w, h, fps, n, &out, &opts, &moving_square(w, h)).unwrap();
 
         let bytes = std::fs::read(&out).unwrap();
-        assert_eq!(&bytes[..4], &[0x1A, 0x45, 0xDF, 0xA3], "应为 EBML/WebM 容器");
+        assert_eq!(
+            &bytes[..4],
+            &[0x1A, 0x45, 0xDF, 0xA3],
+            "应为 EBML/WebM 容器"
+        );
         let _ = std::fs::remove_file(&out);
     }
 
@@ -694,8 +704,10 @@ mod tests {
     #[test]
     fn 未知扩展名报错() {
         let out = std::env::temp_dir().join("ffanim-encode-test.avi");
-        let e = encode_video(64, 64, 30, 2, &out, &Default::default(), &|_| vec![0; 64 * 64 * 4])
-            .unwrap_err();
+        let e = encode_video(64, 64, 30, 2, &out, &Default::default(), &|_| {
+            vec![0; 64 * 64 * 4]
+        })
+        .unwrap_err();
         assert!(e.to_string().contains("扩展名"), "错误应可读: {e}");
     }
 }
