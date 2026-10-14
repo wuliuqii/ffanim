@@ -193,6 +193,29 @@ impl TypstEngine {
         Ok(added)
     }
 
+    /// 加载字体集合（.ttc）中的**单个 face**（face 序号由调用方指定）。
+    ///
+    /// 与 [`Self::add_font`]（集合全量加载）的区别：fallback 候选唯一，
+    /// CJK 排版结果确定（`find_cjk_font` 报告的 face 配对使用，避免
+    /// 全量注入时 Typst fallback 选错 face——如 JP/SC 同集时选中日文）。
+    pub fn add_font_face(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+        index: u32,
+    ) -> Result<usize> {
+        let path = path.as_ref();
+        let data = std::fs::read(path).map_err(|e| Error::FontIo(e, path.to_path_buf()))?;
+        let font = Font::new(Bytes::new(data), index)
+            .ok_or_else(|| Error::Other(format!("字体解析失败: {}#{index}", path.display())))?;
+        let mut fonts = (*self.fonts).clone();
+        fonts.push(font);
+        self.fonts = Arc::new(fonts);
+        self.book = Arc::new(LazyHash::new(FontBook::from_fonts(self.fonts.iter())));
+        self.fonts_gen += 1;
+        log::debug!("字体注入: {}#{index}（单 face）", path.display());
+        Ok(1)
+    }
+
     /// 排版公式（Typst 数学语法，如 `x^2 + y^2 = z^2`）。
     ///
     /// 命中缓存返回同一 `Arc`（0 排版开销）；未命中则编译并写入缓存。

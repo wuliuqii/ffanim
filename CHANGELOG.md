@@ -7,6 +7,24 @@
 
 ### Added
 
+- feat(core): M9.18 表格（manim `Table` 对应）——`ffanim::table(headers, rows_data, &Font,
+  &TableOptions)` core 侧 `Font::outline_text` 逐格排版拼组（列宽/行高自动或指定、
+  格内居中、网格线内外开关 `include_outer_lines`；弃 Typst 整块 `#table()` 保逐格
+  动画句柄）→ `TableSpec`：整表 `table` / 行组 `rows`（lagged_start 错峰出场）/
+  `cell_rects` + `row_rect`/`col_rect` 并集（高亮底板与 `surrounding_rect` 圈注定位）；
+  z 序 = 注册序（高亮底板先于行组注册垫底）；table_demo 场景验收（行组错峰淡入 +
+  第二行高亮 + 示例格圈注，末帧像素探针三要素实证）
+
+### Fixed
+
+- fix(typst): 中文字体选择错误——`find_cjk_font` 改返回 `(路径, face 序号)` 且
+  `fc-list` 排序修正：原仅按文件名排 bold/italic，在本机会选中
+  `NotoSansCJK-Black.ttc`（文件名不含 bold）且其 face 0 为**日文 JP Black**，
+  复/沿等字用日文写法 + 超粗重量渲染（table_demo/delimiter_demo 目检实证）。
+  现排序键 = 常规体（族名/样式无重量后缀）→ SC 简体族 → 非等宽变体（选中
+  Sarasa UI SC Regular）→ 路径字典序；新增 `TypstEngine::add_font_face`（单
+  face 精确注入，CJK fallback 结果确定，避免 ttc 全量注入时选错 face）；全部
+  调用点迁移 `Font::from_index` / `add_font_face`
 - feat(encode): M9.17 GIF/WebM 输出 + 画质预设（manim `-ql/-qm/-qh/-qk` 对应）——
   `Quality` 预设表（ql=854×480@15 / qm=720p30 / qh=1080p60 / qk=2160p60：
   定输出分辨率 + fps（时间轴按预设 fps 重建）+ 分格式 CRF）+ 输出扩展名路由

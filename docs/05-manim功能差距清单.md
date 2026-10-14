@@ -61,7 +61,7 @@
 | P1-11 | save_state / restore | mobject.save_state() | ✅ 已落地（M9.7）：`tl.save_state(id) -> Item` + `tl.restore(id, &snap) -> ItemId`（快照 + 完整 morph，返回新句柄） | S |
 | P1-12 | 按词/按段着色 t2c | Text(t2c=…) | ✅ 已落地（M9.16）：`TypstEngine::text_t2c(body, &[(词, Color)], &TextOptions)`（markup 注入 `#text(fill:)[词]`，全出现/对序优先/非重叠，特殊字符自动转义，走 LRU 缓存），t2c_demo 场景验收 | S |
 | P1-13 | 代码块高亮 | Code | ✅ 已落地（M9.9）：`TypstEngine::code(body, lang, &CodeOptions)`（Typst raw + syntect 高亮，内嵌 Dark/Light tmTheme，普通文本前景色显式填入 `foreground_hex`），code_demo 场景验收 | M |
-| P1-14 | 表格 | Table/MathTable | 手拼 grid_item + 文本可绕 | M |
+| P1-14 | 表格 | Table/MathTable | ✅ 已落地（M9.18）：`ffanim::table(headers, rows_data, &Font, &TableOptions)`（core 侧 `Font::outline_text` 逐格排版拼组：列宽/行高自动或指定、格内居中、内外网格线开关 `include_outer_lines`；不用 Typst 整块 `#table()` 以保逐格动画句柄）→ `TableSpec`（整表 `table` + 行组 `rows` 供 `lagged_start` + `cell_rects` 供高亮定位，`row_rect`/`col_rect` 并集辅助），table_demo 场景验收 | M |
 
 ### P2 —— 暂缓 / 不追
 

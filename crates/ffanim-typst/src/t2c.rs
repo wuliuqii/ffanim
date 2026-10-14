@@ -203,12 +203,12 @@ mod tests {
     /// 中文按词着色：需系统中文字体，缺失时跳过。
     #[test]
     fn t2c_中文着色() {
-        let Some(font) = crate::text::find_cjk_font() else {
+        let Some((font, idx)) = crate::text::find_cjk_font() else {
             eprintln!("跳过：未找到系统中文字体");
             return;
         };
         let mut engine = TypstEngine::new(8);
-        engine.add_font(&font).unwrap();
+        engine.add_font_face(&font, idx).unwrap();
         let o = TextOptions::new(24.0, Color::new(240, 240, 240, 255));
         let f = engine
             .text_t2c("数学动画引擎", &[("动画", RED)], &o)

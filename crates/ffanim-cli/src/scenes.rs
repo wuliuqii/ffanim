@@ -27,6 +27,7 @@ pub const SCENES: &[&str] = &[
     "arrow_demo",
     "decimal_demo",
     "t2c_demo",
+    "table_demo",
 ];
 
 /// 构建场景时间轴。
@@ -52,6 +53,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "arrow_demo" => arrow_demo(theme, fps),
         "decimal_demo" => decimal_demo(theme, fps),
         "t2c_demo" => t2c_demo(theme, fps),
+        "table_demo" => table_demo(theme, fps),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -243,8 +245,8 @@ fn text_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
 
     // 引擎 + 系统中文字体（env FFANIM_CJK_FONT → fc-list → 常见路径）
     let mut engine = TypstEngine::new(16);
-    if let Some(font) = find_cjk_font() {
-        engine.add_font(&font)?;
+    if let Some((font, idx)) = find_cjk_font() {
+        engine.add_font_face(&font, idx)?;
     }
 
     // 排版产物落位 + 整组同时淡入（group 步长 0 = 同窗）
@@ -588,8 +590,8 @@ fn annotate_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
 
     let mut engine = TypstEngine::new(16);
-    if let Some(font) = find_cjk_font() {
-        engine.add_font(&font)?;
+    if let Some((font, idx)) = find_cjk_font() {
+        engine.add_font_face(&font, idx)?;
     }
     let fopts = FormulaOptions {
         font_size_pt: 26.0,
@@ -696,8 +698,8 @@ fn code_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
     let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
 
     let mut engine = TypstEngine::new(16);
-    if let Some(font) = find_cjk_font() {
-        engine.add_font(&font)?;
+    if let Some((font, idx)) = find_cjk_font() {
+        engine.add_font_face(&font, idx)?;
     }
 
     // 排版产物注册 helper：散件注册（供逐字形动画）+ 拼组（仅几何用途）
@@ -870,7 +872,7 @@ fn brace_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
 
     // 括注为中文：须 CJK 字形（find_cjk_font 优先，缺失时回退系统拉丁字体）
     let font = ffanim_typst::find_cjk_font()
-        .and_then(|path| ffanim::Font::from_path(&path).ok())
+        .and_then(|(path, idx)| ffanim::Font::from_index(&path, idx).ok())
         .map(Ok)
         .unwrap_or_else(|| load_font(None))?;
     // 花括号 = Typst MATH 装配（NewCMMath），与公式排版同引擎
@@ -936,7 +938,7 @@ fn delimiter_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
 
     // 括注为中文：须 CJK 字形（find_cjk_font 优先，缺失时回退系统拉丁字体）
     let font = ffanim_typst::find_cjk_font()
-        .and_then(|path| ffanim::Font::from_path(&path).ok())
+        .and_then(|(path, idx)| ffanim::Font::from_index(&path, idx).ok())
         .map(Ok)
         .unwrap_or_else(|| load_font(None))?;
     // 定界符 = Typst MATH 装配（NewCMMath GlyphAssembly），与公式排版同引擎
@@ -1000,7 +1002,7 @@ fn arrow_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
 
     // 括注为中文：须 CJK 字形（find_cjk_font 优先，缺失时回退系统拉丁字体）
     let font = ffanim_typst::find_cjk_font()
-        .and_then(|path| ffanim::Font::from_path(&path).ok())
+        .and_then(|(path, idx)| ffanim::Font::from_index(&path, idx).ok())
         .map(Ok)
         .unwrap_or_else(|| load_font(None))?;
     // 箭头 = Typst MATH stretch 装配，与公式排版同引擎
@@ -1081,7 +1083,7 @@ fn decimal_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
 
     // 括注为中文：须 CJK 字形（find_cjk_font 优先，缺失时回退系统拉丁字体）
     let font = ffanim_typst::find_cjk_font()
-        .and_then(|path| ffanim::Font::from_path(&path).ok())
+        .and_then(|(path, idx)| ffanim::Font::from_index(&path, idx).ok())
         .map(Ok)
         .unwrap_or_else(|| load_font(None))?;
     let fg = theme.foreground().unwrap();
@@ -1155,8 +1157,8 @@ fn t2c_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
 
     // 中文正文须 CJK 字形（缺失时回退拉丁字体，中文会口占位但仍出片）
     let mut engine = TypstEngine::new(16);
-    if let Some(font) = find_cjk_font() {
-        engine.add_font(&font)?;
+    if let Some((font, idx)) = find_cjk_font() {
+        engine.add_font_face(&font, idx)?;
     }
 
     let show = |tl: &mut Timeline, f: &ffanim_typst::Formula, cy: f64, dur: f64| {
@@ -1198,6 +1200,86 @@ fn t2c_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
         &TextOptions::new(18.0, accent),
     )?;
     show(&mut tl, &cap, 480.0, 0.8);
+    tl.wait(0.8);
+    Ok(tl)
+}
+
+/// M9.18 验收场景：P1-14 表格（manim `Table` 对应）。
+///
+/// 标题淡入 → 表格行组 `lagged_start` 逐行淡入 → 第二行高亮底板淡入
+/// → `surrounding_rect` 圈注「示例」格（create 描边生长）。
+/// 表格 = core 侧逐格排版拼组（行组保留独立动画句柄）；z 序 = 注册序，
+/// 高亮底板须先于行组注册才能垫底。
+fn table_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
+    let fg = theme.foreground().unwrap();
+    let accent = theme.accent().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // 表格文本/标题须 CJK 字形（find_cjk_font 优先，缺失时回退拉丁字体）
+    let font = ffanim_typst::find_cjk_font()
+        .and_then(|(p, idx)| ffanim::Font::from_index(&p, idx).ok())
+        .map(Ok)
+        .unwrap_or_else(|| load_font(None))?;
+
+    // 1) 标题淡入（描边路径文本）
+    let title_path = font.outline_text("复杂度对照表", 52.0)?;
+    let bounds = title_path.bounding_box();
+    let title = tl.add(
+        Item::from_path(title_path)
+            .with_fill(fg)
+            .with_transform(Affine::translate((
+                f64::from(w) / 2.0 - (bounds.x0 + bounds.x1) / 2.0,
+                f64::from(h) * 0.10,
+            ))),
+    );
+    tl.play(Anim::fade_in(title).during(0.7));
+    tl.wait(0.2);
+
+    // 2) 表格拼装（数据驱动：色皆出自主题，仅透明度派生）
+    let o = ffanim::TableOptions {
+        header_fill: Some(ffanim::Color::new(accent.r, accent.g, accent.b, 60)),
+        ..ffanim::TableOptions::new(24.0, fg)
+    };
+    let spec = ffanim::table(
+        &["运算", "复杂度", "示例"],
+        &[
+            vec!["求和", "O(n)", "sum(xs)"],
+            vec!["排序", "O(n log n)", "sorted(xs)"],
+        ],
+        &font,
+        &o,
+    )?;
+    // 表格从原点生长 → 平移到画布水平居中
+    let b = spec.table.bbox();
+    let move_t = Affine::translate((
+        f64::from(w) / 2.0 - (b.x0 + b.x1) / 2.0,
+        310.0 - (b.y0 + b.y1) / 2.0,
+    ));
+
+    // 高亮底板：先注册（z 序垫底），后播放
+    let hl = tl.add(
+        Item::rect(spec.row_rect(1))
+            .with_transform(move_t)
+            .with_fill(ffanim::Color::new(accent.r, accent.g, accent.b, 60)),
+    );
+    // 行组逐行注册 + 错峰淡入
+    let row_ids: Vec<_> = spec
+        .rows
+        .iter()
+        .map(|it| tl.add(it.clone().with_transform(move_t)))
+        .collect();
+    tl.lagged_start(row_ids.into_iter().map(Anim::fade_in), 0.5);
+    tl.play(Anim::fade_in(hl).during(0.6));
+    tl.wait(0.3);
+
+    // 3) 圈注「示例」格：surrounding_rect 描边生长（未注册临时 Item 供定位）
+    let ring = tl.add(
+        Item::surrounding_rect(&Item::rect(spec.cell(1, 2)), 6.0)
+            .with_transform(move_t)
+            .with_stroke(accent),
+    );
+    tl.play(Anim::create(ring).during(0.6));
     tl.wait(0.8);
     Ok(tl)
 }

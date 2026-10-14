@@ -33,29 +33,28 @@ impl TextOptions {
     }
 }
 
-/// 查找系统中文字体文件（首个存在者）：环境变量 `FFANIM_CJK_FONT`
-/// → `fc-list :lang=zh`（fontconfig 按语言能力查询）→ fontdb 系统枚举
-/// （CoreText/DirectWrite 等无 fontconfig 平台，与 core 共用同一实现）
-/// → 常见发行版路径扫描。
-pub fn find_cjk_font() -> Option<PathBuf> {
+/// 查找系统中文字体（文件 + face 序号，ttc 集合须取对 face）：环境变量
+/// `FFANIM_CJK_FONT`（face 0）→ `fc-list :lang=zh` 带序号查询（常规体、
+/// SC 简体、非等宽变体优先）→ fontdb 系统枚举（CoreText/DirectWrite 等
+/// 无 fontconfig 平台，与 core 共用同一实现）→ 常见发行版路径扫描（face 0）。
+pub fn find_cjk_font() -> Option<(PathBuf, u32)> {
     if let Ok(p) = std::env::var("FFANIM_CJK_FONT") {
         let p = PathBuf::from(p);
         if p.exists() {
-            return Some(p);
+            return Some((p, 0));
         }
     }
-    if let Some(p) = fc_list_cjk() {
-        return Some(p);
+    if let Some(found) = fc_list_cjk() {
+        return Some(found);
     }
-    // fontdb 按 family 名精确匹配；face 序号丢弃——TypstEngine::add_font 按
-    // face 0 加载，与 fc-list / 路径兜底语义一致
-    if let Some((p, _)) = ffanim_core::find_system_font(CJK_FAMILIES) {
-        return Some(p);
+    if let Some(found) = ffanim_core::find_system_font(CJK_FAMILIES) {
+        return Some(found);
     }
     CJK_CANDIDATES
         .iter()
         .map(PathBuf::from)
         .find(|p| p.exists())
+        .map(|p| (p, 0))
 }
 
 /// fontdb family 匹配用：常见中文字体的 en-US 名（按序优先）。
@@ -68,11 +67,16 @@ const CJK_FAMILIES: &[&str] = &[
     "Microsoft YaHei",
 ];
 
-/// fontconfig 语言查询：列出所有支持中文的字体文件，取常规体优先的第一个。
-fn fc_list_cjk() -> Option<PathBuf> {
+/// fontconfig 语言查询：列出所有支持中文的 face（文件 + 序号 + 族名），
+/// 排序取最优。教训实证（M9.18）：仅按文件名排 bold/italic 会在 Noto CJK
+/// ttc 上选中 `NotoSansCJK-Black.ttc`（文件名不含 bold）且其 face 0 是
+/// **日文 JP Black**——中文字形用日文写法 + 超粗重量，复/沿等字观感错误。
+/// 排序键：常规体（族名/样式无重量后缀）→ SC 简体族 → 非等宽变体（UI/Gothic
+/// 的中西文标点排版正确）→ 路径字典序（确定性）。
+fn fc_list_cjk() -> Option<(PathBuf, u32)> {
     let out = std::process::Command::new("fc-list")
         .arg("--format")
-        .arg("%{file}\n")
+        .arg("%{file}\t%{index}\t%{family}\t%{style}\n")
         .arg(":lang=zh")
         .output()
         .ok()?;
@@ -81,17 +85,33 @@ fn fc_list_cjk() -> Option<PathBuf> {
     }
     String::from_utf8_lossy(&out.stdout)
         .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        // 常规体优先（Bold/Italic 样式排后），保证正文观感
-        .min_by_key(|l| {
-            let lower = l.to_lowercase();
+        .filter_map(|l| {
+            let mut it = l.trim().splitn(4, '\t');
+            let file = it.next()?.trim();
+            if file.is_empty() {
+                return None;
+            }
+            let index = it.next()?.trim().parse::<u32>().ok()?;
+            let family = it.next().unwrap_or("");
+            let style = it.next().unwrap_or("");
+            Some((file, index, family, style))
+        })
+        .min_by_key(|(file, _, family, style)| {
+            let lower = format!("{family} {style}").to_lowercase();
+            // 重量后缀（Black/Light/Thin/Medium/SemiBold/Bold/Italic…）→ 非常规体
+            let weighted = [
+                "black", "light", "thin", "medium", "semibold", "bold", "italic", "xlight",
+            ]
+            .iter()
+            .any(|w| lower.contains(w));
             (
-                lower.contains("bold") || lower.contains("italic"),
-                l.to_string(),
+                weighted,
+                !family.contains("SC"),
+                lower.contains("mono") || lower.contains("term") || lower.contains("fixed"),
+                file.to_string(),
             )
         })
-        .map(PathBuf::from)
+        .map(|(file, index, _, _)| (PathBuf::from(file), index))
 }
 
 /// 常见安装路径兜底（fontconfig 不可用时；Linux/macOS/Windows）。
@@ -109,9 +129,9 @@ mod tests {
 
     #[test]
     fn find_cjk_font_冒烟() {
-        // 有中文环境命中路径；无字体环境 None 合法（打点跳过）
+        // 有中文环境命中路径 + face 序号；无字体环境 None 合法（打点跳过）
         match find_cjk_font() {
-            Some(p) => assert!(p.exists(), "报告的 CJK 字体应存在: {p:?}"),
+            Some((p, idx)) => assert!(p.exists(), "报告的 CJK 字体应存在: {p:?}#{idx}"),
             None => eprintln!("跳过：未发现系统中文字体"),
         }
     }

@@ -31,8 +31,8 @@ fn main() -> ffanim::Result<()> {
     // 排版引擎 + 系统中文字体（env FFANIM_CJK_FONT → fc-list :lang=zh → 常见路径，
     // 无硬编码路径；缺失时 Typst 退回内置拉丁字体）
     let mut engine = TypstEngine::new(16);
-    if let Some(font) = ffanim::typst::find_cjk_font() {
-        engine.add_font(&font)?;
+    if let Some((font, idx)) = ffanim::typst::find_cjk_font() {
+        engine.add_font_face(&font, idx)?;
     }
     // strip 时间轴标注用拉丁字体（与文本排版无关）
     let font = Font::from_system(None::<&str>)?;

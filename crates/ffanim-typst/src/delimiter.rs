@@ -331,12 +331,12 @@ mod tests {
 
     #[test]
     fn brace_括注文本外沿居中() {
-        let Some(path) = crate::text::find_cjk_font() else {
+        let Some((path, idx)) = crate::text::find_cjk_font() else {
             eprintln!("无 CJK 字体，跳过");
             return;
         };
         let mut engine = TypstEngine::new(8);
-        let font = Font::from_path(&path).unwrap();
+        let font = Font::from_index(&path, idx).unwrap();
         let target = Item::rect(Rect::new(100.0, 100.0, 300.0, 150.0));
         let (brace, label) = engine
             .brace_with_text(&target, Direction::Down, 12.0, &font, "宽度", 28.0)

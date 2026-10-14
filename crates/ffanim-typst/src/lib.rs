@@ -225,12 +225,12 @@ mod tests {
     /// 需要系统中文字体，缺失时跳过。
     #[test]
     fn text_中英混排限宽不出框() {
-        let Some(font) = find_cjk_font() else {
+        let Some((font, idx)) = find_cjk_font() else {
             eprintln!("跳过：未找到系统中文字体");
             return;
         };
         let mut engine = TypstEngine::new(8);
-        engine.add_font(&font).unwrap();
+        engine.add_font_face(&font, idx).unwrap();
         let o = TextOptions {
             wrap_width_pt: Some(220.0),
             ..text_opts(18.0)
