@@ -37,7 +37,7 @@ ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4")?;
 - `tl.add_tracker(v0) -> TrackerId` / `Anim::set_value(tracker, to)`：值动画（与其他动画同表调度）。
 - `tl.add_updater(&[deps], move |v| Item)`：注册信号节点，渲染期按 tracker 值**逐帧重建**形状（如函数图像随参数变化）。
 - 基元构造器：`Item::rect / circle / regular_polygon / from_path / from_image` +
-  标注五件套 `Item::line(a, b)` / `arrow(a, b)`（线+闭合三角头，需同色 fill+stroke）/
+  标注五件套 `Item::line(a, b)` / `arrow(a, b)`（几何线+闭合三角头，需同色 fill+stroke；数学字形箭头见下条）/
   `dashed_line(a, b, dash, gap)` / `arc(center, r, 起角°, 止角°)`（视觉逆时针）/
   `ellipse(center, rx, ry)`；`item.bbox() -> Rect` 查包围盒（布局/对齐用）。
 - 相对布局（构建期纯操作，manim `next_to`/`to_edge`/`arrange` 对应）：
@@ -59,6 +59,14 @@ ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4")?;
   形状 = Typst OpenType MATH 装配（NewCMMath GlyphAssembly，`lr(size: #Npt)` 精确控跨、
   深度∝字号），闭合填充轮廓，**用 `with_fill` 着色**（非描边）。出场用 `fade_in`。
   `brace`/`brace_with_text` 为 Brace 别名（调用方零改动）。带 log::info 埋点。
+- Arrow 装配箭头（manim `Arrow`/`DoubleArrow` 对应，M9.14）：
+  `TypstEngine::arrow(from, to, kind)`——两点式，kind ∈ `ArrowKind::{Single, Double}`；
+  形状 = Typst MATH `stretch(->, size: #Npt)` 装配（NewCMMath GlyphAssembly，跨度
+  **精确吸收零偏差**——关系符进 `lr` 不拉伸，必须走 stretch），头高/杆厚 ∝ 字号
+  （0.520/0.048 探针定标），头高 = `clamp(span×0.15, 10, 24)` px 随跨度自适应封顶
+  （manim capped 语义同族）；弦角 = 显式 6 元矩阵复合（斜向头尖精确闭合 to）。
+  闭合填充字形，**用 `with_fill` 着色**（非描边）；出场用 `fade_in`（填充字形禁用
+  create——会显式描轮廓）。跨度 <20px 报错。带 log::info 埋点。
 - 组编排糖（manim Together/Succession/LaggedStart/VGroup/save_state·restore 对应）：
   `tl.together([...])`（多动画同窗对齐，游标取最长 dur——**规避 overlap 各段 during 必须一致的坑**）/
   `tl.succession([...])`（逐段接续播）/

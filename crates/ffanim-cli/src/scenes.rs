@@ -24,6 +24,7 @@ pub const SCENES: &[&str] = &[
     "shapes_demo",
     "brace_demo",
     "delimiter_demo",
+    "arrow_demo",
 ];
 
 /// 构建场景时间轴。
@@ -46,6 +47,7 @@ pub fn build(name: &str, theme: &Theme, fps: u32) -> ffanim_core::Result<Timelin
         "shapes_demo" => shapes_demo(theme, fps),
         "brace_demo" => brace_demo(theme, fps),
         "delimiter_demo" => delimiter_demo(theme, fps),
+        "arrow_demo" => arrow_demo(theme, fps),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -959,6 +961,88 @@ fn delimiter_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
             [Anim::fade_in(d).during(0.6)]
                 .into_iter()
                 .chain([Anim::fade_in(t).during(0.5)]),
+        );
+    }
+
+    tl.wait(0.8);
+    Ok(tl)
+}
+
+/// arrow_demo：Typst 装配箭头验收示例（M9.14）。
+///
+/// 标题淡入 → 三支箭头（水平单头 / 斜向单头 / 水平双头）依次淡入 +
+/// 中文括注（manim `Arrow`/`DoubleArrow` 对应；头高随跨度自适应并封顶，
+/// 双头两端对称）。形状 = Typst MATH stretch 装配（NewCMMath GlyphAssembly），
+/// 闭合填充字形，出场用 fade_in（填充字形禁用 create）。
+fn arrow_demo(theme: &Theme, fps: u32) -> ffanim_core::Result<Timeline> {
+    use ffanim_typst::{ArrowKind, TypstEngine};
+
+    // 括注为中文：须 CJK 字形（find_cjk_font 优先，缺失时回退系统拉丁字体）
+    let font = ffanim_typst::find_cjk_font()
+        .and_then(|path| ffanim::Font::from_path(&path).ok())
+        .map(Ok)
+        .unwrap_or_else(|| load_font(None))?;
+    // 箭头 = Typst MATH stretch 装配，与公式排版同引擎
+    let mut engine = TypstEngine::new(8);
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // 1) 标题淡入
+    let text_path = font.outline_text("Arrow 箭头", 56.0).unwrap();
+    let bounds = text_path.bounding_box();
+    let dx = f64::from(w) / 2.0 - (bounds.x0 + bounds.x1) / 2.0;
+    let title = tl.add(
+        Item::from_path(text_path)
+            .with_fill(fg)
+            .with_transform(Affine::translate((dx, f64::from(h) * 0.10))),
+    );
+    tl.play(Anim::fade_in(title).during(0.7));
+
+    // 2) 三支箭头依次淡入 + 括注（交替前景/强调色；括注在杆中点上方居中）
+    let specs: [(ArrowKind, Point, Point, &str); 3] = [
+        (
+            ArrowKind::Single,
+            Point::new(220.0, 300.0),
+            Point::new(740.0, 300.0),
+            "单头",
+        ),
+        (
+            ArrowKind::Single,
+            Point::new(280.0, 460.0),
+            Point::new(680.0, 380.0),
+            "斜向",
+        ),
+        (
+            ArrowKind::Double,
+            Point::new(300.0, 200.0),
+            Point::new(660.0, 200.0),
+            "双头",
+        ),
+    ];
+    for (i, (kind, from, to, label)) in specs.into_iter().enumerate() {
+        let arrow = engine.arrow(from, to, kind)?;
+        // 括注：杆中点上方 34px，bbox 中心对齐杆中点
+        let mid = Point::new((from.x + to.x) / 2.0, (from.y + to.y) / 2.0);
+        let label_path = font.outline_text(label, 30.0).unwrap();
+        let lb = label_path.bounding_box();
+        let lx = mid.x - (lb.x0 + lb.x1) / 2.0;
+        let ly = mid.y - 34.0 - (lb.y0 + lb.y1) / 2.0;
+        let color = if i % 2 == 0 { fg } else { accent };
+        let (a, t) = (
+            tl.add(arrow.with_fill(color)),
+            tl.add(
+                Item::from_path(label_path)
+                    .with_fill(color)
+                    .with_transform(Affine::translate((lx, ly))),
+            ),
+        );
+        tl.wait(0.15);
+        tl.together(
+            [Anim::fade_in(a).during(0.8)]
+                .into_iter()
+                .chain([Anim::fade_in(t).during(0.6)]),
         );
     }
 

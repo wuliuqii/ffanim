@@ -55,6 +55,7 @@
 | P1-6 | 数字滚动 DecimalNumber | DecimalNumber + tracker | tracker+updater+Typst 组合已可行，缺"每帧改文本"的示范与便利封装（Typst LRU 缓存使逐帧排版可行） | S~M |
 | P1-7 | 标注复合件：SurroundingRectangle/Underline/Cross/BackgroundRect | 同名 | ✅ 已落地（M9.8）：`Item::surrounding_rect/underline/cross/background_rect`（基于注册基线 bbox + `Item::group` 拼组标注），annotate_demo 场景验收 | S |
 | P1-8 | Brace 花括号 + 括注文本 | Brace | ✅ M9.12+M9.13：`TypstEngine::delimiter(kind,...)` 四类定界符（Delimiter 枚举：brace/bracket/paren/双线同装配）——Typst OpenType MATH 装配（`lr(size: #Npt, \{)` 排拉伸花括号），跨度精确/深度∝字号线性，规范形 + 四向旋转，散件对 | S |
+| M9.14 | Arrow 装配箭头 | Arrow/DoubleArrow | ✅ M9.14：`TypstEngine::arrow(from, to, kind)`（ArrowKind::Single/Double）——Typst MATH `stretch(->)` 装配（跨度精确零偏差），头高随跨度自适应封顶，显式矩阵弦角复合支持斜向；与几何 `Item::arrow`（线+三角头）并存 | S |
 | P1-9 | GIF / WebM 输出 + 画质预设 | -ql/-qm/-qh/-qk | M9 已列（GIF 循环、WebM 编码参数）， EncodeOptions 质量预设 | M |
 | P1-10 | VGroup 语义糖：批量注册 + 整体动画 | VGroup | ✅ 已落地（M9.7）：`tl.add_group(Vec<Item>) -> Vec<ItemId>`（注册侧；组级动画配 `tl.group`/`together`） | S |
 | P1-11 | save_state / restore | mobject.save_state() | ✅ 已落地（M9.7）：`tl.save_state(id) -> Item` + `tl.restore(id, &snap) -> ItemId`（快照 + 完整 morph，返回新句柄） | S |

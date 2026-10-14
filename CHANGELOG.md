@@ -57,6 +57,20 @@
 - 验收：delimiter_demo 场景（四类定界符贴横条四侧 + 中文括注）+ ffanim-typst 单测 9 +
   ffanim 集成 1（workspace 172 测全绿）
 
+### M9.14 箭头装配：Arrow 迁 Typst MATH stretch 装配（2026-10-14）
+
+- feat(typst): 新增 `arrow.rs`——`ArrowKind`（Single/Double）+ `TypstEngine::arrow(from, to, kind)`
+  两点式（manim `Arrow(start, end)` 对齐）；`stretch(->, size: #Npt)` 触发 NewCMMath
+  GlyphAssembly 拉伸，跨度精确吸收（宽零偏差——无 delimiter 档位离散，免精调仿射）
+- 新实证：头高/杆厚 ∝ 字号（0.520 / 0.048，pt 空间精确线性，探针定标）；单头 10 片 /
+  双头 19 片（2 头 + 17 杆）；关系符进 `lr(size:)` 不拉伸（w1=w2 实证）→ 必须走 `stretch()`
+- 几何：头高 = clamp(span×0.15, 10, 24) px（manim capped 语义同族），字号反推；
+  归一化（原点=from、杆沿 +x、中线 y=0、头在 +x 端）+ 显式 6 元矩阵弦角复合
+  （c=dx/span, s=dy/span），头尖精确闭合 to；跨度 <20px 报错；`with_fill` 着色 +
+  `fade_in` 出场（填充字形禁 create）
+- 验收：arrow_demo 场景（水平单头/斜向单头/水平双头依次淡入 + 中文括注）+
+  ffanim-typst 单测 6 + ffanim 集成 1（workspace 184 测全绿）
+
 ### M9.12 manim 对齐第九批：P1-8 Brace 花括号 + 括注文本（2026-10-13，2026-10-14 改 Typst 装配机制）
 
 - feat(typst): `TypstEngine::brace(&target, dir, buff)`——沿目标 bbox 指定侧

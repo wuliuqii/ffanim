@@ -806,3 +806,71 @@ fn delimiter_四类定界符编排() {
     assert_eq!(render_frame(&ct, 45).items.len(), 3);
     assert_eq!(render_frame(&ct, 59).items.len(), 3);
 }
+
+#[test]
+fn arrow_两点式编排() {
+    use ffanim::kurbo::Point;
+    use ffanim::render_frame;
+    use ffanim::typst::ArrowKind;
+
+    // 无系统字体的环境跳过（与 delimiter 测试同一兜底模式）
+    if ffanim_core::text::find_system_font(&[]).is_none() {
+        eprintln!("无系统字体，跳过");
+        return;
+    }
+    let mut engine = TypstEngine::new(8);
+
+    // 几何：水平单头（span 400 → 头 24 封顶，±12 对称张开）
+    let from = Point::new(100.0, 200.0);
+    let to = Point::new(500.0, 200.0);
+    let arrow = engine.arrow(from, to, ArrowKind::Single).expect("单头构造");
+    let bb = arrow.bbox();
+    assert!((bb.x0 - 100.0).abs() < 0.5, "尾端贴 from {bb:?}");
+    assert!((bb.x1 - 500.0).abs() < 0.5, "头尖贴 to {bb:?}");
+    assert!((bb.height() - 24.0).abs() < 0.5, "头高 24 封顶 {bb:?}");
+    assert!((bb.y0 + bb.y1 - 400.0).abs() < 0.5, "杆过弦中线 y=200");
+
+    // 双头 + 斜向构造冒烟
+    let dbl = engine.arrow(from, to, ArrowKind::Double).expect("双头构造");
+    let dbb = dbl.bbox();
+    assert!(
+        dbb.width() > 0.0 && dbb.height() > 0.0,
+        "双头 bbox 非空 {dbb:?}"
+    );
+    let diag = engine
+        .arrow(
+            Point::new(100.0, 100.0),
+            Point::new(400.0, 300.0),
+            ArrowKind::Single,
+        )
+        .expect("斜向构造");
+    let db = diag.bbox();
+    assert!(
+        db.width() > 0.0 && db.height() > 0.0,
+        "斜向 bbox 非空 {db:?}"
+    );
+
+    // 跨度过短报错
+    let short = engine.arrow(
+        Point::new(0.0, 0.0),
+        Point::new(10.0, 0.0),
+        ArrowKind::Single,
+    );
+    assert!(short.is_err(), "跨度 10px 低于下限应报错");
+
+    // 编排：目标淡入 → 箭头淡入（填充字形禁 create，统一 fade_in）
+    let mut tl = Timeline::new(960, 540, 30, BG);
+    let target = tl.add(Item::circle(Circle::new((100.0, 200.0), 20.0)).with_fill(FG));
+    tl.play(Anim::fade_in(target).during(0.8));
+    let aid = tl.add(arrow);
+    tl.wait(0.2);
+    tl.play(Anim::fade_in(aid).during(1.0));
+    let ct = tl.compile();
+    assert_eq!(ct.anims.len(), 2, "1 目标淡入 + 1 箭头淡入");
+    assert_eq!(ct.duration_frames, 60, "0.8 + 0.2 + 1.0 @30fps");
+
+    // 求值：目标窗口前 1 件 → 同窗中 2 件 → 段后 2 件
+    assert_eq!(render_frame(&ct, 29).items.len(), 1);
+    assert_eq!(render_frame(&ct, 45).items.len(), 2);
+    assert_eq!(render_frame(&ct, 59).items.len(), 2);
+}
