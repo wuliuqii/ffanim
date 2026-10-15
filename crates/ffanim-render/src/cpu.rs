@@ -136,6 +136,34 @@ mod tests {
     }
 
     #[test]
+    fn 组内alpha描边线渲染() {
+        let mut draw = DrawList::new(64, 64, Color::new(0, 0, 0, 255));
+        // group 内半透明细线（circle_sine 引导线同款样式）
+        draw.push(Item {
+            id: 1,
+            shape: ffanim_core::Shape::Group(vec![
+                Item::line((8.0, 32.0), (56.0, 32.0))
+                    .with_stroke(Color::new(255, 255, 255, 120))
+                    .with_stroke_width(1.5),
+            ]),
+            paint: Default::default(),
+            transform: Affine::IDENTITY,
+        });
+
+        let mut backend = CpuBackend;
+        let buf = backend.render(&draw);
+        // 线上多点应高于背景（alpha 120 细线混合后 ≈ 100+）
+        for x in [16usize, 32, 48] {
+            let px = (32 * 64 + x) * 4;
+            assert!(
+                buf[px] > 60,
+                "x={x} 处应有半透明线像素: {:?}",
+                &buf[px..px + 4]
+            );
+        }
+    }
+
+    #[test]
     fn 图片渲染冒烟() {
         // 2x2 纯红图片平移到 (3,3)，画布 8x8
         let mut rgba = vec![0u8; 4 * 4];

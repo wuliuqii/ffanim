@@ -1,7 +1,7 @@
 # 附录：与 manim gallery 对照
 
 以 [manim 官方 Example Gallery]（`docs/source/examples.rst`，5 大节 20 例）
-为对照表逐项核对。结论先行：**20 例中 13 例已有对应示例/能力，4 例可用
+为对照表逐项核对。结论先行：**20 例中 14 例已有对应示例/能力，3 例可用
 现有词汇拼出，3 例存在真实能力缺口**（下表 🟡/❌），3D 类按定位不追。
 
 ## 逐项对照
@@ -28,7 +28,7 @@
 | HeatDiagramPlot | 折线/散点图 `plot_line_graph` | `line_graph`（polyline + scatter 拼装） | ✅ |
 | FollowingGraphCamera | 相机跟随曲线 | Camera 即 Item + `transform_to`（M8.1） | 🟡 可拼 |
 | OpeningManim | 公式 Write + 网格非线性形变 | 公式族 ✅；`apply_function` 逐点形变 ❌ | 🟡 半覆盖 |
-| SineCurveUnitCircle | 单位圆展开正弦波 | 信号 updater 可拼，无现成示例 | 🟡 可拼 |
+| SineCurveUnitCircle | 单位圆展开正弦波 | `circle_sine_demo`（`plot_parametric` + tracker 联动） | ✅ |
 
 > 3D 全家桶（ThreeDScene/Surface/ThreeDAxes 共 4 例）超出 2D 目标场景，
 > 已在仓库 `docs/05-manim功能差距清单.md` P2 登记，不追。

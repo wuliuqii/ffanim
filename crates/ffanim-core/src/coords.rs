@@ -158,20 +158,43 @@ impl Axes {
                 self.c2p(x, f(x))
             })
             .collect();
-        let mut path = BezPath::new();
-        path.move_to(pts[0]);
-        // Catmull-Rom → 三次贝塞尔：控制点取相邻点的 1/6 切线
-        for i in 0..pts.len() - 1 {
-            let p0 = pts[i.saturating_sub(1)];
-            let p1 = pts[i];
-            let p2 = pts[i + 1];
-            let p3 = pts[(i + 2).min(pts.len() - 1)];
-            let c1 = p1 + (p2 - p0) / 6.0;
-            let c2 = p2 - (p3 - p1) / 6.0;
-            path.curve_to(c1, c2, p2);
-        }
-        Item::from_path(path)
+        smooth_path(pts)
     }
+
+    /// 参数曲线：t 在 t_range 上等距采样，(fx(t), fy(t)) 经 c2p 变换后平滑。
+    /// 单位圆（cos, sin）、利萨茹曲线等 y=f(x) 无法表达的单值曲线用此构造。
+    pub fn plot_parametric(
+        &self,
+        fx: impl Fn(f64) -> f64,
+        fy: impl Fn(f64) -> f64,
+        t_range: (f64, f64),
+    ) -> Item {
+        const SAMPLES: usize = 200;
+        let (ta, tb) = t_range;
+        let pts: Vec<Point> = (0..=SAMPLES)
+            .map(|i| {
+                let t = ta + (tb - ta) * i as f64 / SAMPLES as f64;
+                self.c2p(fx(t), fy(t))
+            })
+            .collect();
+        smooth_path(pts)
+    }
+}
+
+/// 采样点列 → Catmull-Rom 平滑路径（控制点取相邻点 1/6 切线），plot 家族共用。
+fn smooth_path(pts: Vec<Point>) -> Item {
+    let mut path = BezPath::new();
+    path.move_to(pts[0]);
+    for i in 0..pts.len() - 1 {
+        let p0 = pts[i.saturating_sub(1)];
+        let p1 = pts[i];
+        let p2 = pts[i + 1];
+        let p3 = pts[(i + 2).min(pts.len() - 1)];
+        let c1 = p1 + (p2 - p0) / 6.0;
+        let c2 = p2 - (p3 - p1) / 6.0;
+        path.curve_to(c1, c2, p2);
+    }
+    Item::from_path(path)
 }
 
 impl Color {
@@ -229,6 +252,22 @@ mod tests {
         // 起点 = f(−2) = 4 的像素位置
         let expected = axes.c2p(-2.0, 4.0);
         assert!(matches!(els[0], kurbo::PathEl::MoveTo(p) if (p.x - expected.x).abs() < 1e-9));
+    }
+
+    #[test]
+    fn plot_parametric单位圆过四象限采样点() {
+        let axes = test_axes();
+        let item = axes.plot_parametric(|t| t.cos(), |t| t.sin(), (0.0, std::f64::consts::TAU));
+        let Shape::Path(path) = &item.shape else {
+            panic!("应为路径");
+        };
+        let els = path.elements();
+        assert_eq!(els.len(), 201);
+        // 起点 = 数据 (1, 0)；t=π/2 处应为数据 (0, 1) 附近（平滑曲线过采样点）
+        let start = axes.c2p(1.0, 0.0);
+        assert!(
+            matches!(els[0], kurbo::PathEl::MoveTo(p) if (p.x - start.x).abs() < 1e-9 && (p.y - start.y).abs() < 1e-9)
+        );
     }
 
     #[test]

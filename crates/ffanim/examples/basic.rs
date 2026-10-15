@@ -25,6 +25,7 @@ const SCENES: &[&str] = &[
     "riemann_area",
     "line_graph",
     "angle_demo",
+    "circle_sine_demo",
 ];
 
 fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
@@ -40,6 +41,7 @@ fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
         "riemann_area" => riemann_area(theme, FPS),
         "line_graph" => line_graph(theme, FPS),
         "angle_demo" => angle_demo(theme, FPS),
+        "circle_sine_demo" => circle_sine_demo(theme, FPS),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -932,3 +934,80 @@ fn angle_group(
     );
     vec![arm, arc, label]
 }
+
+// ANCHOR: circle_sine_demo
+/// SineCurveUnitCircle 对齐场景：单位圆动点绕转 ↔ 正弦曲线逐段展开（联动）。
+///
+/// `plot_parametric` 画单位圆（新 API 验收：参数曲线超越 y=f(x) 单值限制）→
+/// 动点/曲线前沿点/引导线由 phase tracker 每帧重建 → 同窗同步：
+/// 正弦曲线 create 与点绕圆一圈等长（同 Smooth rate，进度一致）。
+fn circle_sine_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
+    use ffanim::Axes;
+
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    let tau = std::f64::consts::TAU;
+    // 左：单位圆区（数据域 [-1.4,1.4]²）；右：正弦区（x 数据域 [0, 2π] 与相位同标度）
+    let circle_axes = Axes::new((-1.4, 1.4), (-1.4, 1.4))
+        .with_size(260.0, 260.0)
+        .with_center(190.0, 270.0);
+    let sine_axes = Axes::new((0.0, tau), (-1.4, 1.4))
+        .with_size(500.0, 260.0)
+        .with_center(650.0, 270.0);
+
+    // 轴与网格
+    let grid1 = tl.add(circle_axes.grid_item(fg.with_alpha(40), 1.0));
+    let grid2 = tl.add(sine_axes.grid_item(fg.with_alpha(40), 1.0));
+    tl.together([
+        Anim::fade_in(grid1).during(0.6),
+        Anim::fade_in(grid2).during(0.6),
+    ]);
+    let ax1 = tl.add(circle_axes.to_item(&theme.style));
+    let ax2 = tl.add(sine_axes.to_item(&theme.style));
+    tl.overlap(0.3);
+    tl.together([Anim::create(ax1).during(1.0), Anim::create(ax2).during(1.0)]);
+
+    // 单位圆：plot_parametric（cos, sin）
+    let circle = tl.add(
+        circle_axes
+            .plot_parametric(|t| t.cos(), |t| t.sin(), (0.0, tau))
+            .with_stroke(fg)
+            .with_stroke_width(3.0),
+    );
+    tl.play(Anim::create(circle).during(1.2));
+
+    // 正弦曲线：参数化 (t, sin t)，x 数据域 [0, 2π] 恰好铺满
+    let sine = tl.add(
+        sine_axes
+            .plot_parametric(|t| t, |t| t.sin(), (0.0, tau))
+            .with_stroke(accent)
+            .with_stroke_width(3.0),
+    );
+
+    // 联动三件套：圆上动点 + 曲线对应点 + 跨区引导线（phase 每帧重建，全程可见）
+    let phase = tl.add_tracker(0.0);
+    tl.add_updater(&[phase], move |v| {
+        let t = v[0];
+        let c_pt = circle_axes.c2p(t.cos(), t.sin());
+        let s_pt = sine_axes.c2p(t, t.sin());
+        let conn = Item::line(c_pt, s_pt)
+            .with_stroke(fg.with_alpha(120))
+            .with_stroke_width(1.5);
+        let dot_c = Item::circle(Circle::new(c_pt, 8.0)).with_fill(accent);
+        let dot_s = Item::circle(Circle::new(s_pt, 8.0)).with_fill(accent);
+        Item::group(vec![conn, dot_c, dot_s])
+    });
+
+    // 同窗同步：曲线逐段生长 ↔ 点绕圆一圈（同 duration 同 rate，进度一致）
+    tl.wait(0.2);
+    tl.together([
+        Anim::create(sine).during(1.8),
+        Anim::set_value(phase, tau).during(1.8),
+    ]);
+    tl.wait(0.8);
+    Ok(tl)
+}
+// ANCHOR_END
