@@ -74,7 +74,11 @@ fn parse_example(path: &Path) -> Option<Example> {
                 .unwrap_or("");
             for lit in body.split('"').skip(1).step_by(2) {
                 if !lit.is_empty() {
-                    scenes.push(Scene { name: lit.to_string(), doc: String::new(), rendered: false });
+                    scenes.push(Scene {
+                        name: lit.to_string(),
+                        doc: String::new(),
+                        rendered: false,
+                    });
                 }
             }
             in_scenes = !body.contains(']');
@@ -85,7 +89,11 @@ fn parse_example(path: &Path) -> Option<Example> {
                 // 提取引号内场景名："name" 的奇数段
                 for lit in t.split('"').skip(1).step_by(2) {
                     if !lit.is_empty() {
-                        scenes.push(Scene { name: lit.to_string(), doc: String::new(), rendered: false });
+                        scenes.push(Scene {
+                            name: lit.to_string(),
+                            doc: String::new(),
+                            rendered: false,
+                        });
                     }
                 }
             }
@@ -117,9 +125,18 @@ fn parse_example(path: &Path) -> Option<Example> {
     let single = !has_scenes;
     if single {
         // 创作示例：场景名 = 文件名（产物 out/<stem>.mp4）
-        scenes.push(Scene { name: name.clone(), doc: String::new(), rendered: false });
+        scenes.push(Scene {
+            name: name.clone(),
+            doc: String::new(),
+            rendered: false,
+        });
     }
-    Some(Example { name, title, scenes, single })
+    Some(Example {
+        name,
+        title,
+        scenes,
+        single,
+    })
 }
 
 /// 渲染单场景：子进程调 examples（复用其出片管线），产物 out/<scene>.mp4。
@@ -217,7 +234,11 @@ fn main() -> std::io::Result<()> {
         .collect();
     // 呈现顺序：chapter_meta 序优先，未登记文件按文件名排后
     paths.sort_by_key(|p| {
-        let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let stem = p
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
         (chapter_meta(&stem).0, stem)
     });
     let mut examples: Vec<Example> = paths.iter().filter_map(|p| parse_example(p)).collect();
@@ -259,6 +280,8 @@ fn main() -> std::io::Result<()> {
         .map(|e| e.scenes.iter().filter(|s| s.rendered).count())
         .sum::<usize>();
     let total: usize = examples.iter().map(|e| e.scenes.len()).sum();
-    println!("已生成 docs/book/src/（{total_rendered}/{total} 场景有视频），运行 `just book` 构建书籍");
+    println!(
+        "已生成 docs/book/src/（{total_rendered}/{total} 场景有视频），运行 `just book` 构建书籍"
+    );
     Ok(())
 }
