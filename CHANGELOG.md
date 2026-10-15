@@ -7,6 +7,37 @@
 
 ### Added
 
+- feat(render): clip 裁剪原语（docs/07 §1.1，透镜/区间显示/滚动窗口基元）——
+  `Item` 新增 `clip: Option<BezPath>` 字段与 `with_clip` 构建器（路径为
+  Item 局部坐标，随 `transform` 一起变换；Group 作用于整棵子树）；场景
+  遍历改事件流 `walk_events`（`Draw/PushClip/PopClip` 严格栈式配对），
+  CPU（vello_cpu `push_clip_layer`，clip 变换 push 时刻固化）与 GPU
+  （vello `push_clip_layer` 显式传 transform，层栈不保存变换）双后端
+  映射一致；形变产物继承 from 侧裁剪域。验收：CPU 像素级测试（叶子裁剪
+  + Group 随变换子树裁剪）、GPU 冒烟、`examples/lens.rs` 放大镜透镜
+  （整帧场景克隆 × 镜心不动点放大仿射 + 圆 clip 一次渲染合成，出片
+  282 帧抽帧目检——镜内矢量级放大含线宽 2.5×，镜外原样，透镜错位
+  视觉正确）
+- feat(core): ODE 数值积分工具集 `ffanim_core::math`（docs/07 §2.1）——
+  `rk4(f, y0, t0, t1, steps)` 四阶 Runge-Kutta 构建期预积分 + `Trajectory`
+  均匀网格查表（`at(t)` 线性插值、越界钳位，动画窗口长于积分窗口时
+  定格端点）+ `component(k)` 分量序列（喂 `Axes::plot` 相图）+ `bisect`
+  二分求根；完全匹配两阶段时间轴模型（构建期积分、渲染期纯查表）。
+  验收：抛体运动对解析解、无阻尼单摆能量守恒（8s 摆动漂移 < 1e-6）、
+  `examples/pendulum.rs` 出片（支点+杆+摆锤+摆角弧 updater 查表重建）
+- feat(render): PNG 序列帧导出（docs/07 §4.1）——`write_png_sequence`
+  （`{dir}/{n:04}.png`，原子计数器动态分派帧号防首帧排版冷启动负载
+  倾斜，worker 数为核数一半不超订阅）+ 门面 `render_to_png_frames`
+  （全片）/`render_to_png_frames_range`（片段，传全片帧号偏移与 mp4
+  对帧）；渲染走与出片相同的 `FrameBackend::auto` GPU 优先策略，PNG
+  编码纯 Rust 不依赖 ffmpeg——下游剪辑/审片标准中间格式与论文插图
+  逐帧提取；端到端测试覆盖文件名对帧与像素断言
+- feat(bench): 性能回归门禁（docs/07 §6.1）——新增编排/求值维度基准
+  `crates/ffanim-core/benches/pipeline.rs`（`compile_60_items` 10.5µs /
+  `eval_frame_1080p` 3.5µs，与渲染维度 render.rs 同负载互补成完整
+  管线）；`just bench-gate`（`scripts/bench_gate.sh`）全维度对阈值
+  断言（>50% 硬回退即红，阈值 = docs/benchmarks.md 基线 × 宽松系数
+  防环境波动），数字入库 docs/benchmarks.md
 - feat(render): GPU 默认出片 + 自动降级——新增后端选择器
   `ffanim_render::FrameBackend`（枚举 `Gpu/Cpu` 双分支，均 `Send`，出片
   管线经 `Mutex` 单实例共享，GPU 提交串行但帧求值仍分段并行）：

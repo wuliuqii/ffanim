@@ -29,6 +29,7 @@ ffanim 门面全部公开 API（与 `scripts/api_coverage.sh` 门禁同步，
 | `Axes` | 坐标系：`plot` 画函数、`c2p` 数据→像素、`grid_item/to_item` | [第 4 课](lesson-axes.md) |
 | `Camera` | 相机（注视点/缩放/旋转），`affine(w,h)` 编译为仿射 | [第 6 课](lesson-camera.md) |
 | `BoolOp` | 布尔四则 `Intersection/Union/Xor/Difference`（配 `Item::boolean`） | [配方：布尔](recipes.md) |
+| `Item::with_clip` | 裁剪域：Item 局部坐标路径随变换走，Group 作用整棵子树（透镜/滚动窗口基元） | [透镜](lens.md) |
 | `kurbo` | kurbo 几何库 re-export（`BezPath/Circle/Rect/Affine/Point/Vec2`） | [第 1 课](lesson-shapes.md) |
 
 ## 文字与公式

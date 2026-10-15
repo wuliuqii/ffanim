@@ -34,9 +34,14 @@ demo-formula:
 fourier:
 	cargo run --release -p ffanim --example fourier
 
-# 性能基准：criterion（1080p 单帧渲染基线，数字入库 docs/benchmarks.md）
+# 性能基准：criterion（渲染 render + 编排/求值 pipeline，数字入库 docs/benchmarks.md）
 bench:
-	cargo bench -p ffanim-render
+        cargo bench -p ffanim-render
+        cargo bench -p ffanim-core
+
+# 性能门禁（docs/07 §6.1）：跑全维度 bench 并对阈值断言（>50% 硬回退即红）
+bench-gate:
+        ./scripts/bench_gate.sh
 
 # 示例书：生成书源（examples 元数据 + 渲染缺失产物）→ mdbook 构建 docs/book/
 book:

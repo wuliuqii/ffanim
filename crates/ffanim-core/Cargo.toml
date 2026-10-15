@@ -24,3 +24,10 @@ fontdb = "0.23"
 usvg = { version = "0.45", default-features = false }
 tiny-skia-path = "0.11"
 i_overlay = "9.1.0"
+
+[dev-dependencies]
+criterion = "0.7"
+
+[[bench]]
+name = "pipeline"
+harness = false
