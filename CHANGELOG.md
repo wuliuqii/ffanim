@@ -5,6 +5,27 @@
 
 ## [Unreleased]
 
+### Added
+
+- feat(gally): 网页示例画廊生成器 `ffanim-gally`——扫描
+  `crates/ffanim/examples/*.rs` 自动提取标题/场景清单/doc 摘要/源码全文
+  （零硬编码数据源，新增 example 免配置），逐场景复用 examples 出片管线
+  渲染 mp4，生成 `docs/gallery/index.html`（卡片网格 + 视频预览 + 源码
+  折叠，对齐 manim 官网画廊形态）；`SKIP_RENDER=1` 只重建 HTML 复用已有
+  产物
+
+### Changed
+
+- refactor(examples): 18 个内置场景迁移至门面 crate `examples/`（对齐
+  manim `example_scenes` 形态）——`basic.rs`(8)/`typography.rs`(5)/
+  `assemblies.rs`(4)/`tables.rs`(1) 四文件分组，单文件多场景 + argv 寻址
+  （缺省全渲染，≙ `manim -a`），只依赖门面公开 API；18 场景 timeline
+  JSON 与迁移前 md5 逐一比对 18/18 一致（零语义漂移）
+- refactor(cli): `ffanim-cli` 退回纯薄壳——删除场景绑定子命令 12→4
+  （仅 new/audio/info/diff），删 `scenes.rs`（1283 行）与孤儿依赖
+  （render/encode/typst/preview）；门面补公开导出 `ItemId`/
+  `DecimalNumberOptions`；`just demo`/`demo-formula` 改走 examples 形态
+
 ## [v0.4.0] - 2026-10-14
 
 M9 manim 功能对齐收官：P1 差距清单 14 项全部落地（M9.1~M9.18），
