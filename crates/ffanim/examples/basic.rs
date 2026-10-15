@@ -24,6 +24,7 @@ const SCENES: &[&str] = &[
     "shapes_demo",
     "riemann_area",
     "line_graph",
+    "angle_demo",
 ];
 
 fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
@@ -38,6 +39,7 @@ fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
         "shapes_demo" => shapes_demo(theme, FPS),
         "riemann_area" => riemann_area(theme, FPS),
         "line_graph" => line_graph(theme, FPS),
+        "angle_demo" => angle_demo(theme, FPS),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -829,4 +831,104 @@ fn scatter(axes: &ffanim::Axes, pts: &[(f64, f64)], r: f64, fill: ffanim::Color)
     pts.iter()
         .map(|(x, y)| Item::circle(Circle::new(axes.c2p(*x, *y), r)).with_fill(fill))
         .collect()
+}
+
+// ANCHOR: angle_demo
+/// MovingAngle 对齐场景：夹角测量件拼装（弧 + 双线 + θ 标注，纯现有 API）。
+///
+/// 固定线 + 动线（60°）+ 夹角弧 + θ 公式标注入场 → 交叉淡切动态组 →
+/// 夹角 60°→15°→90° 摆动，弧与 θ 沿角平分线跟随（tracker 驱动逐帧重建）。
+/// 几何常量：顶点偏下居中，上方留 90° 摆动空间；角度均为数学角（逆时针为正）。
+const ANGLE_O: Point = Point::new(480.0, 380.0);
+const ANGLE_LEN: f64 = 260.0;
+const ANGLE_ARC_R: f64 = 70.0;
+
+fn angle_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
+    use ffanim::typst::{FormulaOptions, TypstEngine};
+
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // θ 标注排版一次：中心锚定到原点的字形，动态段仅做仿射平移（无逐帧重排）
+    let mut engine = TypstEngine::new(8);
+    let theta_formula = engine.formula(
+        "theta",
+        &FormulaOptions {
+            font_size_pt: 30.0,
+            text_color: accent,
+        },
+    )?;
+    let base = theta_formula.fit_transform(0.0, 0.0, 1.6);
+    // 字形保留无 transform 的局部坐标，label 处合成 translate×base（with_transform 是替换语义）
+    let theta_glyph = theta_formula.to_items().remove(0);
+
+    // 静态段：顶点 → 固定线（0°）→ 动线（60°）→ 弧 + θ 标注
+    let dot = tl.add(Item::circle(Circle::new(ANGLE_O, 5.0)).with_fill(fg));
+    tl.play(Anim::fade_in(dot).during(0.3));
+    let fixed = tl.add(
+        Item::line(ANGLE_O, Point::new(ANGLE_O.x + ANGLE_LEN, ANGLE_O.y))
+            .with_stroke(fg)
+            .with_stroke_width(3.0),
+    );
+    tl.play(Anim::create(fixed).during(0.7));
+    let parts = angle_group(&theta_glyph, base, 60.0, accent);
+    let arm = tl.add(parts[0].clone());
+    let arc_id = tl.add(parts[1].clone());
+    let label_id = tl.add(parts[2].clone());
+    tl.play(Anim::create(arm).during(0.7));
+    tl.wait(0.2);
+    tl.together([
+        Anim::fade_in(arc_id).during(0.6),
+        Anim::fade_in(label_id).during(0.6),
+    ]);
+
+    // 动态组：夹角 tracker 驱动（动线 + 弧 + θ 三件每帧重建，初始 60° 同形无缝切换）
+    let angle = tl.add_tracker(60.0);
+    let dyn_angle = tl.add_updater(&[angle], move |v| {
+        Item::group(angle_group(&theta_glyph, base, v[0], accent))
+    });
+    tl.wait(0.3);
+    let mut cross: Vec<_> = [arm, arc_id, label_id]
+        .iter()
+        .map(|&id| Anim::fade_out(id).during(0.5))
+        .collect();
+    cross.push(Anim::fade_in(dyn_angle).during(0.5));
+    tl.together(cross);
+
+    // 夹角摆动：收窄 → 张开到直角（Smooth 默认缓动）
+    tl.play(Anim::set_value(angle, 15.0).during(1.2));
+    tl.play(Anim::set_value(angle, 90.0).during(1.6));
+    tl.wait(0.8);
+    Ok(tl)
+}
+// ANCHOR_END
+
+/// 夹角三件套：动线（0°→theta_deg 数学角）+ 夹角弧 + θ 标注（角平分线方向）。
+/// 动态/静态组共用同一构造，保证切换前后形状一致。
+fn angle_group(
+    theta_glyph: &Item,
+    base: Affine,
+    theta_deg: f64,
+    stroke: ffanim::Color,
+) -> Vec<Item> {
+    let rad = theta_deg.to_radians();
+    let tip = Point::new(
+        ANGLE_O.x + ANGLE_LEN * rad.cos(),
+        ANGLE_O.y - ANGLE_LEN * rad.sin(),
+    );
+    let arm = Item::line(ANGLE_O, tip)
+        .with_stroke(stroke)
+        .with_stroke_width(3.0);
+    let arc = Item::arc(ANGLE_O, ANGLE_ARC_R, 0.0, theta_deg)
+        .with_stroke(stroke)
+        .with_stroke_width(2.0);
+    // θ 标注：角平分线方向（数学角 θ/2），半径略大于弧；translate×base 复合锚定中心
+    let mid = (theta_deg / 2.0).to_radians();
+    let d = ANGLE_ARC_R + 45.0;
+    let label = theta_glyph.clone().with_transform(
+        Affine::translate((ANGLE_O.x + d * mid.cos(), ANGLE_O.y - d * mid.sin())) * base,
+    );
+    vec![arm, arc, label]
 }

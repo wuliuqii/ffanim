@@ -1,7 +1,7 @@
 # 附录：与 manim gallery 对照
 
 以 [manim 官方 Example Gallery]（`docs/source/examples.rst`，5 大节 20 例）
-为对照表逐项核对。结论先行：**20 例中 12 例已有对应示例/能力，5 例可用
+为对照表逐项核对。结论先行：**20 例中 13 例已有对应示例/能力，4 例可用
 现有词汇拼出，3 例存在真实能力缺口**（下表 🟡/❌），3D 类按定位不追。
 
 ## 逐项对照
@@ -15,7 +15,7 @@
 | BooleanOperations | 椭圆并/交/差布尔运算 | 无（vello 无布尔路径） | ❌ 缺口 |
 | PointMovingOnShapes | 点沿圆周移动 + 绕点旋转 | `move_demo`（move_along_path）+ `Anim::rotate` | ✅ |
 | MovingAround | shift/填充/scale/rotate 动作糖 | `Anim::shift_to/rotate_to/scale_to`（M9.3） | ✅ |
-| MovingAngle | 两线夹角弧 + θ 随 tracker | arc 可画弧，但无 `Angle` 测量件 | 🟡 可拼 |
+| MovingAngle | 两线夹角弧 + θ 随 tracker | `angle_demo`（弧+双线+θ 标注拼装，角平分线跟随） | ✅ |
 | MovingDots | 双 tracker 分别驱动 x/y | `add_tracker` + 信号 updater（M8.3） | ✅ |
 | MovingGroupToDestination | 组整体对齐目标点 | `move_to` + group | ✅ |
 | MovingFrameBox | 公式框选强调 | `annotate_demo`（circumscribe/surrounding_rect） | ✅ |
@@ -40,7 +40,7 @@
 | ~~1~~ | ~~曲线下面积填充 + 黎曼矩形~~ | `get_area` / `get_riemann_rectangles` | — | ✅ 已由 `riemann_area` 纯现有 API 拼装实现（basic.rs） |
 | ~~2~~ | ~~折线/散点图~~ | `Axes.plot_line_graph` | — | ✅ 已由 `line_graph` 纯现有 API 拼装实现（basic.rs） |
 | 3 | 网格逐点形变 | `apply_function` + `prepare_for_nonlinear_transform` | M | OpeningManim 级演示效果 |
-| 4 | Angle 角度测量件 | `Angle(line1, line2)` | S~M | 几何教学常用 |
+| ~~4~~ | ~~Angle 角度测量件~~ | `Angle(line1, line2)` | — | ✅ 已由 `angle_demo` 纯现有 API 拼装实现（basic.rs） |
 | 5 | 布尔路径运算 | `Union/Intersection/Exclusion` | L | vello 无布尔，需引入 path 布尔库或自研，缓 |
 | 6 | 轨迹拖尾件 | PointWithTrace 模式 | S | 低频，可拼 |
 | 7 | 画中画缩放 | `ZoomedScene` | L | 低频，暂缓 |
