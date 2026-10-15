@@ -25,22 +25,20 @@ const SCENES: &[&str] = &[
 ];
 
 fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
-    Ok(match name {
-        "demo_anim" => demo_anim(theme, font, FPS),
-        "sine_demo" => sine_demo(theme, FPS)?,
-        "primitives_demo" => primitives_demo(theme, FPS),
-        "layout_demo" => layout_demo(theme, FPS),
-        "emphasize_demo" => emphasize_demo(theme, FPS),
-        "sugar_demo" => sugar_demo(theme, FPS),
-        "move_demo" => move_demo(theme, FPS)?,
-        "shapes_demo" => shapes_demo(theme, FPS)?,
-        other => {
-            return Err(ffanim::Error::Other(format!(
-                "未知场景 {other}，可用场景: {}",
-                SCENES.join(", ")
-            )))
-        }
-    })
+    match name {
+        "demo_anim" => Ok(demo_anim(theme, font, FPS)),
+        "sine_demo" => sine_demo(theme, FPS),
+        "primitives_demo" => Ok(primitives_demo(theme, FPS)),
+        "layout_demo" => Ok(layout_demo(theme, FPS)),
+        "emphasize_demo" => Ok(emphasize_demo(theme, FPS)),
+        "sugar_demo" => Ok(sugar_demo(theme, FPS)),
+        "move_demo" => move_demo(theme, FPS),
+        "shapes_demo" => shapes_demo(theme, FPS),
+        other => Err(ffanim::Error::Other(format!(
+            "未知场景 {other}，可用场景: {}",
+            SCENES.join(", ")
+        ))),
+    }
 }
 
 fn main() -> ffanim::Result<()> {
@@ -584,4 +582,3 @@ fn shapes_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.8);
     Ok(tl)
 }
-

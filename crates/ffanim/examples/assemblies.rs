@@ -13,12 +13,7 @@ use ffanim::{Anim, Font, Item, Theme, Timeline};
 const FPS: u32 = 30;
 
 /// 场景清单（argv 寻址，缺省全渲染）。
-const SCENES: &[&str] = &[
-    "brace_demo",
-    "delimiter_demo",
-    "arrow_demo",
-    "decimal_demo",
-];
+const SCENES: &[&str] = &["brace_demo", "delimiter_demo", "arrow_demo", "decimal_demo"];
 
 fn build(name: &str, theme: &Theme) -> ffanim::Result<Timeline> {
     match name {
@@ -26,12 +21,10 @@ fn build(name: &str, theme: &Theme) -> ffanim::Result<Timeline> {
         "delimiter_demo" => delimiter_demo(theme, FPS),
         "arrow_demo" => arrow_demo(theme, FPS),
         "decimal_demo" => decimal_demo(theme, FPS),
-        other => {
-            return Err(ffanim::Error::Other(format!(
-                "未知场景 {other}，可用场景: {}",
-                SCENES.join(", ")
-            )))
-        }
+        other => Err(ffanim::Error::Other(format!(
+            "未知场景 {other}，可用场景: {}",
+            SCENES.join(", ")
+        ))),
     }
 }
 
@@ -349,4 +342,3 @@ fn decimal_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.6);
     Ok(tl)
 }
-

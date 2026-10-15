@@ -14,7 +14,7 @@ ci:
 
 # GPU 特性编译验证（CI build-gpu job 对应；无 GPU 时运行期测试自动跳过）
 ci-gpu:
-	cargo clippy --workspace --all-targets --features ffanim-cli/gpu -- -D warnings
+	cargo clippy --workspace --all-targets --features ffanim-render/gpu -- -D warnings
 	cargo test --workspace --features ffanim-render/gpu
 
 # rustdoc 零警告门禁（docs/04 §3.4 规则 A）
@@ -22,13 +22,13 @@ doc:
 	cargo doc --workspace --no-deps
 	@echo "rustdoc 零警告"
 
-# 官方示例：demo_anim 场景出片（960x540@30fps，产物 out/demo.mp4）
+# 官方示例：basic 族场景出片（argv 寻址，缺省全渲染；对齐 manim example_scenes）
 demo:
-	cargo run --release -p ffanim-cli -- render --scene demo_anim
+        cargo run --release -p ffanim --example basic -- demo_anim
 
-# 公式示例：formula_demo 场景（Typst 排版 + 结构匹配变换）
+# 公式示例：typography 族场景（Typst 排版 + 结构匹配变换）
 demo-formula:
-	cargo run --release -p ffanim-cli -- render --scene formula_demo --out out/formula_demo.mp4
+        cargo run --release -p ffanim --example typography -- formula_demo
 
 # 创作示例：傅里叶级数教学视频（BGM_PATH 环境变量可选混流音轨）
 fourier:

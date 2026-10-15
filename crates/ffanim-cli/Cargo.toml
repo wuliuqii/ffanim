@@ -1,6 +1,6 @@
 [package]
 name = "ffanim-cli"
-description = "ffanim 命令行：渲染与 Agent 验证工具链"
+description = "ffanim 命令行：脚手架与 Agent 诊断工具链（纯薄壳）"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -18,15 +18,8 @@ workspace = true
 [dependencies]
 ffanim = { path = "../ffanim" }
 ffanim-core = { workspace = true }
-ffanim-render = { path = "../ffanim-render" }
-ffanim-encode = { path = "../ffanim-encode" }
-ffanim-typst = { path = "../ffanim-typst" }
-ffanim-preview = { path = "../ffanim-preview" }
 ffanim-audio = { path = "../ffanim-audio" }
 clap = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 serde_json = { workspace = true }
-
-[features]
-gpu = ["ffanim-render/gpu"]

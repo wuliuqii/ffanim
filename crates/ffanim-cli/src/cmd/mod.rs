@@ -1,16 +1,12 @@
 //! CLI 子命令实现：clap 定义留在 main.rs，每个 handler 是 `pub fn run_*`。
 //!
-//! 模块划分（docs/04-项目优化规划.md §4.2）：
-//! - render / timeline / frame（渲染同族）
-//! - inspect / snapshot（诊断与基准对）
-//! - strip / onion（Agent 视觉诊断，转发 ffanim_render::tools）
-//! - new / info（脚手架与元信息）
-//! - audio / preview
+//! 场景绑定子命令（render/timeline/inspect/snapshot/preview/frame/strip/onion）
+//! 已随 scenes.rs 迁移删除；场景示范见门面 crate examples/。
+//! 保留模块：
+//! - scaffold：new / info（脚手架与元信息）
+//! - audio：音轨诊断
+//! - formula：diff 公式片段匹配预检
 
 pub mod audio;
 pub mod formula;
-pub mod inspect;
-pub mod preview;
-pub mod render;
 pub mod scaffold;
-pub mod tools;

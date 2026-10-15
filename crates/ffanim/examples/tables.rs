@@ -6,8 +6,8 @@
 //! `cargo run -p ffanim --release --example tables`（缺省全渲染，≙ `manim -a`）
 //! `cargo run -p ffanim --example tables -- --json table_demo`（打印调度表，agent 检查用）
 
-use ffanim::kurbo::Shape as _;
 use ffanim::kurbo::Affine;
+use ffanim::kurbo::Shape as _;
 use ffanim::{Anim, Font, Item, Theme, Timeline};
 
 const FPS: u32 = 30;
@@ -18,12 +18,10 @@ const SCENES: &[&str] = &["table_demo"];
 fn build(name: &str, theme: &Theme) -> ffanim::Result<Timeline> {
     match name {
         "table_demo" => table_demo(theme, FPS),
-        other => {
-            return Err(ffanim::Error::Other(format!(
-                "未知场景 {other}，可用场景: {}",
-                SCENES.join(", ")
-            )))
-        }
+        other => Err(ffanim::Error::Other(format!(
+            "未知场景 {other}，可用场景: {}",
+            SCENES.join(", ")
+        ))),
     }
 }
 
@@ -141,4 +139,3 @@ fn table_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.8);
     Ok(tl)
 }
-

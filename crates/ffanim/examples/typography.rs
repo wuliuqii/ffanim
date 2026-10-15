@@ -27,12 +27,10 @@ fn build(name: &str, theme: &Theme) -> ffanim::Result<Timeline> {
         "annotate_demo" => annotate_demo(theme, FPS),
         "code_demo" => code_demo(theme, FPS),
         "t2c_demo" => t2c_demo(theme, FPS),
-        other => {
-            return Err(ffanim::Error::Other(format!(
-                "未知场景 {other}，可用场景: {}",
-                SCENES.join(", ")
-            )))
-        }
+        other => Err(ffanim::Error::Other(format!(
+            "未知场景 {other}，可用场景: {}",
+            SCENES.join(", ")
+        ))),
     }
 }
 
@@ -78,8 +76,8 @@ fn main() -> ffanim::Result<()> {
 /// `x^2 + y^2 = z^2` 逐字形写出后，`+`/`z^2` 淡出、`-`/`0` 淡入，
 /// 相同子式（x、2、y、=）跨公式逐点形变。
 fn formula_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
-    use ffanim::{ItemId, RateFunc};
     use ffanim::typst::FormulaOptions;
+    use ffanim::{ItemId, RateFunc};
 
     let mut engine = ffanim::typst::TypstEngine::new(16);
     let fopts = FormulaOptions {
@@ -288,9 +286,8 @@ fn annotate_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
             .map(|it| it.with_transform(cap_place))
             .collect(),
     );
-    let bg = tl.add(
-        Item::background_rect(&cap_grp, 16.0).with_fill(ffanim::Color { a: 90, ..accent }),
-    );
+    let bg =
+        tl.add(Item::background_rect(&cap_grp, 16.0).with_fill(ffanim::Color { a: 90, ..accent }));
     let cap_ids = tl.add_group(
         cap.to_items()
             .into_iter()
@@ -433,4 +430,3 @@ fn t2c_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.8);
     Ok(tl)
 }
-
