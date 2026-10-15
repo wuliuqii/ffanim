@@ -62,6 +62,7 @@ fn main() -> ffanim::Result<()> {
     Ok(())
 }
 
+// ANCHOR: table_demo
 /// M9.18 验收场景：P1-14 表格（manim `Table` 对应）。
 ///
 /// 标题淡入 → 表格行组 `lagged_start` 逐行淡入 → 第二行高亮底板淡入
@@ -139,3 +140,4 @@ fn table_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.8);
     Ok(tl)
 }
+// ANCHOR_END

@@ -1,0 +1,12 @@
+[book]
+title = "ffanim 示例画廊"
+authors = ["ffanim"]
+language = "zh"
+description = "ffanim 官方示例：每个场景一段视频 + 一段可复现的源码（对齐 manim example gallery 形态）"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+default-theme = "navy"

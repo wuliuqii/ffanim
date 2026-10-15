@@ -24,25 +24,27 @@ tl.play(Anim::create(cir).during(1.0));
 ffanim::render_to_mp4(&tl.compile(), "out/demo.mp4").unwrap();
 ```
 
-或直接跑官方示例：
+或直接跑官方示例（argv 寻址，缺省全渲染）：
 
 ```sh
-just demo      # demo_anim 场景出片（三角形生长 / 圆滑入 / 形变 / 标题）
-just fourier   # 傅里叶级数创作示例（Typst 公式 + BGM 混流）
+just demo                      # demo_anim 场景出片（三角形生长 / 圆滑入 / 形变 / 标题）
+cargo run -p ffanim --example basic -- sine_demo   # 任意场景，或省略场景名全渲染
+just fourier                   # 傅里叶级数创作示例（Typst 公式 + BGM 混流）
 ```
+
+全部 20 个示例的**视频 + 源码**见[示例书](#文档)（`just book` 本地构建）。
 
 ## CLI 工具箱
 
 | 命令 | 用途 |
 |---|---|
-| `ffanim render --scene demo_anim` | 场景出片 mp4（ffmpeg rawvideo 管道，帧段并行） |
-| `ffanim timeline --scene demo_anim` | 打印调度表（agent 检查节奏） |
-| `ffanim inspect --scene demo_anim` | 字体加载 / 调度 / 溢出采样诊断 |
-| `ffanim strip --scene demo_anim` | 接触表网格大图（一眼看全节奏与构图） |
-| `ffanim onion --scene demo_anim` | 洋葱皮残影（运动轨迹检查） |
-| `ffanim snapshot --scene demo_anim` | 基准帧像素对比（回归测试） |
-| `ffanim preview --scene demo_anim` | 实时预览窗口（空格播放 / 逐帧 / seek） |
-| `ffanim new my_anim` | 脚手架：空目录 → 最小可跑工程 |
+| `ffanim new my_anim` | 脚手架：空目录 → 最小可跑工程（`--template` 选模板） |
+| `ffanim audio -i <文件>` | 音频诊断：时长/电平/削波/静音段（`--json` 机器可读） |
+| `ffanim info` | 加载并展示主题摘要（验证数据驱动管线） |
+| `ffanim diff <公式A> <公式B>` | 公式片段匹配预览（TransformMatchingTex 调度计划） |
+
+> 场景出片/预览直接跑 [examples](crates/ffanim/examples/)（对齐 manim
+> example_scenes 形态）；agent 逐帧检查用 `--json` 打印调度表。
 
 ## 与 manim 的差异
 
@@ -58,6 +60,7 @@ just fourier   # 傅里叶级数创作示例（Typst 公式 + BGM 混流）
 
 ## 文档
 
+- **[示例书](docs/book/src/index.md)** —— 全部 20 个示例：视频 + 可复现源码（`just book` 构建）
 - [架构设计](docs/02-架构设计.md) —— 分层、时间轴模型、渲染管线
 - [路线图与风险](docs/03-路线图与风险.md) —— M0~M10 里程碑
 - [项目优化规划](docs/04-项目优化规划.md) —— v0.2.0 起的演进计划

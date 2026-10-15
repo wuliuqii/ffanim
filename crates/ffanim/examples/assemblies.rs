@@ -65,6 +65,7 @@ fn main() -> ffanim::Result<()> {
     Ok(())
 }
 
+// ANCHOR: brace_demo
 /// M9.12 验收场景（P1-8）：Brace 花括号 + 括注文本。
 ///
 /// 标题淡入 → 横条描边生长 → 下方花括号淡入放大 + 括注“宽度”淡入 →
@@ -130,7 +131,9 @@ fn brace_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.8);
     Ok(tl)
 }
+// ANCHOR_END
 
+// ANCHOR: delimiter_demo
 /// M9.13 验收场景：Delimiter 四类定界符统一 Typst MATH 装配。
 ///
 /// 标题淡入 → 横条生长 → 花括号↓ / 方括号↑ / 圆括号← / 双线方括号→
@@ -194,7 +197,9 @@ fn delimiter_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.8);
     Ok(tl)
 }
+// ANCHOR_END
 
+// ANCHOR: arrow_demo
 /// arrow_demo：Typst 装配箭头验收示例（M9.14）。
 ///
 /// 标题淡入 → 三支箭头（水平单头 / 斜向单头 / 水平双头）依次淡入 +
@@ -276,7 +281,9 @@ fn arrow_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.8);
     Ok(tl)
 }
+// ANCHOR_END
 
+// ANCHOR: decimal_demo
 /// M9.15 验收场景：P1-6 数字滚动（manim `DecimalNumber` + ValueTracker 对应）。
 ///
 /// 标题淡入 → 主数字 0→1,234.5 千分位滚动（中心锚定不漂移）→ 副数字
@@ -342,3 +349,4 @@ fn decimal_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.6);
     Ok(tl)
 }
+// ANCHOR_END

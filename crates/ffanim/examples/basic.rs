@@ -79,6 +79,7 @@ fn main() -> ffanim::Result<()> {
     Ok(())
 }
 
+// ANCHOR: demo_anim
 /// M2 验收场景：三角形描边生长 → 圆形滑入 → 圆形形变放大 → 文字淡入。
 fn demo_anim(theme: &Theme, font: &Font, fps: u32) -> Timeline {
     let accent = theme.accent().unwrap();
@@ -138,7 +139,9 @@ fn demo_anim(theme: &Theme, font: &Font, fps: u32) -> Timeline {
     tl.wait(0.8);
     tl
 }
+// ANCHOR_END
 
+// ANCHOR: sine_demo
 /// M4 验收场景：坐标系 + 正弦函数图像随 ValueTracker 动画（求值期信号）。
 ///
 /// 网格淡入 → 坐标轴描边生长 → sin 曲线逐段画出 → 振幅 1.0→0.2→1.0 呼吸。
@@ -180,7 +183,9 @@ fn sine_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.6);
     Ok(tl)
 }
+// ANCHOR_END
 
+// ANCHOR: primitives_demo
 /// manim 对齐 P0 验收场景：标注基元（线/箭头/虚线/弧/椭圆）+ 位姿动作糖。
 ///
 /// 前半段基元逐个描边生长（group 错开），后半段演示 `shift_to / rotate_to /
@@ -243,7 +248,9 @@ fn primitives_demo(theme: &Theme, fps: u32) -> Timeline {
     tl.wait(0.6);
     tl
 }
+// ANCHOR_END
 
+// ANCHOR: layout_demo
 /// manim 对齐 P0-2 验收场景：相对布局 next_to / to_edge / arrange。
 ///
 /// 标题块贴顶边（to_edge）→ 三基元横排居中（arrange + 总包围盒平移）→
@@ -315,7 +322,9 @@ fn layout_demo(theme: &Theme, fps: u32) -> Timeline {
     tl.wait(0.6);
     tl
 }
+// ANCHOR_END
 
+// ANCHOR: emphasize_demo
 /// M9.5 验收场景：强调四件套（indicate / circumscribe / flash / show_passing_flash）。
 ///
 /// 对应 manim 的 Indicate / Circumscribe / Flash / ShowPassingFlash；
@@ -364,7 +373,9 @@ fn emphasize_demo(theme: &Theme, fps: u32) -> Timeline {
     tl.show_passing_flash(zig_id, 0.25, 0.75, 0.8, accent);
     tl
 }
+// ANCHOR_END
 
+// ANCHOR: sugar_demo
 /// M9.7 验收场景：P1 薄糖批（Uncreate / Together / Succession / 方向家族 /
 /// add_group / save_state-restore）。
 fn sugar_demo(theme: &Theme, fps: u32) -> Timeline {
@@ -468,7 +479,9 @@ fn sugar_demo(theme: &Theme, fps: u32) -> Timeline {
     );
     tl
 }
+// ANCHOR_END
 
+// ANCHOR: move_demo
 /// M9.10 验收场景（P1-4）：MoveAlongPath 沿路径移动。
 ///
 /// 标题淡入 → S 形轨迹曲线描边画出 → 小球沿轨迹弧长匀速移动，
@@ -512,7 +525,9 @@ fn move_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.7);
     Ok(tl)
 }
+// ANCHOR_END
 
+// ANCHOR: shapes_demo
 /// M9.11 验收场景（P1-5）：TransformMatchingShapes 任意片段结构匹配形变。
 ///
 /// 标题淡入 → "MATH" 逐字形淡入 → `match_shapes` 几何签名配对 →
@@ -582,3 +597,4 @@ fn shapes_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.8);
     Ok(tl)
 }
+// ANCHOR_END

@@ -37,3 +37,13 @@ fourier:
 # 性能基准：criterion（1080p 单帧渲染基线，数字入库 docs/benchmarks.md）
 bench:
 	cargo bench -p ffanim-render
+
+# 示例书：生成书源（examples 元数据 + 渲染缺失产物）→ mdbook 构建 docs/book/
+book:
+	cargo run --release -p ffanim-gally
+	mdbook build docs/book
+	@echo "书籍就绪：docs/book/book/index.html"
+
+# 示例书热重载预览（http://localhost:3000；需另一终端先跑 just book）
+book-serve:
+	mdbook serve docs/book -p 3000

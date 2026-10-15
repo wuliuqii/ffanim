@@ -7,12 +7,14 @@
 
 ### Added
 
-- feat(gally): 网页示例画廊生成器 `ffanim-gally`——扫描
-  `crates/ffanim/examples/*.rs` 自动提取标题/场景清单/doc 摘要/源码全文
-  （零硬编码数据源，新增 example 免配置），逐场景复用 examples 出片管线
-  渲染 mp4，生成 `docs/gallery/index.html`（卡片网格 + 视频预览 + 源码
-  折叠，对齐 manim 官网画廊形态）；`SKIP_RENDER=1` 只重建 HTML 复用已有
-  产物
+- feat(gally): 示例书工具链——`ffanim-gally` 转型为 mdBook 书源生成器
+  （rust-lang 官方 mdBook 0.5.4）：扫描 `crates/ffanim/examples/*.rs` 自动
+  提取标题/场景清单/doc 摘要（零硬编码数据源），渲染缺失产物并拷贝
+  mp4 → 生成 `docs/book/src/SUMMARY.md` 与各章节页（`## 场景` + doc 摘要 +
+  `<video>` + `{{#include}}` ANCHOR 锚点代码段，examples 源文件加
+  `// ANCHOR: 场景名` 标注）；`just book` 一键构建 / `just book-serve`
+  热重载预览；手写 `book.toml`/`index.md` 与附录「与 manim gallery 对照」
+  入库，生成物 gitignore
 
 ### Changed
 

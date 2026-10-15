@@ -71,6 +71,7 @@ fn main() -> ffanim::Result<()> {
     Ok(())
 }
 
+// ANCHOR: formula_demo
 /// M3 验收场景：公式逐字形写出（Write）→ 结构匹配形变（TransformMatchingTex）。
 ///
 /// `x^2 + y^2 = z^2` 逐字形写出后，`+`/`z^2` 淡出、`-`/`0` 淡入，
@@ -138,7 +139,9 @@ fn formula_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.8);
     Ok(tl)
 }
+// ANCHOR_END
 
+// ANCHOR: text_demo
 /// M8.2 验收场景：Text 富文本——中英混排限宽不出框 + 粗细混排 + 行距。
 ///
 /// 系统中文字体经 `find_cjk_font` 数据查找注入引擎（无硬编码路径），
@@ -195,7 +198,9 @@ fn text_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.8);
     Ok(tl)
 }
+// ANCHOR_END
 
+// ANCHOR: annotate_demo
 /// manim 对齐 P1-7 验收场景：标注复合件（圈选框/下划线/叉/背景板）。
 ///
 /// 四个标注几何构造器均基于目标 bbox（含 transform）计算；标注基于注册基线，
@@ -302,7 +307,9 @@ fn annotate_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.5);
     Ok(tl)
 }
+// ANCHOR_END
 
+// ANCHOR: code_demo
 /// M9.9 验收场景（P1-13）：代码块语法高亮。
 ///
 /// 标题淡入 → Rust 代码块逐字形写出（Dark 主题）→ Python 代码块淡入，
@@ -365,7 +372,9 @@ fn code_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.6);
     Ok(tl)
 }
+// ANCHOR_END
 
+// ANCHOR: t2c_demo
 /// M9.16 验收场景：P1-12 按词着色（manim `Text(t2c=…)` 对应）。
 ///
 /// 标题淡入 → 中文句重复词全出现着色（数学/动画各两处）→ 英文句
@@ -430,3 +439,4 @@ fn t2c_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.wait(0.8);
     Ok(tl)
 }
+// ANCHOR_END

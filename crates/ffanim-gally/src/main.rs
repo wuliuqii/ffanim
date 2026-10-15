@@ -1,12 +1,18 @@
-//! ffanim 网页画廊生成器：examples 即数据源，场景清单零硬编码。
+//! ffanim 书源生成器：examples 元数据 → mdBook 书源（docs/book/src/）。
 //!
-//! 流程：扫描 crates/ffanim/examples/*.rs（标题 / SCENES 清单 / doc 摘要 / 源码全文）
-//! → 逐场景调 `cargo run --release -p ffanim --example <ex> -- <scene>` 出 out/<scene>.mp4
-//! → 生成 docs/gallery/index.html（卡片网格 + 视频 + 源码折叠，对齐 manim 官网画廊形态）。
+//! 流程：扫描 crates/ffanim/examples/*.rs（//! 标题 / SCENES 清单 / 每场景 doc 摘要）
+//! → 渲染缺失的 out/<场景>.mp4（子进程复用 examples 出片管线）
+//! → 拷贝产物到 docs/book/src/media/ → 生成 SUMMARY.md 与各章节 .md。
+//!
+//! 章节页格式：`## 场景名` + doc 摘要 + `<video>` + `{{#include}}` 锚点代码段
+//! （examples 源文件中以 `// ANCHOR: 场景名` / `// ANCHOR_END` 标注函数体）。
+//! 无 SCENES 常量的创作示例（fourier/media）视为单场景：整文件 include。
 //!
 //! 用法（仓库根）：
-//! `cargo run --release -p ffanim-gally`（全量渲染 + 生成）
-//! `SKIP_RENDER=1 cargo run --release -p ffanim-gally`（只重建 HTML，复用已有 mp4）
+//! `cargo run --release -p ffanim-gally`（渲染缺失产物 + 生成书源）
+//! `SKIP_RENDER=1 cargo run --release -p ffanim-gally`（只生成书源，复用已有 mp4）
+//!
+//! 构建：`just book`（= 本生成器 + `mdbook build docs/book`）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,12 +25,15 @@ struct Scene {
     rendered: bool,
 }
 
-/// 一个 example 文件：标题 + 场景清单 + 源码全文。
+/// 一个 example 文件：标题 + 场景清单 + 源文件相对路径。
 struct Example {
+    /// 文件名 stem（= cargo example 名）
     name: String,
+    /// //! 头部首行（章节 H1）
     title: String,
     scenes: Vec<Scene>,
-    source: String,
+    /// 无 SCENES 常量的创作示例：单场景、渲染不带场景参数、整文件 include
+    single: bool,
 }
 
 fn repo_root() -> PathBuf {
@@ -43,6 +52,7 @@ fn parse_example(path: &Path) -> Option<Example> {
     let mut scenes: Vec<Scene> = Vec::new();
     let mut docs: Vec<(String, String)> = Vec::new(); // (fn 名, doc 首行)
     let mut pending_doc = String::new();
+    let mut has_scenes = false;
     let mut in_scenes = false;
 
     for line in text.lines() {
@@ -56,6 +66,7 @@ fn parse_example(path: &Path) -> Option<Example> {
                 pending_doc = t.trim_start_matches("///").trim().to_string();
             }
         } else if t.starts_with("const SCENES") {
+            has_scenes = true;
             // 数组体 = 首个 '=' 之后（类型标注 &[&str] 含 ']'，不能整体 contains 判闭合）
             let body = t
                 .find('=')
@@ -63,11 +74,7 @@ fn parse_example(path: &Path) -> Option<Example> {
                 .unwrap_or("");
             for lit in body.split('"').skip(1).step_by(2) {
                 if !lit.is_empty() {
-                    scenes.push(Scene {
-                        name: lit.to_string(),
-                        doc: String::new(),
-                        rendered: false,
-                    });
+                    scenes.push(Scene { name: lit.to_string(), doc: String::new(), rendered: false });
                 }
             }
             in_scenes = !body.contains(']');
@@ -78,11 +85,7 @@ fn parse_example(path: &Path) -> Option<Example> {
                 // 提取引号内场景名："name" 的奇数段
                 for lit in t.split('"').skip(1).step_by(2) {
                     if !lit.is_empty() {
-                        scenes.push(Scene {
-                            name: lit.to_string(),
-                            doc: String::new(),
-                            rendered: false,
-                        });
+                        scenes.push(Scene { name: lit.to_string(), doc: String::new(), rendered: false });
                     }
                 }
             }
@@ -111,135 +114,151 @@ fn parse_example(path: &Path) -> Option<Example> {
             .map(|(_, d)| d.clone())
             .unwrap_or_default();
     }
-    Some(Example {
-        name,
-        title,
-        scenes,
-        source: text,
-    })
+    let single = !has_scenes;
+    if single {
+        // 创作示例：场景名 = 文件名（产物 out/<stem>.mp4）
+        scenes.push(Scene { name: name.clone(), doc: String::new(), rendered: false });
+    }
+    Some(Example { name, title, scenes, single })
 }
 
 /// 渲染单场景：子进程调 examples（复用其出片管线），产物 out/<scene>.mp4。
-fn render_scene(example: &str, scene: &str) -> bool {
-    Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "-p",
-            "ffanim",
-            "--example",
-            example,
-            "--",
-            scene,
-        ])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+fn render_scene(example: &str, scene: Option<&str>) -> bool {
+    let mut cmd = Command::new("cargo");
+    cmd.args(["run", "--release", "-p", "ffanim", "--example", example]);
+    if let Some(s) = scene {
+        cmd.arg(s);
+    }
+    cmd.status().map(|s| s.success()).unwrap_or(false)
 }
 
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
+/// 书章标签（呈现顺序与短标签；examples 是场景清单的唯一真相源）。
+fn chapter_meta(stem: &str) -> (usize, &'static str) {
+    match stem {
+        "basic" => (0, "基础动画"),
+        "typography" => (1, "文字与公式"),
+        "assemblies" => (2, "装配件"),
+        "tables" => (3, "表格"),
+        "fourier" => (4, "创作示例：傅里叶级数"),
+        "media" => (5, "创作示例：SVG 与图片"),
+        // 未登记的新 example 追加在后（字母序），场景清单仍自动提取
+        _ => (usize::MAX, ""),
+    }
 }
 
-fn gen_html(examples: &[Example]) -> String {
-    let mut page = String::new();
-    page.push_str("<!DOCTYPE html>\n<html lang=\"zh\">\n<head>\n<meta charset=\"utf-8\">\n");
-    page.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
-    page.push_str("<title>ffanim Example Gallery</title>\n<style>\n");
-    page.push_str(
-        "body{font-family:system-ui,sans-serif;max-width:1080px;margin:0 auto;padding:16px;background:#fafafa;color:#222}\n\
-         h1{border-bottom:2px solid #4a7dbd;padding-bottom:8px}\n\
-         section{margin:32px 0}\n\
-         h2{color:#4a7dbd}\n\
-         .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:16px}\n\
-         .card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}\n\
-         .card h3{margin:0 0 4px;font-family:ui-monospace,monospace;font-size:15px;color:#333}\n\
-         .card p{margin:4px 0 8px;font-size:13px;color:#666}\n\
-         video{width:100%;border-radius:4px;background:#000}\n\
-         .miss{color:#c0392b;font-size:13px}\n\
-         details{margin-top:8px;font-size:13px}\n\
-         pre{background:#f0f0f0;padding:10px;border-radius:4px;overflow:auto;max-height:400px;font-size:12px}\n",
-    );
-    page.push_str("</style>\n</head>\n<body>\n");
-    page.push_str("<h1>ffanim Example Gallery</h1>\n");
-    let total: usize = examples.iter().map(|e| e.scenes.len()).sum();
-    page.push_str(&format!(
-        "<p>{total} 个场景示例。复现任意场景：<code>cargo run -p ffanim --example &lt;文件名&gt; -- &lt;场景名&gt;</code>（对齐 manim example_scenes 形态）</p>\n"
-    ));
-    for ex in examples {
-        page.push_str(&format!(
-            "<section>\n<h2>{}</h2>\n<div class=\"grid\">\n",
-            html_escape(&ex.title)
+/// 章节页：H1（//! 标题）+ 运行提示 + 逐场景（视频 + doc 摘要 + 锚点代码段）。
+fn gen_chapter_md(ex: &Example) -> String {
+    let mut md = String::new();
+    md.push_str(&format!("# {}\n\n", ex.title));
+    if ex.single {
+        md.push_str(&format!(
+            "运行：`cargo run -p ffanim --example {}`\n\n",
+            ex.name
         ));
-        for sc in &ex.scenes {
-            page.push_str(&format!(
-                "<div class=\"card\">\n<h3>{}</h3>\n<p>{}</p>\n",
-                html_escape(&sc.name),
-                html_escape(&sc.doc)
-            ));
-            if sc.rendered {
-                page.push_str(&format!(
-                    "<video controls loop muted preload=\"metadata\"><source src=\"../../out/{}.mp4\" type=\"video/mp4\"></video>\n",
-                    sc.name
-                ));
-            } else {
-                page.push_str(&format!(
-                    "<p class=\"miss\">渲染产物缺失（out/{}.mp4）</p>\n",
-                    sc.name
-                ));
-            }
-            page.push_str("</div>\n");
-        }
-        page.push_str("</div>\n");
-        page.push_str(&format!(
-            "<details><summary>源码：{}.rs</summary>\n<pre><code>{}</code></pre>\n</details>\n</section>\n",
-            ex.name,
-            html_escape(&ex.source)
+    } else {
+        md.push_str(&format!(
+            "运行：`cargo run -p ffanim --example {} -- [场景名...]`（缺省全渲染，≙ `manim -a`）\n\n",
+            ex.name
         ));
     }
-    page.push_str("</body>\n</html>\n");
-    page
+    for sc in &ex.scenes {
+        md.push_str(&format!("## {}\n\n", sc.name));
+        if !sc.doc.is_empty() {
+            md.push_str(&format!("{}\n\n", sc.doc));
+        }
+        if sc.rendered {
+            md.push_str(&format!(
+                "<video controls loop muted preload=\"metadata\" src=\"media/{}.mp4\"></video>\n\n",
+                sc.name
+            ));
+        } else {
+            md.push_str(&format!("> 渲染产物缺失（out/{}.mp4）\n\n", sc.name));
+        }
+        // include 相对路径：docs/book/src/ → 仓库根需三层上跳
+        if ex.single {
+            md.push_str(&format!(
+                "```rust\n{{{{#include ../../../crates/ffanim/examples/{}.rs}}}}\n```\n\n",
+                ex.name
+            ));
+        } else {
+            md.push_str(&format!(
+                "```rust\n{{{{#include ../../../crates/ffanim/examples/{}.rs:{}}}}}\n```\n\n",
+                ex.name, sc.name
+            ));
+        }
+    }
+    md
+}
+
+/// SUMMARY.md：介绍 + 各章节（手写 index.md / manim-gallery.md 为固定条目）。
+fn gen_summary_md(chapters: &[(String, String)]) -> String {
+    let mut s = String::from("# Summary\n\n- [介绍](index.md)\n\n");
+    for (file, label) in chapters {
+        if label.is_empty() {
+            s.push_str(&format!("- [{file}]({file}.md)\n"));
+        } else {
+            s.push_str(&format!("- [{label}]({file}.md)\n"));
+        }
+    }
+    s.push_str("\n- [附录：与 manim gallery 对照](manim-gallery.md)\n");
+    s
 }
 
 fn main() -> std::io::Result<()> {
     let root = repo_root();
     let ex_dir = root.join("crates/ffanim/examples");
+    let book_src = root.join("docs/book/src");
+    let media_dir = book_src.join("media");
     let skip_render = std::env::var("SKIP_RENDER").is_ok();
 
     let mut paths: Vec<PathBuf> = fs::read_dir(&ex_dir)?
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| p.extension().is_some_and(|x| x == "rs"))
         .collect();
-    paths.sort();
+    // 呈现顺序：chapter_meta 序优先，未登记文件按文件名排后
+    paths.sort_by_key(|p| {
+        let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        (chapter_meta(&stem).0, stem)
+    });
     let mut examples: Vec<Example> = paths.iter().filter_map(|p| parse_example(p)).collect();
 
-    // 渲染：SKIP_RENDER=1 复用已有 mp4；产物缺失才调 examples 出片
+    fs::create_dir_all(&media_dir)?;
+
+    // 渲染 + 拷贝媒体
     for ex in &mut examples {
         for sc in &mut ex.scenes {
             let mp4 = root.join(format!("out/{}.mp4", sc.name));
-            if skip_render && mp4.exists() {
-                sc.rendered = true;
-                println!("跳过 {}（已有产物）", sc.name);
-                continue;
+            if !skip_render && !mp4.exists() {
+                print!("渲染 {}/{} ... ", ex.name, sc.name);
+                use std::io::Write as _;
+                std::io::stdout().flush().ok();
+                let scene_arg = (!ex.single).then_some(sc.name.as_str());
+                sc.rendered = render_scene(&ex.name, scene_arg);
+                println!("{}", if sc.rendered { "ok" } else { "失败" });
+            } else {
+                sc.rendered = mp4.exists();
             }
-            print!("渲染 {}/{} ... ", ex.name, sc.name);
-            use std::io::Write as _;
-            std::io::stdout().flush().ok();
-            sc.rendered = render_scene(&ex.name, &sc.name);
-            println!("{}", if sc.rendered { "ok" } else { "失败" });
+            if sc.rendered {
+                fs::copy(&mp4, media_dir.join(format!("{}.mp4", sc.name)))?;
+            }
         }
     }
 
-    let out_dir = root.join("docs/gallery");
-    fs::create_dir_all(&out_dir)?;
+    // 生成章节页 + SUMMARY
+    fs::create_dir_all(&book_src)?;
+    let mut chapters: Vec<(String, String)> = Vec::new();
+    for ex in &examples {
+        fs::write(book_src.join(format!("{}.md", ex.name)), gen_chapter_md(ex))?;
+        let (_, label) = chapter_meta(&ex.name);
+        chapters.push((ex.name.clone(), label.to_string()));
+    }
+    fs::write(book_src.join("SUMMARY.md"), gen_summary_md(&chapters))?;
+
     let total_rendered = examples
         .iter()
         .map(|e| e.scenes.iter().filter(|s| s.rendered).count())
         .sum::<usize>();
     let total: usize = examples.iter().map(|e| e.scenes.len()).sum();
-    fs::write(out_dir.join("index.html"), gen_html(&examples))?;
-    println!("已生成 docs/gallery/index.html（{total_rendered}/{total} 场景有视频）");
+    println!("已生成 docs/book/src/（{total_rendered}/{total} 场景有视频），运行 `just book` 构建书籍");
     Ok(())
 }

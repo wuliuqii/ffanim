@@ -1,6 +1,6 @@
 [package]
 name = "ffanim-gally"
-description = "ffanim 网页画廊生成器：examples 元数据 → 静态 index.html"
+description = "ffanim 示例书源生成器：examples 元数据 → mdBook 书源（docs/book/src/）"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
