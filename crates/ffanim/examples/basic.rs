@@ -27,6 +27,7 @@ const SCENES: &[&str] = &[
     "angle_demo",
     "circle_sine_demo",
     "warp_grid_demo",
+    "boolean_demo",
 ];
 
 fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
@@ -44,6 +45,7 @@ fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
         "angle_demo" => angle_demo(theme, FPS),
         "circle_sine_demo" => circle_sine_demo(theme, FPS),
         "warp_grid_demo" => warp_grid_demo(theme, FPS),
+        "boolean_demo" => boolean_demo(theme, FPS),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -1108,5 +1110,91 @@ fn warp_grid_item(
     Item::from_path(path)
         .with_stroke(color)
         .with_stroke_width(1.0)
+}
+// ANCHOR_END
+
+// ANCHOR: boolean_demo
+/// BooleanOperation 对齐场景：两椭圆 A/B 部分交叠 → 四种布尔结果轮播
+/// （Intersection → Union → Exclusion → Difference，与 manim booleans 顺序一致）。
+///
+/// 核心拼装：`Item::boolean` 原语（i_overlay 平坦化布尔，样式继承 subject）、
+/// `grow_from_center` 长出结果；表达式 = Typst 公式淡入；A/B 标签 = 字形
+/// 描边生长（≙ manim Write）。每轮「长出 → 停留 → 淡出」置换，A/B 常驻画布。
+fn boolean_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
+    use ffanim::BoolOp;
+    use ffanim::typst::{FormulaOptions, TypstEngine};
+
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let font = Font::from_system(None::<&str>)?;
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // 椭圆 A（小）与 B（大 = A ×2 右移）：右半交叠（manim RIGHT*3 关系）；布尔原语输入
+    // A 常驻偏淡（alpha 150），布尔结果覆盖高填充（alpha 235）以区分本体与结果
+    let ea = Item::ellipse((390.0, 270.0), 95.0, 48.0)
+        .with_fill(accent.with_alpha(150))
+        .with_stroke(accent)
+        .with_stroke_width(4.0);
+    let eb = Item::ellipse((585.0, 270.0), 190.0, 95.0)
+        .with_fill(fg.with_alpha(70))
+        .with_stroke(fg)
+        .with_stroke_width(4.0);
+    let a = tl.add(ea.clone());
+    let b = tl.add(eb.clone());
+    tl.play(Anim::create(a).during(0.7));
+    tl.play(Anim::create(b).during(0.7));
+
+    // A/B 标签：字形路径描边生长（≙ manim Write），放各自椭圆上方避开交叠区
+    let label = |s: &str, size: f64, cx: f64, baseline: f64, color: ffanim::Color| {
+        let p = font.outline_text(s, size).unwrap();
+        let bb = p.bounding_box();
+        Item::from_path(p)
+            .with_fill(color)
+            .with_transform(Affine::translate((cx - (bb.x0 + bb.x1) / 2.0, baseline)))
+    };
+    let la = tl.add(label("A", 48.0, 390.0, 200.0, accent));
+    // B 标签放椭圆右上方（x 超出公式横跨范围），避免与顶部表达式重叠
+    let lb = tl.add(label("B", 64.0, 730.0, 150.0, fg));
+    tl.together([Anim::create(la).during(0.4), Anim::create(lb).during(0.4)]);
+    tl.wait(0.3);
+
+    // 四种布尔轮播：表达式淡入 + 结果中心长出（fill/stroke 继承 subject A）
+    let mut engine = TypstEngine::new(8);
+    let fopts = FormulaOptions {
+        font_size_pt: 34.0,
+        text_color: fg,
+    };
+    let rounds = [
+        (BoolOp::Intersection, "A ∩ B"),
+        (BoolOp::Union, "A ∪ B"),
+        (BoolOp::Xor, "A △ B"),
+        (BoolOp::Difference, "A − B"),
+    ];
+    for (op, expr) in rounds {
+        let f = engine.formula(expr, &fopts)?;
+        let base = f.fit_transform(480.0, 110.0, 2.0);
+        // 多字形各自带同一 base（formula_demo 同模式），组成单 group 便于整体动画
+        let expr_id = tl.add(Item::group(
+            f.to_items()
+                .into_iter()
+                .map(|it| it.with_transform(base))
+                .collect(),
+        ));
+
+        // 结果样式继承 subject A，再覆盖高填充与本体区分
+        let result = tl.add(ea.boolean(op, &eb)?.with_fill(accent.with_alpha(235)));
+        tl.together([
+            Anim::grow_from_center(result).during(0.7),
+            Anim::fade_in(expr_id).during(0.7),
+        ]);
+        tl.wait(0.6);
+        tl.together([
+            Anim::fade_out(result).during(0.4),
+            Anim::fade_out(expr_id).during(0.4),
+        ]);
+    }
+    tl.wait(0.3);
+    Ok(tl)
 }
 // ANCHOR_END

@@ -1,8 +1,8 @@
 # 附录：与 manim gallery 对照
 
 以 [manim 官方 Example Gallery]（`docs/source/examples.rst`，5 大节 20 例）
-为对照表逐项核对。结论先行：**20 例中 15 例已有对应示例/能力，2 例可用
-现有词汇拼出，3 例存在真实能力缺口**（下表 🟡/❌），3D 类按定位不追。
+为对照表逐项核对。结论先行：**21 例中 18 例已有对应示例，3 例可用现有
+词汇拼出**（下表 🟡），硬缺口仅剩画中画（暂缓）；3D 类按定位不追。
 
 ## 逐项对照
 
@@ -12,7 +12,7 @@
 | BraceAnnotation | 花括号 + 括注 | `brace_demo`（含方向化花括号） | ✅ |
 | VectorArrow | 箭头 + 坐标平面 + 标注 | `arrow_demo` + `Coords::grid_item` | ✅ |
 | GradientImageFromArray | 位图导入 + 框选 | `media.rs`（`from_image` + surrounding_rect） | ✅ |
-| BooleanOperations | 椭圆并/交/差布尔运算 | 无（vello 无布尔路径） | ❌ 缺口 |
+| BooleanOperations | 椭圆并/交/差布尔运算 | `boolean_demo`（`Item::boolean` 四则轮播 + 表达式） | ✅ |
 | PointMovingOnShapes | 点沿圆周移动 + 绕点旋转 | `move_demo`（move_along_path）+ `Anim::rotate` | ✅ |
 | MovingAround | shift/填充/scale/rotate 动作糖 | `Anim::shift_to/rotate_to/scale_to`（M9.3） | ✅ |
 | MovingAngle | 两线夹角弧 + θ 随 tracker | `angle_demo`（弧+双线+θ 标注拼装，角平分线跟随） | ✅ |
@@ -39,9 +39,9 @@
 |---|---|---|---|---|
 | ~~1~~ | ~~曲线下面积填充 + 黎曼矩形~~ | `get_area` / `get_riemann_rectangles` | — | ✅ 已由 `riemann_area` 纯现有 API 拼装实现（basic.rs） |
 | ~~2~~ | ~~折线/散点图~~ | `Axes.plot_line_graph` | — | ✅ 已由 `line_graph` 纯现有 API 拼装实现（basic.rs） |
-| 3 | 网格逐点形变 | `apply_function` + `prepare_for_nonlinear_transform` | M | OpeningManim 级演示效果 |
+| ~~3~~ | ~~网格逐点形变~~ | `apply_function` + `prepare_for_nonlinear_transform` | — | ✅ 已由 `warp_grid_demo` 纯现有 API 拼装实现（basic.rs） |
 | ~~4~~ | ~~Angle 角度测量件~~ | `Angle(line1, line2)` | — | ✅ 已由 `angle_demo` 纯现有 API 拼装实现（basic.rs） |
-| 5 | 布尔路径运算 | `Union/Intersection/Exclusion` | L | vello 无布尔，需引入 path 布尔库或自研，缓 |
+| ~~5~~ | ~~布尔路径运算~~ | `Union/Intersection/Exclusion` | — | ✅ 已落地 `Item::boolean` 原语（i_overlay）+ `boolean_demo` 对齐场景 |
 | 6 | 轨迹拖尾件 | PointWithTrace 模式 | S | 低频，可拼 |
 | 7 | 画中画缩放 | `ZoomedScene` | L | 低频，暂缓 |
 

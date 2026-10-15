@@ -5,8 +5,8 @@
 
 pub use ffanim_core::kurbo;
 pub use ffanim_core::{
-    Anim, AnimKind, Axes, Camera, Color, CompiledTimeline, Direction, DrawList, Error, Font,
-    ImageAsset, Item, ItemId, MatchPlan, PoseDelta, RateFunc, Result, Style, TableOptions,
+    Anim, AnimKind, Axes, BoolOp, Camera, Color, CompiledTimeline, Direction, DrawList, Error,
+    Font, ImageAsset, Item, ItemId, MatchPlan, PoseDelta, RateFunc, Result, Style, TableOptions,
     TableSpec, Theme, Timeline, arrange, from_svg_file, from_svg_str, match_shapes, render_frame,
     table,
 };
