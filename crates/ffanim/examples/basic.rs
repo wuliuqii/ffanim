@@ -23,6 +23,7 @@ const SCENES: &[&str] = &[
     "move_demo",
     "shapes_demo",
     "riemann_area",
+    "line_graph",
 ];
 
 fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
@@ -36,6 +37,7 @@ fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
         "move_demo" => move_demo(theme, FPS),
         "shapes_demo" => shapes_demo(theme, FPS),
         "riemann_area" => riemann_area(theme, FPS),
+        "line_graph" => line_graph(theme, FPS),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -726,4 +728,105 @@ fn area_under(
     path.line_to(axes.c2p(b, 0.0));
     path.close_path();
     Item::from_path(path).with_fill(fill)
+}
+
+// ANCHOR: line_graph
+/// HeatDiagramPlot 对齐场景：折线/散点图（对标 Axes.plot_line_graph，纯现有 API 拼装）。
+///
+/// 12 点测量数据：折线 create → 顶点散点错峰入场 → 交叉淡切动态组 →
+/// 相位 tracker 驱动曲线波动（数据实时更新语义）。
+fn line_graph(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
+    use ffanim::Axes;
+
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // 示例数据：12 个月测量值（点列定义一次，静态/动态共用）
+    const PTS: [(f64, f64); 12] = [
+        (1.0, 2.1),
+        (2.0, 3.4),
+        (3.0, 2.8),
+        (4.0, 4.6),
+        (5.0, 5.2),
+        (6.0, 4.1),
+        (7.0, 5.8),
+        (8.0, 6.5),
+        (9.0, 5.4),
+        (10.0, 7.2),
+        (11.0, 6.1),
+        (12.0, 7.8),
+    ];
+    let axes = Axes::new((0.0, 13.0), (0.0, 9.0))
+        .with_size(840.0, 400.0)
+        .with_center(f64::from(w) / 2.0, f64::from(h) / 2.0);
+
+    // 网格 + 轴
+    let grid = tl.add(axes.grid_item(fg.with_alpha(40), 1.0));
+    tl.play(Anim::fade_in(grid).during(0.6));
+    let ax = tl.add(axes.to_item(&theme.style));
+    tl.overlap(0.4);
+    tl.play(Anim::create(ax).during(1.0));
+
+    // 折线描边生长
+    let line = tl.add(polyline(&axes, &PTS, accent, 3.0));
+    tl.wait(0.2);
+    tl.play(Anim::create(line).during(1.2));
+
+    // 顶点散点逐个错峰入场
+    let dots = scatter(&axes, &PTS, 6.0, accent);
+    let dot_ids = tl.add_group(dots);
+    tl.lagged_start(dot_ids.iter().map(|&id| Anim::fade_in(id).during(0.3)), 0.4);
+
+    // 动态组：相位 tracker 驱动 y 值正弦微扰，updater 每帧重建折线+散点
+    let phase = tl.add_tracker(0.0);
+    let stroke = accent;
+    let dot_fill = accent;
+    let dyn_graph = tl.add_updater(&[phase], move |v| {
+        let pts: Vec<(f64, f64)> = PTS
+            .iter()
+            .map(|(x, y)| (*x, y + 0.8 * (x * 0.7 + v[0]).sin()))
+            .collect();
+        let mut children = vec![polyline(&axes, &pts, stroke, 3.0)];
+        children.extend(scatter(&axes, &pts, 6.0, dot_fill));
+        Item::group(children)
+    });
+    tl.wait(0.2);
+    // 与静态组同形交叉淡化 → 相位 0→2π 波动一回合
+    let mut cross: Vec<_> = dot_ids
+        .iter()
+        .map(|&id| Anim::fade_out(id).during(0.5))
+        .collect();
+    cross.push(Anim::fade_out(line).during(0.5));
+    cross.push(Anim::fade_in(dyn_graph).during(0.5));
+    tl.together(cross);
+    tl.play(Anim::set_value(phase, std::f64::consts::TAU).during(2.0));
+
+    tl.wait(0.8);
+    Ok(tl)
+}
+// ANCHOR_END
+
+/// 折线：数据点列 c2p 依次连线（plot_line_graph 的线部，open polyline）。
+fn polyline(axes: &ffanim::Axes, pts: &[(f64, f64)], stroke: ffanim::Color, width: f64) -> Item {
+    let mut path = BezPath::new();
+    for (i, (x, y)) in pts.iter().enumerate() {
+        let p = axes.c2p(*x, *y);
+        if i == 0 {
+            path.move_to(p);
+        } else {
+            path.line_to(p);
+        }
+    }
+    Item::from_path(path)
+        .with_stroke(stroke)
+        .with_stroke_width(width)
+}
+
+/// 散点：每点一个小实心圆（plot_line_graph 的点部）。
+fn scatter(axes: &ffanim::Axes, pts: &[(f64, f64)], r: f64, fill: ffanim::Color) -> Vec<Item> {
+    pts.iter()
+        .map(|(x, y)| Item::circle(Circle::new(axes.c2p(*x, *y), r)).with_fill(fill))
+        .collect()
 }

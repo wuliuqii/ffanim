@@ -1,8 +1,8 @@
 # 附录：与 manim gallery 对照
 
 以 [manim 官方 Example Gallery]（`docs/source/examples.rst`，5 大节 20 例）
-为对照表逐项核对。结论先行：**20 例中 11 例已有对应示例/能力，5 例可用
-现有词汇拼出，4 例存在真实能力缺口**（下表 🟡/❌），3D 类按定位不追。
+为对照表逐项核对。结论先行：**20 例中 12 例已有对应示例/能力，5 例可用
+现有词汇拼出，3 例存在真实能力缺口**（下表 🟡/❌），3D 类按定位不追。
 
 ## 逐项对照
 
@@ -25,7 +25,7 @@
 | ArgMinExample | 函数图像 + 动点跟随 | `Coords::c2p` + tracker（sine_demo 同族） | ✅ |
 | GraphAreaPlot | 曲线下面积填充 + 黎曼矩形 | `riemann_area`（c2p 采样拼多边形 + tracker 收敛） | ✅ |
 | PolygonOnAxes | 多边形随 tracker 重绘 | polygon + tracker 拼组 | 🟡 可拼 |
-| HeatDiagramPlot | 折线/散点图 `plot_line_graph` | 无折线图构造器 | ❌ 缺口 |
+| HeatDiagramPlot | 折线/散点图 `plot_line_graph` | `line_graph`（polyline + scatter 拼装） | ✅ |
 | FollowingGraphCamera | 相机跟随曲线 | Camera 即 Item + `transform_to`（M8.1） | 🟡 可拼 |
 | OpeningManim | 公式 Write + 网格非线性形变 | 公式族 ✅；`apply_function` 逐点形变 ❌ | 🟡 半覆盖 |
 | SineCurveUnitCircle | 单位圆展开正弦波 | 信号 updater 可拼，无现成示例 | 🟡 可拼 |
@@ -38,7 +38,7 @@
 | # | 缺口 | manim 对应 | 工作量 | 建议 |
 |---|---|---|---|---|
 | ~~1~~ | ~~曲线下面积填充 + 黎曼矩形~~ | `get_area` / `get_riemann_rectangles` | — | ✅ 已由 `riemann_area` 纯现有 API 拼装实现（basic.rs） |
-| 2 | 折线/散点图 | `Axes.plot_line_graph` | S~M | 数据展示场景常用 |
+| ~~2~~ | ~~折线/散点图~~ | `Axes.plot_line_graph` | — | ✅ 已由 `line_graph` 纯现有 API 拼装实现（basic.rs） |
 | 3 | 网格逐点形变 | `apply_function` + `prepare_for_nonlinear_transform` | M | OpeningManim 级演示效果 |
 | 4 | Angle 角度测量件 | `Angle(line1, line2)` | S~M | 几何教学常用 |
 | 5 | 布尔路径运算 | `Union/Intersection/Exclusion` | L | vello 无布尔，需引入 path 布尔库或自研，缓 |
