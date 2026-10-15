@@ -7,6 +7,15 @@
 
 ### Added
 
+- feat(render): GPU 默认出片 + 自动降级——新增后端选择器
+  `ffanim_render::FrameBackend`（枚举 `Gpu/Cpu` 双分支，均 `Send`，出片
+  管线经 `Mutex` 单实例共享，GPU 提交串行但帧求值仍分段并行）：
+  `auto()` 启动时探测 wgpu 适配器，成功走 Vello GPU、失败打 warn 自动
+  降级 vello_cpu（调用方零分支，无 GPU 是常态而非错误）；门面新增
+  `render_to_mp4_cpu` 强制 CPU 出片（逐字节确定，供回归比对/CI/无 GPU
+  环境显式锁定）；criterion 新增 `gpu_render_1080p` 基准（本机实测
+  1080p 单帧 CPU 35.7ms → GPU 2.73ms，≈13×，全管线实时率门禁余量
+  大幅增厚）；后端自动选择端到端测试覆盖
 - feat(api): Phase 2 Stage 糖层落地（docs/07 评审路线，fourier.rs 验收）——
   ① `ffanim::stage::Stage` 场景工作台：`from_theme_path/with_theme` 一次
   装配（主题加载 + Timeline + TypstEngine + CJK 字体注入），`text_at/
@@ -30,6 +39,11 @@
 
 ### Changed
 
+- feat(render)!: ffanim-render `gpu` feature 转为默认开启——出片默认后端
+  从 CPU 改为 GPU 优先（`render_to_mp4/render_to_mp4_frames` 经
+  `FrameBackend::auto()` 自动选择，无 GPU/驱动缺失自动降级 CPU）；无
+  GPU 环境编译可 `--no-default-features`（此时 `FrameBackend` 仅剩
+  `Cpu` 分支，出片一律 CPU）
 - feat(api)!: **Theme 解析前置（breaking）**——颜色在 `Theme::from_path`
   /`FromStr` 加载点一次性解析，取色 API `background()/foreground()/accent()`
   从 `Result<Color>` 收窄为 `Color`；非法十六进制在加载时报错（错误消息

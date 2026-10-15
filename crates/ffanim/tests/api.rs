@@ -136,6 +136,31 @@ fn stage_装配与一步上屏() {
 }
 
 #[test]
+fn 出片后端自动选择与强制cpu() {
+    use ffanim_render::RenderBackend as _;
+    // auto：GPU 可用走 GPU，否则降级 CPU（本机/CI 行为不同，均须成功出片）
+    let mut tl = ffanim::Timeline::new(64, 64, 30, ffanim::Color::new(0, 0, 0, 255));
+    let id = tl.add(ffanim::Item::rect(ffanim::kurbo::Rect::new(
+        0.0, 0.0, 16.0, 16.0,
+    )));
+    tl.play(ffanim::Anim::fade_in(id).during(0.5));
+    let c = tl.compile();
+    let dir = std::env::temp_dir().join("ffanim-backend-test");
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("auto.mp4");
+    ffanim::render_to_mp4(&c, &out).expect("auto 出片");
+    // cpu：锁定 vello_cpu，逐字节确定
+    let out_cpu = dir.join("cpu.mp4");
+    ffanim::render_to_mp4_cpu(&c, &out_cpu).expect("cpu 出片");
+    // FrameBackend 直接构造（门面 re-export）
+    let mut b = ffanim::FrameBackend::cpu();
+    let buf = ffanim::render_frame(&c, 0);
+    assert_eq!(b.render(&buf).len(), 64 * 64 * 4);
+    let _ = std::fs::remove_file(&out);
+    let _ = std::fs::remove_file(&out_cpu);
+}
+
+#[test]
 fn 自定义缓动注册表端到端() {
     // 注册二次缓入 → 挂动画 → 编译后按帧求值应快于线性（前半段进度落后、中点只有 0.25）
     let mut tl = ffanim::Timeline::new(100, 100, 30, ffanim::Color::new(0, 0, 0, 255));

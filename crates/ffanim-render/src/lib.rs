@@ -4,12 +4,14 @@
 //! - 两个后端消费同一 `DrawList`，单一路径表示，文本/公式已预提取为轮廓；
 //! - CPU 后端是兜底路径（CI/无 GPU），GPU 后端是生产路径。
 
+pub mod backend;
 pub mod cpu;
 pub mod tools;
 
 #[cfg(feature = "gpu")]
 pub mod gpu;
 
+pub use backend::FrameBackend;
 pub use cpu::CpuBackend;
 #[cfg(feature = "gpu")]
 pub use gpu::GpuBackend;

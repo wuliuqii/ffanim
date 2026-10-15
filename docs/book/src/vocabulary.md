@@ -1,7 +1,7 @@
 # 词汇速查
 
 ffanim 门面全部公开 API（与 `scripts/api_coverage.sh` 门禁同步，
-共 56 项）。按用途分组，每项一句话；「→」指向讲解它的课程或示例。
+共 61 项）。按用途分组，每项一句话；「→」指向讲解它的课程或示例。
 
 ## 时间轴与动画
 
@@ -66,8 +66,10 @@ ffanim 门面全部公开 API（与 `scripts/api_coverage.sh` 门禁同步，
 
 | 词汇 | 一句话 | 讲解 |
 |---|---|---|
-| `render_to_mp4` | 整段出片（ffmpeg rawvideo 管道） | [第一个动画](first-animation.md) |
+| `render_to_mp4` | 整段出片（ffmpeg rawvideo 管道；GPU 优先，无 GPU 自动降级 CPU） | [第一个动画](first-animation.md) |
 | `render_to_mp4_frames` | 指定帧区间出片 | — |
+| `render_to_mp4_cpu` | 强制 CPU 出片（逐字节确定，回归比对/CI 用） | — |
+| `FrameBackend` | 渲染后端选择器：`auto()` GPU 探测失败自动降级，`cpu()` 显式锁定 | — |
 | `render_frame` | 取单帧 `DrawList`（出片层拼装的入口） | [配方：画中画](recipes.md) |
 | `DrawList` | 一帧的绘制清单（可克隆改写后重渲染） | [配方：画中画](recipes.md) |
 | `sample_frames` | 全片均匀采样帧号（诊断图取帧） | [实战拆解](fourier-walkthrough.md) |

@@ -10,6 +10,7 @@ pub use ffanim_core::{
     TableOptions, TableSpec, Theme, Timeline, arrange, from_svg_file, from_svg_str, match_shapes,
     render_frame, table,
 };
+pub use ffanim_render::FrameBackend;
 
 /// 场景创作糖层（docs/07 评审 D1/D3）：Stage 工作台 + 像素意图落位。
 ///
@@ -62,6 +63,10 @@ pub fn render_to_mp4(tl: &CompiledTimeline, out: impl AsRef<std::path::Path>) ->
 /// 帧号平移：区间内第 f 帧 = 全片第 `frames.start + f` 帧（渲染是纯函数查表），
 /// 复用同一条 ffmpeg 管道。用于 `--section` 片段导出与分段出片。
 ///
+/// 渲染后端：自动选择（GPU 优先，无 GPU/驱动缺失自动降级 CPU，见
+/// [`FrameBackend::auto`]）。需要确定性输出（回归比对）时用
+/// [`render_to_mp4_cpu`]。
+///
 /// # 示例
 ///
 /// ```no_run
@@ -81,6 +86,25 @@ pub fn render_to_mp4_frames(
     out: impl AsRef<std::path::Path>,
     frames: std::ops::Range<usize>,
 ) -> Result<()> {
+    render_to_mp4_frames_with(tl, out, frames, ffanim_render::FrameBackend::auto)
+}
+
+/// 一键出片（强制 CPU）：与 [`render_to_mp4`] 同一管线，但帧渲染锁定
+/// vello_cpu 后端——逐字节确定，供回归比对 / CI / 无 GPU 环境显式选择。
+pub fn render_to_mp4_cpu(tl: &CompiledTimeline, out: impl AsRef<std::path::Path>) -> Result<()> {
+    render_to_mp4_frames_with(tl, out, 0..tl.duration_frames, || {
+        ffanim_render::FrameBackend::cpu()
+    })
+}
+
+/// 指定后端构造器的片段出片（`make_backend` 在编码启动前调用一次，
+/// 同一实例被并行帧闭包经 `Mutex` 共享）。
+fn render_to_mp4_frames_with(
+    tl: &CompiledTimeline,
+    out: impl AsRef<std::path::Path>,
+    frames: std::ops::Range<usize>,
+    make_backend: impl FnOnce() -> ffanim_render::FrameBackend,
+) -> Result<()> {
     if frames.is_empty() || frames.end > tl.duration_frames {
         return Err(Error::Other(format!(
             "帧区间 {frames:?} 越界：全片共 {} 帧（{:.2}s）",
@@ -88,14 +112,19 @@ pub fn render_to_mp4_frames(
             tl.duration_frames as f64 / f64::from(tl.fps),
         )));
     }
+    use std::sync::Mutex;
+    // render 是 trait 方法，需将 trait 引入作用域
     use ffanim_render::RenderBackend;
     let out = out.as_ref();
     let first = frames.start;
     let total = frames.len();
-    // CpuBackend 无状态，每帧独立实例（闭包 Send+Sync，分段并行无需加锁）
+    // 后端单实例 + Mutex 共享（vello Renderer/wgpu 资源均为 Send）：
+    // GPU 提交串行化，帧求值（DrawList 查表）仍然分段并行
+    let backend = Mutex::new(make_backend());
+    println!("渲染后端: {}", backend.lock().unwrap().name());
     let frame_of = move |f: usize| -> Vec<u8> {
         let draw = ffanim_core::render_frame(tl, first + f);
-        ffanim_render::CpuBackend::new().render(&draw)
+        backend.lock().unwrap().render(&draw)
     };
     ffanim_encode::encode_video(
         tl.width,

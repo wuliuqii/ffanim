@@ -14,6 +14,9 @@ use ffanim_core::kurbo::{Circle, Rect};
 use ffanim_core::{Anim, Color, Item, Timeline};
 use ffanim_render::{CpuBackend, RenderBackend};
 
+#[cfg(feature = "gpu")]
+use ffanim_render::GpuBackend;
+
 /// 构造 1080p 满配场景：60 个对象（圆/矩形混合），动画密度贴近教学视频场景。
 fn scene_1080p() -> ffanim_core::CompiledTimeline {
     let mut tl = Timeline::new(1920, 1080, 30, Color::new(14, 17, 22, 255));
@@ -55,6 +58,19 @@ fn bench_cpu_render_1080p(c: &mut Criterion) {
     });
 }
 
+/// 1080p 单帧 GPU 渲染（求值 + wgpu compute 光栅化 + 读回），`gpu` feature 下编译。
+#[cfg(feature = "gpu")]
+fn bench_gpu_render_1080p(c: &mut Criterion) {
+    let tl = scene_1080p();
+    let mut backend = GpuBackend::new().expect("GPU bench 需要可用 GPU/软件光栅实现");
+    c.bench_function("gpu_render_1080p", |b| {
+        b.iter(|| {
+            let draw = ffanim_core::render_frame(&tl, black_box(45));
+            backend.render(&draw)
+        })
+    });
+}
+
 /// 1080p 单帧 RGBA→RGB24 打包（≈6MB 源缓冲）。
 fn bench_rgb24_pack_1080p(c: &mut Criterion) {
     let tl = scene_1080p();
@@ -65,5 +81,13 @@ fn bench_rgb24_pack_1080p(c: &mut Criterion) {
     });
 }
 
+#[cfg(feature = "gpu")]
+criterion_group!(
+    benches,
+    bench_cpu_render_1080p,
+    bench_gpu_render_1080p,
+    bench_rgb24_pack_1080p
+);
+#[cfg(not(feature = "gpu"))]
 criterion_group!(benches, bench_cpu_render_1080p, bench_rgb24_pack_1080p);
 criterion_main!(benches);
