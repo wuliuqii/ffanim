@@ -123,6 +123,7 @@ mod tests {
         Formula {
             width_pt: 0.0,
             height_pt: 0.0,
+            font_size_pt: 32.0,
             pieces: texts
                 .iter()
                 .map(|t| FormulaPiece {

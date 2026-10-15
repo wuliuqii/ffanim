@@ -35,6 +35,8 @@ pub struct Formula {
     pub width_pt: f64,
     /// 排版高度（pt）。
     pub height_pt: f64,
+    /// 排版主字号（pt），供像素意图落位换算（[`Formula::to_items_at`]）。
+    pub font_size_pt: f64,
     /// 绘制片段（字形轮廓 + 几何形状，顺序即 Typst Frame 遍历序）。
     pub pieces: Vec<FormulaPiece>,
 }
@@ -64,6 +66,42 @@ impl Formula {
             })
             .collect()
     }
+
+    /// 像素意图落位：一步得到「屏上主字号 ≈ `font_px`、锚点对准 `(cx, cy)`」
+    /// 的对象列表（内部完成缩放换算与拆件落位，替代
+    /// `to_items → fit_transform → map(with_transform) → add` 四拍）。
+    ///
+    /// 锚点为 [`Anchor::Center`] 时 (cx, cy) 是缩放后公式的**中心**；
+    /// [`Anchor::Top`] 时是**顶边中点**（标题/字幕顶锚定排版常用）。
+    pub fn to_items_at(&self, cx: f64, cy: f64, font_px: f64, anchor: Anchor) -> Vec<Item> {
+        // 屏上字号 px = font_size_pt × scale ⟹ scale = font_px / font_size_pt
+        let scale = font_px / self.font_size_pt;
+        let (tx, ty) = match anchor {
+            Anchor::Center => (
+                cx - scale * self.width_pt / 2.0,
+                cy - scale * self.height_pt / 2.0,
+            ),
+            Anchor::Top => (
+                cx - scale * self.width_pt / 2.0,
+                cy, // 顶边锚定：缩放后顶边恰在 cy
+            ),
+        };
+        let place = Affine::translate((tx, ty)) * Affine::scale(scale);
+        self.to_items()
+            .into_iter()
+            .map(|item| item.with_transform(place))
+            .collect()
+    }
+}
+
+/// 落位锚点意图：`(cx, cy)` 指向缩放后公式的哪个点。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Anchor {
+    /// 中心锚定（默认）：公式中心落在目标点。
+    #[default]
+    Center,
+    /// 顶边中点锚定：公式顶边中点落在目标点（标题带、字幕行常用）。
+    Top,
 }
 
 /// 供测试/诊断：把公式重新居中到矩形（后续场景摆放用例）。
@@ -82,5 +120,50 @@ impl Formula {
             cx - scale * self.width_pt / 2.0,
             cy - scale * self.height_pt / 2.0,
         )) * Affine::scale(scale)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 100×50pt、主字号 25pt 的测试公式（单片段空白路径）。
+    fn sample() -> Formula {
+        Formula {
+            width_pt: 100.0,
+            height_pt: 50.0,
+            font_size_pt: 25.0,
+            pieces: vec![FormulaPiece {
+                path: BezPath::new(),
+                fill: Some(Color::new(0, 0, 0, 255)),
+                stroke: None,
+                source_range: None,
+                text: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn 像素意图落位_中心锚() {
+        // 25pt 公式落 50px 屏上字号 → scale = 2.0，中心 (480, 158)
+        let f = sample();
+        let items = f.to_items_at(480.0, 158.0, 50.0, Anchor::Center);
+        assert_eq!(items.len(), 1);
+        let [a, _, _, _, e, g] = items[0].transform.as_coeffs();
+        assert_eq!(a, 2.0, "scale = font_px/font_size_pt");
+        // 中心落位：e = cx - scale·w/2 = 480 - 100
+        assert!((e - (480.0 - 2.0 * 100.0 / 2.0)).abs() < 1e-9);
+        assert!((g - (158.0 - 2.0 * 50.0 / 2.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn 像素意图落位_顶锚() {
+        // 26pt 公式落 26px → scale 1.0，顶边锚在 495
+        let f = sample();
+        let items = f.to_items_at(480.0, 495.0, 26.0, Anchor::Top);
+        let [a, _, _, _, e, g] = items[0].transform.as_coeffs();
+        assert_eq!(a, 26.0 / 25.0);
+        assert!((e - (480.0 - 26.0 / 25.0 * 100.0 / 2.0)).abs() < 1e-9);
+        assert_eq!(g, 495.0, "顶边锚定：ty 恰为 cy");
     }
 }

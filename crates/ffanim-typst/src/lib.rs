@@ -23,7 +23,7 @@ pub use code::{CodeOptions, CodeTheme};
 pub use decimal::DecimalNumberOptions;
 pub use delimiter::Delimiter;
 pub use engine::TypstEngine;
-pub use formula::{Formula, FormulaOptions, FormulaPiece};
+pub use formula::{Anchor, Formula, FormulaOptions, FormulaPiece};
 pub use matching::{MatchPlan, match_formulas};
 pub use t2c::{build_t2c_markup, escape_markup};
 pub use text::{TextOptions, find_cjk_font};

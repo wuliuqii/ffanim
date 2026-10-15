@@ -35,8 +35,11 @@ ffanim 门面全部公开 API（与 `scripts/api_coverage.sh` 门禁同步，
 
 | 词汇 | 一句话 | 讲解 |
 |---|---|---|
+| `Stage` | 场景工作台：装配四件套一次到位，`text_at/formula_at` 一步上屏、`write/fade_in` 一行排入；`tl()` 回原语层 | [实战拆解](fourier-walkthrough.md) |
+| `Placed` | 一步上屏的组合件句柄：`ids()` 回查已注册对象 | [实战拆解](fourier-walkthrough.md) |
 | `TypstEngine` | Typst 排版引擎：`formula/text/code/arrow/delimiter/brace/decimal_signal` | [第 3 课](lesson-text.md) |
-| `Formula` | 排版产物：`to_items` 拆散件、`fit_transform/center_transform` 落位 | [第 3 课](lesson-text.md) |
+| `Formula` | 排版产物：`to_items` 拆散件、`to_items_at` 像素意图落位、`fit_transform/center_transform` 仿射落位 | [第 3 课](lesson-text.md) |
+| `Anchor` | 落位锚点：`Center` 中心 / `Top` 顶边中点 | [实战拆解](fourier-walkthrough.md) |
 | `FormulaOptions` | 公式选项（字号/颜色） | [第 3 课](lesson-text.md) |
 | `TextOptions` | 文本选项（字号/颜色/限宽/行距） | [text_demo](typography.md#text_demo) |
 | `CodeOptions` / `CodeTheme` | 代码块选项与内嵌高亮主题 | [code_demo](typography.md#code_demo) |

@@ -11,10 +11,17 @@ pub use ffanim_core::{
     render_frame, table,
 };
 
+/// 场景创作糖层（docs/07 评审 D1/D3）：Stage 工作台 + 像素意图落位。
+///
+/// 装配四件套（Theme/引擎/字体/时间轴）与文本上屏四拍（排版→拆件→落位→
+/// 编排）一步到位；纯组合器，可随时经 `tl()`/`into_timeline()` 绕过回原语层。
+/// 落位锚点 [`Anchor`](ffanim_typst::Anchor) 从 [`typst`] 模块引入。
+pub mod stage;
+
 /// 公式/富文本排版子系统（Typst 嵌入）：TypstEngine / Formula / Text / match_formulas。
 pub mod typst {
     pub use ffanim_typst::{
-        ArrowKind, CodeOptions, CodeTheme, DecimalNumberOptions, Delimiter, Formula,
+        Anchor, ArrowKind, CodeOptions, CodeTheme, DecimalNumberOptions, Delimiter, Formula,
         FormulaOptions, TextOptions, TypstEngine, find_cjk_font, match_formulas,
     };
 }

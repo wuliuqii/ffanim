@@ -233,7 +233,7 @@ let id = tl.add(Item::circle(...));               // 原语照用
 | 阶段 | 内容 | 依赖 | 验收 |
 |------|------|------|------|
 | Phase 1（API 地基） | D2 Theme 解析前置 + D4 组动画 API + D5 速率开放 ✅ 已完成（2026-10-15） | 无 breaking 风险项先行 | 门禁 `api_coverage.sh` + 全量场景重渲染 diff 为零（D2 除外，为取色等价值） |
-| Phase 2（糖层） | D1 Stage 便捷层 + D3 落位意图 | Phase 1 | `fourier.rs` Stage 版作为验收样例；37 场景全绿 |
+| Phase 2（Stage 糖层） | D1 Stage 便捷层 + D3 落位意图 API（`to_items_at`/`Anchor`）✅ 已完成（2026-10-15，fourier.rs Stage 版验收：236→208 行，样板区 −50%，出片目检等价） | 糖层可整体绕过 | `just ci` 全绿 + fourier strip/onion 目检 |
 | Phase 3（能力 P0 批次） | 1.1 clip 原语 + 2.1 ODE + 4.1 PNG 序列 + 6.1 bench 门禁 | 与 Phase 2 并行 | 透镜拼装配方用 clip 重写简化；ODE 场景（单摆/抛体）新示例 |
 | Phase 4（P1 主线） | 2.2 线代 → 1.2 3D 投影模拟；1.3/4.2/4.3 导出参数化；5.1 命中测试；5.2 参数 schema；7.1 发布工程；7.2 迁移指南 | Phase 3 | 按里程碑逐项 |
 

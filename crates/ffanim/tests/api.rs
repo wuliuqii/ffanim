@@ -110,6 +110,32 @@ fn theme_默认主题加载() {
 }
 
 #[test]
+fn stage_装配与一步上屏() {
+    // Stage 糖层（docs/07 D1/D3）：装配四件套 + 像素意图落位 + 一行组动画
+    let mut st = ffanim::stage::Stage::from_theme_path(
+        repo_root().join("themes/default.json"),
+        320,
+        180,
+        30,
+    )
+    .expect("主题装配");
+    // 文字/公式一步上屏（屏上字号 + 锚点），句柄可回查
+    let t = st
+        .text_at("标题", 160.0, 20.0, 24.0, ffanim::typst::Anchor::Top)
+        .expect("文字上屏");
+    assert!(!t.ids().is_empty(), "Placed 持有已注册句柄");
+    let f = st
+        .formula_at("x^2", 160.0, 90.0, 32.0, ffanim::typst::Anchor::Center)
+        .expect("公式上屏");
+    st.write(&f, 0.5, 0.06); // Write 错峰
+    st.fade_in(&t, 1.0); // 整组淡入
+    let c = st.into_timeline().compile();
+    // Write 5 个字形（x,^,2）+ 淡入 1 组：至少 2 段动画
+    assert!(c.anims.len() >= 2, "write/fade_in 已排入");
+    let _ = ffanim::render_frame(&c, 0);
+}
+
+#[test]
 fn 自定义缓动注册表端到端() {
     // 注册二次缓入 → 挂动画 → 编译后按帧求值应快于线性（前半段进度落后、中点只有 0.25）
     let mut tl = ffanim::Timeline::new(100, 100, 30, ffanim::Color::new(0, 0, 0, 255));

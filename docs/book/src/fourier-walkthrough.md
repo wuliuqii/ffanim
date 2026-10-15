@@ -16,7 +16,16 @@
 > 标题 → 级数公式逐字写出 → 坐标系与方波目标登场 → 部分和 S_N 逐阶
 > 升高逼近方波 → 推近看吉布斯过冲 → 结论。
 
-对应到 ffanim 就是**五幕**，每幕 = 几个 `tl.play` + `tl.wait`。
+对应到 ffanim 就是**五幕**，每幕 = 几个 `play` + `wait`。
+
+## 第 0 幕 · 一次装配
+
+```rust
+{{#include ../../../crates/ffanim/examples/fourier.rs:fourier_setup}}
+```
+
+知识点：`Stage::from_theme_path` 一行完成主题加载（颜色解析前置）、
+时间轴构造、Typst 排版引擎与 CJK 字体注入——环境四件套不再逐样手配。
 
 ## 幕 1 · 标题淡入
 
@@ -24,8 +33,8 @@
 {{#include ../../../crates/ffanim/examples/fourier.rs:fourier_title}}
 ```
 
-知识点：`engine.text` 排版 → `to_items()` 拆散件 → `fit_transform`
-落位 → `group(..., 0.0)` 同窗淡入（步长 0 = 整体同时出场）。
+知识点：`text_at` 以**像素意图**一步上屏——屏上 52px、顶边锚定 y=48、
+默认前景色，排版/拆件/落位/注册全在内部；`fade_in` 整组同窗淡入。
 
 ## 幕 2 · 公式逐字形写出（Write 效果）
 
@@ -34,8 +43,8 @@
 ```
 
 知识点：公式用 Typst math 语法（`frac(a,b)` 分数、`dots` 省略号）；
-`group(..., 0.06)` 步长 0.06s——**逐字形错峰 = Write**，这就是 manim
-`Write` 的全部秘密，没有专用类。
+`write(&f, 0.5, 0.06)` 第三参步长 0.06s——**逐字形错峰 = Write**，
+这就是 manim `Write` 的全部秘密，没有专用类。
 
 ## 幕 3 · 坐标系与方波目标
 
@@ -78,7 +87,7 @@
 | 步骤 | 用什么 |
 |---|---|
 | 先写脚本分幕 | 每幕 = play/wait 序列 |
-| 文字公式 | `TypstEngine` + `to_items` + `fit_transform` |
+| 文字公式 | `Stage::text_at` / `formula_at`（原语逃生舱在 `st.tl()`） |
 | 自定义曲线 | `from_path` + `c2p`（或 `plot` 直接吃闭包） |
 | 任何"随参数变化" | tracker + updater 重建 |
 | 引导视线 | 相机 `transform_to` / 强调两件套 |

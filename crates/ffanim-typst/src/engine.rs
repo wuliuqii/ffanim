@@ -351,7 +351,7 @@ fn compile_formula(
          $ {body} $",
         opts.font_size_pt
     );
-    compile_source(source, fonts, book, &Default::default())
+    compile_source(source, opts.font_size_pt, fonts, book, &Default::default())
 }
 
 /// 编译 markup 富文本（限宽时页面宽度 = 内容宽 + 左右 margin，恰好换行）。
@@ -376,7 +376,7 @@ fn compile_text(
          {body}",
         opts.font_size_pt, opts.leading_em
     );
-    compile_source(source, fonts, book, &Default::default())
+    compile_source(source, opts.font_size_pt, fonts, book, &Default::default())
 }
 
 /// 编译 raw 代码块（语法高亮主题以虚拟 tmTheme 文件提供）。
@@ -402,12 +402,13 @@ fn compile_code(
          {fence}{lang}\n{body}\n{fence}",
         opts.font_size_pt
     );
-    compile_source(source, fonts, book, &Arc::new(assets))
+    compile_source(source, opts.font_size_pt, fonts, book, &Arc::new(assets))
 }
 
 /// 编译 Typst 源码为 [`Formula`]（页宽/字号/颜色/行距由调用方拼入源码）。
 fn compile_source(
     source: String,
+    font_size_pt: f64,
     fonts: &Arc<Vec<Font>>,
     book: &Arc<LazyHash<FontBook>>,
     assets: &Arc<HashMap<String, String>>,
@@ -438,6 +439,7 @@ fn compile_source(
     Ok(Formula {
         width_pt: size.x.to_pt(),
         height_pt: size.y.to_pt(),
+        font_size_pt,
         pieces,
     })
 }

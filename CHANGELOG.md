@@ -7,6 +7,17 @@
 
 ### Added
 
+- feat(api): Phase 2 Stage 糖层落地（docs/07 评审路线，fourier.rs 验收）——
+  ① `ffanim::stage::Stage` 场景工作台：`from_theme_path/with_theme` 一次
+  装配（主题加载 + Timeline + TypstEngine + CJK 字体注入），`text_at/
+  formula_at` 以像素意图（屏上字号 + `Anchor` 锚点）一步完成「排版→拆件→
+  落位→注册」，`write/fade_in` 一行排入组动画，`tl()/into_timeline()`
+  原语逃生舱随时绕过（纯组合器零新渲染能力）；② D3 落位意图原语：
+  `Formula::to_items_at(cx, cy, font_px, Anchor)`（`Formula` 新增
+  `font_size_pt` 记录排版字号），替代四拍写法；验收：fourier.rs 236→
+  208 行（样板区 −50%，tracker/相机/诊断原语区不压），出片 16.67s 与
+  原版等价（strip/onion 目检），walkthrough 同步 Stage 叙述并新增
+  「第 0 幕 · 一次装配」
 - feat(api): Phase 1 API 地基落地（docs/07 评审路线）——① 组动画一行
   排入 `Timeline::animate_group(&ids, Anim::create, step)`：对已注册句柄
   逐个套用同一动画模板（`Anim::create`/`fade_in` 等构造器可直接作模板），

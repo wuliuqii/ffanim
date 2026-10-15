@@ -1,8 +1,11 @@
-//! ffanim 创作示例：傅里叶级数逼近方波（M6 实际创作验证）。
+//! ffanim 创作示例：傅里叶级数逼近方波（Stage 糖层验收样例，docs/07 D1/D3）。
 //!
-//! 真实用户视角走通全流程：主题 JSON → 公式 Write → 坐标系 + 方波目标 →
-//! 部分和 S_N 随 ValueTracker 逐阶升高（吉布斯过冲可见）→ 渲染出片 →
-//! strip/onion 诊断（agent 无看片验证循环的库式用法）。
+//! 真实用户视角走通全流程：Stage 一次装配（主题/引擎/CJK 字体/时间轴）→
+//! 标题与公式以像素意图（屏上字号 + 锚点）一步上屏 → Tracker 逐阶逼近
+//! （吉布斯过冲可见）→ 渲染出片 → strip/onion 诊断。
+//!
+//! 原语层四拍写法（排版→拆件→落位→注册）见本文件 git 历史
+//! （commit 9b45f28 及之前），或 [getting_started.rs] 对照。
 //!
 //! 运行（仓库根目录）：
 //! `cargo run -p ffanim --release --example fourier`（需 PATH 有 ffmpeg）
@@ -13,82 +16,60 @@
 //! 许可：Public domain，可自由分发）——裁剪 18s + 响度归一 -18 LUFS + 淡入淡出。
 
 use ffanim::kurbo::{BezPath, Vec2};
-use ffanim::typst::{FormulaOptions, TextOptions, TypstEngine};
-use ffanim::{Anim, Axes, Camera, Color, Font, Item, RateFunc, Theme, Timeline};
+use ffanim::stage::Stage;
+use ffanim::typst::Anchor;
+use ffanim::{Anim, Axes, Camera, Font, Item, RateFunc};
 
 const W: u32 = 960;
 const H: u32 = 540;
 const FPS: u32 = 30;
 
 fn main() -> ffanim::Result<()> {
-    // 数据驱动：颜色与描边宽度来自主题 JSON（仓库根 themes/）
+    // 一次装配：主题加载（颜色解析前置）+ Timeline + TypstEngine + CJK 字体注入
+    // ANCHOR: fourier_setup
     let theme_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../themes/default.json");
-    let theme = Theme::from_path(theme_path)?;
-    let accent = theme.accent();
-    let fg = theme.foreground();
-    let mut tl = Timeline::new(W, H, FPS, theme.background());
-
-    // 排版引擎 + 系统中文字体（env FFANIM_CJK_FONT → fc-list :lang=zh → 常见路径，
-    // 无硬编码路径；缺失时 Typst 退回内置拉丁字体）
-    let mut engine = TypstEngine::new(16);
-    if let Some((font, idx)) = ffanim::typst::find_cjk_font() {
-        engine.add_font_face(&font, idx)?;
-    }
+    let mut st = Stage::from_theme_path(theme_path, W, H, FPS)?;
+    let (fg, accent) = (st.foreground(), st.accent());
     // strip 时间轴标注用拉丁字体（与文本排版无关）
     let font = Font::from_system(None::<&str>)?;
+    // ANCHOR_END: fourier_setup
 
-    // —— 幕 1：标题淡入 ——
+    // —— 幕 1：标题淡入（顶边锚定 y=48，屏上 52px）——
     // ANCHOR: fourier_title
-    let title = engine.text("傅里叶级数与方波", &TextOptions::new(52.0, fg))?;
-    let title_place = title.fit_transform(f64::from(W) / 2.0, 48.0 + title.height_pt / 2.0, 1.0);
-    let title_ids: Vec<_> = title
-        .to_items()
-        .into_iter()
-        .map(|item| tl.add(item.with_transform(title_place)))
-        .collect();
-    tl.group(
-        title_ids.iter().map(|&id| Anim::fade_in(id).during(1.0)),
-        0.0,
-    );
-    tl.wait(0.3);
+    let title = st.text_at(
+        "傅里叶级数与方波",
+        f64::from(W) / 2.0,
+        48.0,
+        52.0,
+        Anchor::Top,
+    )?;
+    st.fade_in(&title, 1.0);
+    st.tl().wait(0.3);
     // ANCHOR_END: fourier_title
 
-    // —— 幕 2：级数公式逐字形写出 ——
+    // —— 幕 2：级数公式逐字形写出（中心落位 y=158，屏上 45px；Write 错峰 0.06s）——
     // ANCHOR: fourier_write
-    let fopts = FormulaOptions {
-        font_size_pt: 30.0,
-        text_color: fg,
-    };
-    let formula = engine.formula(
+    let formula = st.formula_at(
         "f(x) = 4/pi (sin x + frac(sin 3x, 3) + frac(sin 5x, 5) + dots)",
-        &fopts,
+        f64::from(W) / 2.0,
+        158.0,
+        45.0,
+        Anchor::Center,
     )?;
-    // 缩放后居中于标题下方（fit_transform 修正 center_transform 的缩放偏移）
-    let place = formula.fit_transform(f64::from(W) / 2.0, 158.0, 1.5);
-    let write_dur = 0.5;
-    let step = 0.06;
-    // 公式逐字写出：group 按步长错开排入（M8.3 组动画，替代逐段 play+overlap 手工对齐）
-    let ids: Vec<_> = formula
-        .to_items()
-        .into_iter()
-        .map(|piece| tl.add(piece.with_transform(place)))
-        .collect();
-    tl.group(
-        ids.iter()
-            .map(|&id| Anim::create(id).during(write_dur).rate(RateFunc::Smooth)),
-        step,
-    );
-    tl.wait(0.5);
+    st.write(&formula, 0.5, 0.06);
+    st.tl().wait(0.5);
     // ANCHOR_END: fourier_write
 
-    // —— 幕 3：坐标系 + 方波目标 ——
+    // —— 幕 3：坐标系 + 方波目标（原语区：几何件不走 Stage 糖层）——
     // ANCHOR: fourier_axes
+    let style = st.style().clone(); // 与 tl() 可变借用解耦
+    let tl = st.tl();
     let axes = Axes::new((-3.5, 3.5), (-1.5, 1.5))
         .with_size(880.0, 270.0)
         .with_center(f64::from(W) / 2.0, 350.0);
     let grid = tl.add(axes.grid_item(fg.with_alpha(40), 1.0));
     tl.play(Anim::fade_in(grid).during(0.6));
-    let ax = tl.add(axes.to_item(&theme.style));
+    let ax = tl.add(axes.to_item(&style));
     tl.overlap(0.4);
     tl.play(Anim::create(ax).during(1.0));
     // 方波目标：sign(sin(πx/2))，细线淡入（半透明前景色）
@@ -100,6 +81,7 @@ fn main() -> ffanim::Result<()> {
 
     // —— 幕 4：部分和 S_N 随 tracker N 逐阶升高 ——
     // ANCHOR: fourier_tracker
+    let tl = st.tl();
     let sum = tl.add_tracker(1.0);
     let curve = tl.add_updater(&[sum], move |v| {
         let nn = v[0].round() as i64;
@@ -139,22 +121,20 @@ fn main() -> ffanim::Result<()> {
             .during(1.4)
             .rate(RateFunc::Smooth),
     );
+    // ANCHOR_END: fourier_tracker
 
-    // —— 幕 5：结论 ——
-    let caption = engine.text(
+    // —— 幕 5：结论（字幕行顶锚 495px）——
+    let caption = st.text_at(
         "N → ∞ 时逼近方波，跳变处残留 ≈ 9% 过冲（吉布斯现象）",
-        &TextOptions::new(26.0, fg),
+        f64::from(W) / 2.0,
+        495.0,
+        26.0,
+        Anchor::Top,
     )?;
-    let cap_place = caption.fit_transform(f64::from(W) / 2.0, 495.0 + caption.height_pt / 2.0, 1.0);
-    let cap_ids: Vec<_> = caption
-        .to_items()
-        .into_iter()
-        .map(|item| tl.add(item.with_transform(cap_place)))
-        .collect();
-    tl.group(cap_ids.iter().map(|&id| Anim::fade_in(id).during(0.8)), 0.0);
-    tl.wait(1.2);
+    st.fade_in(&caption, 0.8);
+    st.tl().wait(1.2);
 
-    let mut tl = tl.compile();
+    let mut tl = st.into_timeline().compile();
     // ANCHOR_END: fourier_tracker
 
     // —— 出片 + 无看片诊断（agent 验证循环的库式用法）——
@@ -212,7 +192,7 @@ fn main() -> ffanim::Result<()> {
 }
 
 /// 方波目标曲线：sign(sin(πx/2))，断点 x = -2, 0, 2（数据坐标 → 像素）。
-fn square_wave_item(axes: &Axes, color: Color) -> Item {
+fn square_wave_item(axes: &Axes, color: ffanim::Color) -> Item {
     let mut path = BezPath::new();
     let pts = [
         (-3.5, -1.0),
