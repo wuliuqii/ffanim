@@ -39,6 +39,14 @@
 
 ### Changed
 
+- fix(encode): 出片编码并行度收敛（修复笔记本爆载过热重启）——分段 ffmpeg
+  此前无线程上限，libx264 每进程默认 ≈1.5×核数 帧线程，叠加
+  `available_parallelism` 全核分段（16 段 × 24 线程 ≈ 400 逻辑线程）+
+  16 渲染 worker，笔记本 APU（CPU 与 iGPU 同散热槽）长时间满载触发过热
+  保护重启；现每段 ffmpeg 强制 `-threads 1`（并行已由分段承担，段内帧
+  多线程纯浪费），默认段数收敛为核数一半（段数 × 2 恰好铺满逻辑核不超
+  订阅），`EncodeOptions::segments` 仍可显式全速；实测 fourier GPU 出片
+  平均负载 ≈4.7 核（user/real），出片 9.2s 正常
 - feat(render)!: ffanim-render `gpu` feature 转为默认开启——出片默认后端
   从 CPU 改为 GPU 优先（`render_to_mp4/render_to_mp4_frames` 经
   `FrameBackend::auto()` 自动选择，无 GPU/驱动缺失自动降级 CPU）；无

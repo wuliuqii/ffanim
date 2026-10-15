@@ -25,7 +25,8 @@ pub struct EncodeOptions {
     pub crf: u8,
     /// 编码速度/压缩权衡预设。
     pub preset: String,
-    /// 并行分段数；None = 自动（CPU 核数，帧数过少时降为 1）。
+    /// 并行分段数；None = 自动（核数一半，配合段内 ffmpeg 单线程恰好铺满
+    /// 逻辑核；帧数过少时降为 1）。需要全速出片可显式给大值。
     pub segments: Option<usize>,
     /// 画质预设（manim `-ql/-qm/-qh/-qk` 对应）：定输出分辨率缩放 +
     /// 各格式 CRF；None = 原尺寸直出。
@@ -187,8 +188,10 @@ pub fn encode_video(
     let segments = opts
         .segments
         .unwrap_or_else(|| {
+            // 默认核数一半：每段 = 1 渲染线程 + 1 单线程 ffmpeg，段数×2 恰好
+            // 铺满逻辑核不超订阅（全核分段会让笔记本 APU 长时间爆载过热重启）
             std::thread::available_parallelism()
-                .map(|n| n.get())
+                .map(|n| (n.get() / 2).max(1))
                 .unwrap_or(1)
         })
         .max(1)
@@ -247,7 +250,15 @@ pub fn encode_video(
 
 /// 分段编码器的输出参数（编解码器 + 画质预设缩放）。
 fn codec_args(fmt: Format, opts: &EncodeOptions) -> Vec<String> {
-    let mut args = vec!["-pix_fmt".to_string(), "yuv420p".to_string()];
+    let mut args = vec![
+        "-pix_fmt".to_string(),
+        "yuv420p".to_string(),
+        // 每段单线程：并行已由分段承担（段数≈核数/2），段内 x264 帧多线程
+        // 会以 1.5×核数/段 叠加（16 段 × 24 线程 ≈ 400 逻辑线程），笔记本
+        // APU 长时间全核爆载会触发过热保护重启
+        "-threads".to_string(),
+        "1".to_string(),
+    ];
     match fmt {
         Format::Mp4 => {
             // 画质预设给定时覆盖 opts.crf（manim 语义：质量档定码率）
