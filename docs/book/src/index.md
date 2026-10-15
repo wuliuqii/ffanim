@@ -9,7 +9,7 @@ ffanim 是 Rust + Typst + Vello 的数学动画引擎：**manim 的数学语义 
 | 路径 | 适合谁 | 去哪 |
 |---|---|---|
 | **只看** | 学生 / 老师 / 科普创作者，不想碰代码 | [效果画廊](effect-gallery.md) |
-| **上手写** | 想亲手跑出一条动画的人（不需要 Rust 基础） | [第一个动画](first-animation.md) |
+| **上手写** | 想亲手跑出一条动画的人（不需要 Rust 基础） | [第一个动画](first-animation.md) → [分课教程](lesson-shapes.md) |
 | **查源码** | 开发者，看全部官方场景的可复现源码 | [场景画廊](basic.md) |
 
 全部场景源码位于 [`crates/ffanim/examples/`]，是本书的唯一真相源——
@@ -33,6 +33,7 @@ cargo run --release -p ffanim --example getting_started
 | 示例文件 | 场景族 |
 |---|---|
 | `getting_started.rs` | 入门：矩形生长 → 变圆 → 淡出 |
+| `lessons.rs` | 分课教程素材：形状 / 动画词汇 / 文字公式 / 坐标系 / 布局强调 / 相机 |
 | `basic.rs` | 动画词汇 / 坐标系与函数图像 / 几何基元 / 相对布局 / 强调 / 语法糖 / 路径移动 / 结构匹配形变 / 布尔 / 轨迹 / 相机跟随 |
 | `typography.rs` | 公式排版与变换 / 富文本 / 标注复合件 / 代码高亮 / 按词着色 |
 | `assemblies.rs` | 花括号 / 定界符 / 箭头 / 数字滚动 |

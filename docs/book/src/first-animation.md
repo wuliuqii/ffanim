@@ -92,5 +92,5 @@ cargo run --release -p ffanim --example getting_started
 ## 下一步
 
 - 想快速能做什么 → [效果画廊](effect-gallery.md)
-- 想系统看词汇 → 从[场景画廊](basic.md)的 `demo_anim` 逐场景读源码
-- 想知道引擎如何思考 → 词汇手册（撰写中）
+- 想系统学 → [分课教程](lesson-shapes.md)六课，每课 30 行代码
+- 想看真实场景 → [场景画廊](basic.md)的 `demo_anim` 逐场景读源码
