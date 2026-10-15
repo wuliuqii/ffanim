@@ -15,7 +15,7 @@ const FPS: u32 = 30;
 const SCENES: &[&str] = &["pendulum_demo"];
 
 fn main() -> ffanim::Result<()> {
-    let names: Vec<String> = std::env::args().skip(1).map(Into::into).collect();
+    let names: Vec<String> = std::env::args().skip(1).collect();
     let names: Vec<String> = if names.is_empty() {
         SCENES.iter().map(|s| (*s).to_string()).collect()
     } else {

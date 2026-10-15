@@ -189,6 +189,14 @@ fn png序列导出与片段帧号对齐() {
     let _ = std::fs::remove_dir_all(&dir);
     // 越界区间必须报错
     assert!(ffanim::render_to_png_frames_range(&c, &dir, 29..31).is_err());
+    // 全片导出：0..duration_frames，帧数一致
+    let dir2 = std::env::temp_dir().join("ffanim-pngseq-full");
+    let _ = std::fs::remove_dir_all(&dir2);
+    ffanim::render_to_png_frames(&c, &dir2).expect("全片 PNG 序列导出");
+    assert!(dir2.join("0000.png").exists(), "首帧应写出");
+    assert!(dir2.join("0029.png").exists(), "末帧应写出");
+    assert!(!dir2.join("0030.png").exists(), "不应超出总帧数");
+    let _ = std::fs::remove_dir_all(&dir2);
 }
 
 #[test]
