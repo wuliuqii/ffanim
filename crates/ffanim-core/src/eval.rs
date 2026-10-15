@@ -32,6 +32,8 @@ pub struct CompiledTimeline {
     pub updaters: Vec<crate::tracker::Updater>,
     /// 相机对象句柄（None = 无相机，世界系即屏幕系）。
     pub camera: Option<ItemId>,
+    /// 自定义缓动注册表（`RateFunc::Custom` 查表用；构建期注册，编译时搬入）。
+    pub rates: crate::rate::RateTable,
     /// 总帧数（duration_s × fps）。
     pub duration_frames: usize,
 }
@@ -49,6 +51,7 @@ impl Clone for CompiledTimeline {
             trackers: self.trackers.clone(),
             updaters: self.updaters.clone(),
             camera: self.camera,
+            rates: self.rates.clone(),
             duration_frames: self.duration_frames,
         }
     }
@@ -64,6 +67,7 @@ impl std::fmt::Debug for CompiledTimeline {
             .field("trackers", &self.trackers)
             .field("updaters", &self.updaters)
             .field("camera", &self.camera)
+            .field("rates", &self.rates)
             .field("duration_frames", &self.duration_frames)
             .finish()
     }
@@ -95,7 +99,7 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
         .anims
         .iter()
         .filter(|a| matches!(a.kind, AnimKind::Transform { .. }))
-        .filter_map(|a| a.alpha_at(frame).map(|t| (a, t)))
+        .filter_map(|a| a.alpha_at(frame, &tl.rates).map(|t| (a, t)))
         .collect();
     let mut skipped: std::collections::HashSet<ItemId> = std::collections::HashSet::new();
     for (anim, _) in &active_morphs {
@@ -128,7 +132,7 @@ pub fn render_frame(tl: &CompiledTimeline, frame: usize) -> DrawList {
         state.transform = transform_at(tl, id, state.transform, frame);
         let mut opacity = 1.0;
         for anim in &tl.anims {
-            let Some(alpha) = anim.alpha_at(frame) else {
+            let Some(alpha) = anim.alpha_at(frame, &tl.rates) else {
                 continue;
             };
             match &anim.kind {
@@ -195,7 +199,7 @@ fn transform_at(tl: &CompiledTimeline, id: ItemId, base: Affine, f: usize) -> Af
     for anim in &tl.anims {
         match &anim.kind {
             AnimKind::TransformTo { id: tid, from, to } if *tid == id => {
-                if let Some(a) = anim.alpha_at(f) {
+                if let Some(a) = anim.alpha_at(f, &tl.rates) {
                     t = lerp_affine(from, to, a);
                     touched = true;
                 } else if f < anim.start && !touched {
@@ -208,7 +212,7 @@ fn transform_at(tl: &CompiledTimeline, id: ItemId, base: Affine, f: usize) -> Af
                 path,
                 base: from,
             } if *mid == id => {
-                if let Some(a) = anim.alpha_at(f) {
+                if let Some(a) = anim.alpha_at(f, &tl.rates) {
                     // 活跃段：沿路径弧长采样位移（起点对齐）
                     t = Affine::translate(move_offset(path, a)) * *from;
                     touched = true;
@@ -246,7 +250,7 @@ fn tracker_value(tl: &CompiledTimeline, tracker: TrackerId, f: usize) -> f64 {
         if *t != tracker {
             continue;
         }
-        if let Some(a) = anim.alpha_at(f) {
+        if let Some(a) = anim.alpha_at(f, &tl.rates) {
             return lerp(*from, *to, a);
         }
         if f >= anim.end {

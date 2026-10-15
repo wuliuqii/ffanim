@@ -70,10 +70,10 @@ fn main() -> ffanim::Result<()> {
 /// 表格 = core 侧逐格排版拼组（行组保留独立动画句柄）；z 序 = 注册序，
 /// 高亮底板须先于行组注册才能垫底。
 fn table_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
-    let fg = theme.foreground().unwrap();
-    let accent = theme.accent().unwrap();
+    let fg = theme.foreground();
+    let accent = theme.accent();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 表格文本/标题须 CJK 字形（find_cjk_font 优先，缺失时回退拉丁字体）
     let font = ffanim::typst::find_cjk_font()

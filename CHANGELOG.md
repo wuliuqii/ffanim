@@ -7,6 +7,28 @@
 
 ### Added
 
+- feat(api): Phase 1 API 地基落地（docs/07 评审路线）——① 组动画一行
+  排入 `Timeline::animate_group(&ids, Anim::create, step)`：对已注册句柄
+  逐个套用同一动画模板（`Anim::create`/`fade_in` 等构造器可直接作模板），
+  省去「收集 ids → map 构造 Anim → group」三步样板；② 自定义速率函数
+  开放：`Timeline::register_rate(f) -> RateFunc`（新增 `RateFunc::Custom(u16)`
+  注册表索引变体，保持 `Copy`/序列化语义），注册表随 compile 整体搬入
+  `CompiledTimeline.rates`（Arc 共享，渲染期分段并行查表），`RateFunc`
+  封闭枚举的缓动天花板拆除；③ 新公开导出 `RateTable`，端到端集成测试
+  覆盖（注册二次缓入 → 中点帧位移精确断言）
+
+### Changed
+
+- feat(api)!: **Theme 解析前置（breaking）**——颜色在 `Theme::from_path`
+  /`FromStr` 加载点一次性解析，取色 API `background()/foreground()/accent()`
+  从 `Result<Color>` 收窄为 `Color`；非法十六进制在加载时报错（错误消息
+  带字段名定位），不再泄漏到调用点——示例/CLI/测试 ~100 处 `?`/`unwrap`
+  摩擦全部消失；docs/07《核心能力缺口与 API 优化评审》入库（能力缺口
+  7 维度清单 + API 冗余根因与 Stage 糖层方案 + 4 Phase 落地路线，
+  3D 路线定为投影模拟、真 3D 光栅化列为非目标）
+
+### Added (book)
+
 - feat(book): 示例书重规划批 3——实战与参考落地：新增**实战拆解**
   页（fourier.rs 按五幕创作流程拆解：脚本先行 → 标题/公式/坐标系/
   tracker 逼近/出片诊断，源码加 5 个幕级 ANCHOR 子锚点逐段引用）与

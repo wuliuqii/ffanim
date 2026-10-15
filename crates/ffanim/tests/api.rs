@@ -100,12 +100,49 @@ fn theme_默认主题加载() {
     let theme =
         Theme::from_path(repo_root().join("themes/default.json")).expect("默认主题应可加载");
     assert!(!theme.name.is_empty());
-    // 语义色三件套均可解析
-    theme.background().expect("背景色");
-    theme.foreground().expect("前景色");
-    theme.accent().expect("强调色");
+    // 语义色三件套均可解析（解析前置：返回 Color 非 Result）
+    let bg: ffanim::Color = theme.background();
+    assert_eq!(bg.a, 255, "背景不透明");
+    theme.foreground();
+    theme.accent();
     // Style 为门面公开项（规则 B）：对象默认样式随主题加载
     let _style: &ffanim::Style = &theme.style;
+}
+
+#[test]
+fn 自定义缓动注册表端到端() {
+    // 注册二次缓入 → 挂动画 → 编译后按帧求值应快于线性（前半段进度落后、中点只有 0.25）
+    let mut tl = ffanim::Timeline::new(100, 100, 30, ffanim::Color::new(0, 0, 0, 255));
+    let id = tl.add(ffanim::Item::rect(ffanim::kurbo::Rect::new(
+        0.0, 0.0, 40.0, 40.0,
+    )));
+    let square = tl.register_rate(|t| t * t);
+    tl.play(
+        ffanim::Anim::shift_to(id, 50.0, 0.0)
+            .during(1.0)
+            .rate(square),
+    );
+    let c = tl.compile();
+    assert!(!c.rates.is_empty(), "编译产物应携带注册表");
+    // 中点帧（15/30）进度 = 0.25：位移 50×0.25 = 12.5（线性则为 25）
+    let mid = ffanim::render_frame(&c, 15);
+    let item = mid.items.iter().find(|it| it.id == id).expect("对象在场");
+    // Affine 系数 [a,b,c,d,e,f]，平移在 e/f；基线注册于原点，e 即位移
+    let dx = item.transform.as_coeffs()[4];
+    assert!(
+        (dx - 12.5).abs() < 1e-6,
+        "二次缓入中点位移应 12.5，实际 {dx}"
+    );
+    // 句柄直通组动画（animate_group）与 RateTable 同为 Phase 1 API，一并冒烟
+    let mut tl2 = ffanim::Timeline::new(100, 100, 30, ffanim::Color::new(0, 0, 0, 255));
+    let ids = tl2.add_group(vec![
+        ffanim::Item::rect(ffanim::kurbo::Rect::new(0.0, 0.0, 10.0, 10.0)),
+        ffanim::Item::rect(ffanim::kurbo::Rect::new(0.0, 0.0, 10.0, 10.0)),
+    ]);
+    tl2.animate_group(&ids, ffanim::Anim::fade_in, 0.1);
+    let c2 = tl2.compile();
+    assert_eq!(c2.anims.len(), 2, "组动画逐句柄排入");
+    let _table: &ffanim::RateTable = &c2.rates;
 }
 
 #[test]

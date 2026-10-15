@@ -8,9 +8,9 @@ use ffanim::kurbo::Rect;
 fn main() -> ffanim::Result<()> {
     // 数据驱动：颜色与描边宽度全部来自主题 JSON，代码零硬编码颜色
     let theme = Theme::from_path("themes/default.json")?;
-    let accent = theme.accent()?;
+    let accent = theme.accent();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, 30, theme.background()?);
+    let mut tl = Timeline::new(w, h, 30, theme.background());
 
     // 坐标系：x ∈ [-3,3]，y ∈ [-1.2,1.2]，居中放置
     let axes = Axes::new((-3.0, 3.0), (-1.2, 1.2))
@@ -18,7 +18,7 @@ fn main() -> ffanim::Result<()> {
         .with_center(f64::from(w) / 2.0, f64::from(h) / 2.0);
 
     // 网格：淡入
-    let grid = tl.add(axes.grid_item(theme.foreground()?.with_alpha(40), 1.0));
+    let grid = tl.add(axes.grid_item(theme.foreground().with_alpha(40), 1.0));
     tl.play(Anim::fade_in(grid).during(0.6));
 
     // 轴与刻度：错开 0.4s 后生长

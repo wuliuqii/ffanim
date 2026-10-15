@@ -30,7 +30,7 @@ pub use layout::{Direction, arrange};
 pub use match_shape::{MatchPlan, match_shapes};
 pub use ops::BoolOp;
 pub use path_util::{lerp_affine, lerp_path, partial_path};
-pub use rate::RateFunc;
+pub use rate::{RateFunc, RateTable};
 pub use style::{Color, Style, Theme};
 pub use svg::{from_svg_file, from_svg_str};
 pub use table::{TableOptions, TableSpec, table};

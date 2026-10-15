@@ -46,7 +46,7 @@ pub fn new(args: NewArgs) -> ffanim::Result<()> {
 pub fn info(args: InfoArgs) -> ffanim::Result<()> {
     let InfoArgs { theme } = args;
     let theme = ffanim::Theme::from_path(&theme)?;
-    let bg = theme.background()?;
+    let bg = theme.background();
     println!("主题: {}", theme.name);
     println!("背景色: #{:02x}{:02x}{:02x}{:02x}", bg.r, bg.g, bg.b, bg.a);
     println!("描边宽度: {}", theme.style.stroke_width);

@@ -84,20 +84,45 @@ pub struct Style {
 }
 
 /// 主题：调色板 + 默认样式 + 公式排版参数。
+///
+/// 颜色在加载时一次性解析（解析前置）：`background/foreground/accent` 直接返回
+/// [`Color`]，非法十六进制值在 `from_path`/`from_str` 加载点报错，不泄漏到调用点。
 #[derive(Debug, Clone, Deserialize)]
 pub struct Theme {
     /// 主题名（仅展示用）。
     pub name: String,
-    /// 调色板（语义色）。
+    /// 调色板（语义色，原始十六进制描述符）。
     pub palette: Palette,
     /// 对象默认样式。
     pub style: Style,
     /// 公式排版参数。
     pub formula: FormulaStyle,
+    /// 解析后的语义色缓存（加载入口填充，外部不可见）。
+    #[serde(skip)]
+    resolved: ResolvedColors,
+}
+
+/// 解析后的语义色（仅 [`Theme`] 加载流程写入）。
+#[derive(Debug, Clone, Copy)]
+struct ResolvedColors {
+    background: Color,
+    foreground: Color,
+    accent: Color,
+}
+
+/// serde(skip) 占位：真实值总是由加载入口的 `resolve` 覆盖。
+impl Default for ResolvedColors {
+    fn default() -> Self {
+        Self {
+            background: Color::new(0, 0, 0, 255),
+            foreground: Color::new(255, 255, 255, 255),
+            accent: Color::new(0, 0, 0, 255),
+        }
+    }
 }
 
 impl Theme {
-    /// 从文件路径加载。
+    /// 从文件路径加载（颜色在此处一次性解析，非法值即报错）。
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let json =
@@ -105,19 +130,33 @@ impl Theme {
         json.parse::<Self>()
     }
 
-    /// 常用语义色快捷访问（从调色板解析，解析失败属主题文件错误）。
-    pub fn background(&self) -> Result<Color> {
-        self.palette.background.parse()
+    /// 语义色解析前置：非法十六进制在加载点报错（带字段名定位）。
+    fn resolve(&mut self) -> Result<()> {
+        let parse = |spec: &ColorSpec, field: &str| {
+            spec.parse()
+                .map_err(|e| Error::UnknownColorField(format!("{field}: {e}")))
+        };
+        self.resolved = ResolvedColors {
+            background: parse(&self.palette.background, "palette.background")?,
+            foreground: parse(&self.palette.foreground, "palette.foreground")?,
+            accent: parse(&self.palette.accent, "palette.accent")?,
+        };
+        Ok(())
+    }
+
+    /// 画布背景色。
+    pub fn background(&self) -> Color {
+        self.resolved.background
     }
 
     /// 前景/文字色。
-    pub fn foreground(&self) -> Result<Color> {
-        self.palette.foreground.parse()
+    pub fn foreground(&self) -> Color {
+        self.resolved.foreground
     }
 
     /// 强调色（高亮、tracker 曲线等）。
-    pub fn accent(&self) -> Result<Color> {
-        self.palette.accent.parse()
+    pub fn accent(&self) -> Color {
+        self.resolved.accent
     }
 }
 
@@ -126,7 +165,9 @@ impl std::str::FromStr for Theme {
     type Err = Error;
 
     fn from_str(json: &str) -> Result<Self> {
-        serde_json::from_str(json).map_err(Error::ThemeParse)
+        let mut theme: Self = serde_json::from_str(json).map_err(Error::ThemeParse)?;
+        theme.resolve()?;
+        Ok(theme)
     }
 }
 
@@ -169,13 +210,17 @@ mod tests {
     fn 加载示例主题() {
         let theme: Theme = SAMPLE.parse().unwrap();
         assert_eq!(theme.name, "default");
-        assert_eq!(
-            theme.background().unwrap(),
-            Color::new(0x0e, 0x11, 0x16, 0xff)
-        );
-        assert_eq!(theme.accent().unwrap().to_rgba_f32()[3], 1.0);
+        assert_eq!(theme.background(), Color::new(0x0e, 0x11, 0x16, 0xff));
+        assert_eq!(theme.accent().to_rgba_f32()[3], 1.0);
         assert_eq!(theme.style.stroke_width, 4.0);
         assert_eq!(theme.formula.font_size_pt, 24.0);
+    }
+
+    #[test]
+    fn 非法调色板在加载点报错() {
+        let bad = SAMPLE.replace("#88c0d0", "#zzzzzz");
+        let err = bad.parse::<Theme>().unwrap_err().to_string();
+        assert!(err.contains("palette.accent"), "错误应带字段名: {err}");
     }
 
     #[test]

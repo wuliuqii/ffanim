@@ -82,10 +82,10 @@ fn brace_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
         .unwrap_or_else(|| Font::from_system(None::<&str>))?;
     // 花括号 = Typst MATH 装配（NewCMMath），与公式排版同引擎
     let mut engine = TypstEngine::new(8);
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 1) 标题淡入
     let text_path = font.outline_text("Brace 括注", 56.0).unwrap();
@@ -150,10 +150,10 @@ fn delimiter_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
         .unwrap_or_else(|| Font::from_system(None::<&str>))?;
     // 定界符 = Typst MATH 装配（NewCMMath GlyphAssembly），与公式排版同引擎
     let mut engine = TypstEngine::new(8);
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 1) 标题淡入
     let text_path = font.outline_text("Delimiter 定界符", 56.0).unwrap();
@@ -216,10 +216,10 @@ fn arrow_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
         .unwrap_or_else(|| Font::from_system(None::<&str>))?;
     // 箭头 = Typst MATH stretch 装配，与公式排版同引擎
     let mut engine = TypstEngine::new(8);
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 1) 标题淡入
     let text_path = font.outline_text("Arrow 箭头", 56.0).unwrap();
@@ -297,10 +297,10 @@ fn decimal_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
         .and_then(|(path, idx)| ffanim::Font::from_index(&path, idx).ok())
         .map(Ok)
         .unwrap_or_else(|| Font::from_system(None::<&str>))?;
-    let fg = theme.foreground().unwrap();
-    let accent = theme.accent().unwrap();
+    let fg = theme.foreground();
+    let accent = theme.accent();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 1) 标题淡入
     let text_path = font.outline_text("Decimal 数字滚动", 56.0).unwrap();

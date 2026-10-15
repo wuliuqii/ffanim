@@ -15,8 +15,8 @@ fn main() -> ffanim::Result<()> {
         env!("CARGO_MANIFEST_DIR"),
         "/../../themes/default.json"
     ))?;
-    let mut tl = Timeline::new(960, 540, 30, theme.background().unwrap());
-    let fg = theme.foreground().unwrap();
+    let mut tl = Timeline::new(960, 540, 30, theme.background());
+    let fg = theme.foreground();
     let _ = std::fs::create_dir_all("out");
     // ANCHOR_END: setup
 

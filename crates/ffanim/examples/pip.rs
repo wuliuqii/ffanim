@@ -33,9 +33,9 @@ fn main() -> ffanim::Result<()> {
         env!("CARGO_MANIFEST_DIR"),
         "/../../themes/default.json"
     ))?;
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
-    let mut tl = Timeline::new(W, H, FPS, theme.background().unwrap());
+    let accent = theme.accent();
+    let fg = theme.foreground();
+    let mut tl = Timeline::new(W, H, FPS, theme.background());
 
     // 主场景：坐标轴 + 正弦曲线，中心略偏左下给放大镜让位
     let axes = Axes::new((-3.5, 3.5), (-1.5, 1.5))

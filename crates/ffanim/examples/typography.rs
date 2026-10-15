@@ -83,14 +83,14 @@ fn formula_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     let mut engine = ffanim::typst::TypstEngine::new(16);
     let fopts = FormulaOptions {
         font_size_pt: 32.0,
-        text_color: theme.foreground().unwrap(),
+        text_color: theme.foreground(),
     };
     let f1 = engine.formula("x^2 + y^2 = z^2", &fopts)?;
     let f2 = engine.formula("x^2 - y^2 = 0", &fopts)?;
 
     let (w, h) = (960.0_f64, 540.0_f64);
     let scale = 2.0; // pt → px
-    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background());
     // 公式局部坐标 → 画布居中（fit_transform：缩放后的中心精确落在目标点）
     let place = |f: &ffanim::typst::Formula| f.fit_transform(w / 2.0, h / 2.0, scale);
 
@@ -149,10 +149,10 @@ fn formula_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 fn text_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::typst::{TextOptions, TypstEngine, find_cjk_font};
 
-    let fg = theme.foreground().unwrap();
-    let accent = theme.accent().unwrap();
+    let fg = theme.foreground();
+    let accent = theme.accent();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 引擎 + 系统中文字体（env FFANIM_CJK_FONT → fc-list → 常见路径）
     let mut engine = TypstEngine::new(16);
@@ -208,11 +208,11 @@ fn text_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 fn annotate_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::typst::{FormulaOptions, TextOptions, TypstEngine, find_cjk_font};
 
-    let fg = theme.foreground().unwrap();
-    let accent = theme.accent().unwrap();
+    let fg = theme.foreground();
+    let accent = theme.accent();
     let sw = f64::from(theme.style.stroke_width);
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     let mut engine = TypstEngine::new(16);
     if let Some((font, idx)) = find_cjk_font() {
@@ -317,11 +317,11 @@ fn annotate_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 fn code_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::typst::{CodeOptions, TextOptions, TypstEngine, find_cjk_font};
 
-    let fg = theme.foreground().unwrap();
-    let accent = theme.accent().unwrap();
+    let fg = theme.foreground();
+    let accent = theme.accent();
     let sw = f64::from(theme.style.stroke_width);
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     let mut engine = TypstEngine::new(16);
     if let Some((font, idx)) = find_cjk_font() {
@@ -384,12 +384,12 @@ fn code_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 fn t2c_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::typst::{TextOptions, TypstEngine, find_cjk_font};
 
-    let fg = theme.foreground().unwrap();
-    let accent = theme.accent().unwrap();
+    let fg = theme.foreground();
+    let accent = theme.accent();
     // Palette 仅三色：第二高亮色由主题色派生（数据驱动，不硬编码色值）
     let mid = ffanim::Color::lerp(fg, accent, 0.55);
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 中文正文须 CJK 字形（缺失时回退拉丁字体，中文会口占位但仍出片）
     let mut engine = TypstEngine::new(16);

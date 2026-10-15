@@ -32,6 +32,8 @@ pub struct Timeline {
     updaters: Vec<Updater>,
     /// 相机对象句柄（None = 无相机；见 [`Timeline::camera`]）。
     camera: Option<ItemId>,
+    /// 自定义缓动注册表（编译时整体搬入 [`CompiledTimeline`]）。
+    rates: crate::rate::RateTable,
     _canvas: CanvasArgs,
 }
 
@@ -48,6 +50,7 @@ impl Timeline {
             tracker_cur: Vec::new(),
             updaters: Vec::new(),
             camera: None,
+            rates: crate::rate::RateTable::default(),
             _canvas: CanvasArgs {
                 width,
                 height,
@@ -103,6 +106,27 @@ impl Timeline {
         self.trackers.len() - 1
     }
 
+    /// 注册自定义缓动函数（manim `rate_func` 的开放扩展点），返回可挂到
+    /// [`Anim::rate`](crate::anim::Anim::rate) 的 [`RateFunc::Custom`] 句柄。
+    ///
+    /// 输入输出约定同内置缓动：t ∈ \[0,1\] → 进度 ∈ \[0,1\]（结果会被钳制）。
+    /// 注册表随 [`Timeline::compile`] 搬入编译产物，渲染期并行查表。
+    ///
+    /// ```no_run
+    /// # use ffanim_core::{Timeline, Item, Anim, Color};
+    /// # let mut tl = Timeline::new(100, 100, 30, Color::new(0, 0, 0, 255));
+    /// # let id = tl.add(Item::rect(kurbo::Rect::new(0.0, 0.0, 10.0, 10.0)));
+    /// // 重力感缓入：进度按平方加速
+    /// let gravity = tl.register_rate(|t| t * t);
+    /// tl.play(Anim::shift_to(id, 50.0, 0.0).rate(gravity));
+    /// ```
+    pub fn register_rate(
+        &mut self,
+        f: impl Fn(f64) -> f64 + Send + Sync + 'static,
+    ) -> crate::rate::RateFunc {
+        self.rates.insert(f)
+    }
+
     /// 注册求值期信号：`f` 把依赖 tracker 的值映射为对象形状，每帧重建。
     ///
     /// 基准对象以 tracker 初始值生成（因此 [`Anim::create`] 的生长、
@@ -154,6 +178,27 @@ impl Timeline {
     /// 等价于逐段 `play + overlap` 手工对齐（M3 踩坑点），但意图直白不易错。
     pub fn group(&mut self, anims: impl IntoIterator<Item = Anim>, step: f64) -> &mut Self {
         self.stagger(anims, |_| step)
+    }
+
+    /// [`Timeline::group`] 的句柄直通形式：对已注册句柄逐个套用同一动画模板，
+    /// 省去「收集 ids → map 构造 Anim → group」三步样板。
+    ///
+    /// 动画模板可直接传构造器函数（如 [`Anim::create`] / [`Anim::fade_in`]）：
+    ///
+    /// ```no_run
+    /// # use ffanim_core::{Timeline, Item, Anim, Color};
+    /// # let mut tl = Timeline::new(100, 100, 30, Color::new(0, 0, 0, 255));
+    /// # let items: Vec<Item> = vec![];
+    /// let ids = tl.add_group(items);
+    /// tl.animate_group(&ids, Anim::create, 0.06); // 逐字形写出
+    /// ```
+    pub fn animate_group(
+        &mut self,
+        ids: &[ItemId],
+        template: impl Fn(ItemId) -> Anim,
+        step: f64,
+    ) -> &mut Self {
+        self.group(ids.iter().copied().map(template), step)
     }
 
     /// [`Timeline::group`] 的 lag ratio 形式：相邻段起始间隔 = ratio × 前一段时长
@@ -474,6 +519,7 @@ impl Timeline {
             trackers: self.trackers,
             updaters: self.updaters,
             camera: self.camera,
+            rates: self.rates,
             duration_frames,
         }
     }
@@ -748,6 +794,23 @@ mod tests {
     }
 
     #[test]
+    fn animate_group_句柄直通与_group_等价() {
+        // 构造器函数直接作模板：animate_group 与 group+map 排入完全一致
+        let mut tl = make_tl();
+        let ids = tl.add_group(vec![
+            rect_item(Color::new(255, 0, 0, 255)),
+            rect_item(Color::new(0, 255, 0, 255)),
+        ]);
+        tl.animate_group(&ids, Anim::fade_in, 0.1);
+        tl.animate_group(&ids, |id| Anim::create(id).during(0.4), 0.2);
+        let c = tl.compile();
+        assert_eq!(c.anims.len(), 4, "两轮组动画各 2 段");
+        // 首轮 fade_in 步长 0.1（3 帧 @30fps）：窗口起点 0 与 3
+        let starts: Vec<usize> = c.anims[..2].iter().map(|a| a.start).collect();
+        assert_eq!(starts, vec![0, 3], "步长错峰排入");
+    }
+
+    #[test]
     fn save_state_restore_完整恢复() {
         use crate::eval::render_frame;
         let mut tl = make_tl();
@@ -785,10 +848,14 @@ pub struct ScheduledAnim {
 
 impl ScheduledAnim {
     /// 动画在帧 f 的进度（已应用缓动），不活跃返回 None。
-    pub(crate) fn alpha_at(&self, f: usize) -> Option<f64> {
+    ///
+    /// 自定义缓动（`RateFunc::Custom`）按编译产物的注册表查表求值。
+    pub(crate) fn alpha_at(&self, f: usize, table: &crate::rate::RateTable) -> Option<f64> {
         (f >= self.start && f < self.end).then(|| {
-            self.rate
-                .eval((f - self.start) as f64 / (self.end - self.start) as f64)
+            table.eval(
+                self.rate,
+                (f - self.start) as f64 / (self.end - self.start) as f64,
+            )
         })
     }
 }

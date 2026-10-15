@@ -73,9 +73,9 @@ fn main() -> ffanim::Result<()> {
 // ANCHOR: lesson_shapes
 /// 第 1 课 · 形状与样式：三种基元 × 三种着色（填充 / 纯描边 / 半透明）。
 fn lesson_shapes(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
-    let mut tl = Timeline::new(960, 540, fps, theme.background().unwrap());
+    let accent = theme.accent();
+    let fg = theme.foreground();
+    let mut tl = Timeline::new(960, 540, fps, theme.background());
 
     // 圆：填充 + 描边（fill 决定内部色，stroke 决定轮廓色与粗细）
     let circle = tl.add(
@@ -110,9 +110,9 @@ fn lesson_shapes(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 // ANCHOR: lesson_anims
 /// 第 2 课 · 动画词汇：一条时间线串起最常用的四个动画段。
 fn lesson_anims(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
-    let fg = theme.foreground().unwrap();
-    let accent = theme.accent().unwrap();
-    let mut tl = Timeline::new(960, 540, fps, theme.background().unwrap());
+    let fg = theme.foreground();
+    let accent = theme.accent();
+    let mut tl = Timeline::new(960, 540, fps, theme.background());
 
     // 1) create：描边像手绘一样「生长」出来（during 定时长，rate 定缓动）
     let shape = tl.add(
@@ -145,9 +145,9 @@ fn lesson_anims(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 fn lesson_text(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::typst::{FormulaOptions, TextOptions, TypstEngine, find_cjk_font};
 
-    let fg = theme.foreground().unwrap();
-    let accent = theme.accent().unwrap();
-    let mut tl = Timeline::new(960, 540, fps, theme.background().unwrap());
+    let fg = theme.foreground();
+    let accent = theme.accent();
+    let mut tl = Timeline::new(960, 540, fps, theme.background());
 
     // 排版引擎 + 系统中文字体（中文文本必须有 CJK 字形，否则口占位）
     let mut engine = TypstEngine::new(16);
@@ -188,9 +188,9 @@ fn lesson_text(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 fn lesson_axes(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::{Axes, RateFunc};
 
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
-    let mut tl = Timeline::new(960, 540, fps, theme.background().unwrap());
+    let accent = theme.accent();
+    let fg = theme.foreground();
+    let mut tl = Timeline::new(960, 540, fps, theme.background());
 
     // 坐标系：数据范围 x∈[-4,4] y∈[-1.6,1.6]，占画布 800×360 居中
     let axes = Axes::new((-4.0, 4.0), (-1.6, 1.6))
@@ -224,9 +224,9 @@ fn lesson_layout(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::typst::{FormulaOptions, TypstEngine};
     use ffanim::{Direction, arrange};
 
-    let fg = theme.foreground().unwrap();
-    let accent = theme.accent().unwrap();
-    let mut tl = Timeline::new(960, 540, fps, theme.background().unwrap());
+    let fg = theme.foreground();
+    let accent = theme.accent();
+    let mut tl = Timeline::new(960, 540, fps, theme.background());
     let mut engine = TypstEngine::new(16);
     let fopts = FormulaOptions {
         font_size_pt: 26.0,
@@ -275,8 +275,8 @@ fn lesson_layout(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 fn lesson_camera(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::{Axes, Camera};
 
-    let accent = theme.accent().unwrap();
-    let mut tl = Timeline::new(960, 540, fps, theme.background().unwrap());
+    let accent = theme.accent();
+    let mut tl = Timeline::new(960, 540, fps, theme.background());
 
     // 场景内容：一条正弦曲线（推近后细节更清晰）
     let axes = Axes::new((-4.0, 4.0), (-1.6, 1.6))

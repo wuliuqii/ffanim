@@ -7,11 +7,12 @@ ffanim 门面全部公开 API（与 `scripts/api_coverage.sh` 门禁同步，
 
 | 词汇 | 一句话 | 讲解 |
 |---|---|---|
-| `Timeline` | 时间轴：`add` 注册对象、`play/wait` 排节目单、`group/together/overlap` 编排 | [第 2 课](lesson-anims.md) |
+| `Timeline` | 时间轴：`add` 注册对象、`play/wait` 排节目单、`group/together/overlap/animate_group` 编排 | [第 2 课](lesson-anims.md) |
 | `CompiledTimeline` | `compile()` 产物：求值表，渲染期纯函数查表 | [实战拆解](fourier-walkthrough.md) |
 | `Anim` | 动画段：`create/transform/move_to/fade_out/…` × `.during/.rate` | [第 2 课](lesson-anims.md) |
 | `AnimKind` | 动画种类枚举（`describe()` 输出可读名，诊断用） | — |
-| `RateFunc` | 缓动曲线：`Smooth`（默认）/`Linear`/`EaseIn…` | [第 2 课](lesson-anims.md) |
+| `RateFunc` | 缓动曲线：`Smooth`（默认）/`Linear`/`EaseIn…`/`Custom`（自定义注册） | [第 2 课](lesson-anims.md) |
+| `RateTable` | 自定义缓动注册表：`register_rate(f)` 填充，随编译产物查表求值 | — |
 | `PoseDelta` | 相对位姿描述（`shift_to/rotate_to/scale_to` 的内部解析） | [primitives_demo](basic.md#primitives_demo) |
 | `ItemId` | 对象句柄：`tl.add` 返回，动画按句柄寻址 | [第 1 课](lesson-shapes.md) |
 | `Direction` | 方向枚举（贴边/排队/定界共用） | [第 5 课](lesson-layout.md) |

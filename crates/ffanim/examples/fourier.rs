@@ -24,9 +24,9 @@ fn main() -> ffanim::Result<()> {
     // 数据驱动：颜色与描边宽度来自主题 JSON（仓库根 themes/）
     let theme_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../themes/default.json");
     let theme = Theme::from_path(theme_path)?;
-    let accent = theme.accent()?;
-    let fg = theme.foreground()?;
-    let mut tl = Timeline::new(W, H, FPS, theme.background()?);
+    let accent = theme.accent();
+    let fg = theme.foreground();
+    let mut tl = Timeline::new(W, H, FPS, theme.background());
 
     // 排版引擎 + 系统中文字体（env FFANIM_CJK_FONT → fc-list :lang=zh → 常见路径，
     // 无硬编码路径；缺失时 Typst 退回内置拉丁字体）

@@ -100,12 +100,12 @@ fn main() -> ffanim::Result<()> {
 // ANCHOR: demo_anim
 /// M2 验收场景：三角形描边生长 → 圆形滑入 → 圆形形变放大 → 文字淡入。
 fn demo_anim(theme: &Theme, font: &Font, fps: u32) -> Timeline {
-    let accent = theme.accent().unwrap();
-    let foreground = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let foreground = theme.foreground();
     let sw = f64::from(theme.style.stroke_width);
     let (w, h) = (960u32, 540u32);
 
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 三角形：左侧，描边生长
     let tri = Item::regular_polygon((f64::from(w) * 0.25, f64::from(h) * 0.62).into(), 120.0, 3)
@@ -166,16 +166,16 @@ fn demo_anim(theme: &Theme, font: &Font, fps: u32) -> Timeline {
 fn sine_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::Axes;
 
-    let accent = theme.accent().unwrap();
+    let accent = theme.accent();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     let axes = Axes::new((-3.0, 3.0), (-1.2, 1.2))
         .with_size(840.0, 400.0)
         .with_center(f64::from(w) / 2.0, f64::from(h) / 2.0);
 
     // 网格先淡入，坐标轴描边生长
-    let grid = tl.add(axes.grid_item(theme.foreground().unwrap().with_alpha(40), 1.0));
+    let grid = tl.add(axes.grid_item(theme.foreground().with_alpha(40), 1.0));
     tl.play(Anim::fade_in(grid).during(0.6));
     let ax = tl.add(axes.to_item(&theme.style));
     tl.overlap(0.4);
@@ -210,11 +210,11 @@ fn sine_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 /// scale_to / move_to` 四个相对位姿动作（构建期解析为绝对 TransformTo）。
 fn primitives_demo(theme: &Theme, fps: u32) -> Timeline {
     use ffanim::typst::{ArrowKind, TypstEngine};
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let sw = f64::from(theme.style.stroke_width);
     let (w, h) = (960.0_f64, 540.0_f64);
-    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background());
 
     // —— 标注基元逐个 create（group 错开 0.15s）——
     let line = tl.add(
@@ -277,11 +277,11 @@ fn layout_demo(theme: &Theme, fps: u32) -> Timeline {
     use ffanim::kurbo::Vec2;
     use ffanim::{Direction, ItemId, arrange};
 
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let sw = f64::from(theme.style.stroke_width);
     let (w, h) = (960.0_f64, 540.0_f64);
-    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background());
 
     // 标题块贴顶边（to_edge：另一轴对画布居中）
     let title = tl.add(
@@ -350,11 +350,11 @@ fn layout_demo(theme: &Theme, fps: u32) -> Timeline {
 fn emphasize_demo(theme: &Theme, fps: u32) -> Timeline {
     use ffanim::kurbo::BezPath;
 
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let sw = f64::from(theme.style.stroke_width);
     let (w, h) = (960.0_f64, 540.0_f64);
-    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background());
 
     // 左上：圆 create 后 indicate（放大 1.3 倍再复原——"注意这一项"）
     let circle = tl.add(
@@ -400,11 +400,11 @@ fn sugar_demo(theme: &Theme, fps: u32) -> Timeline {
     use ffanim::Direction;
     use ffanim::typst::{ArrowKind, TypstEngine};
 
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let sw = f64::from(theme.style.stroke_width);
     let (w, h) = (960.0_f64, 540.0_f64);
-    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w as u32, h as u32, fps, theme.background());
 
     // 1) Uncreate：圆描边生长 → 收尾收回（create 的镜像）
     let circle = tl.add(
@@ -506,11 +506,11 @@ fn sugar_demo(theme: &Theme, fps: u32) -> Timeline {
 /// 演示 `Anim::move_along_path` 的逐帧路径采样求值（匀速参数化 + 缓动）。
 fn move_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     let font = Font::from_system(None::<&str>)?;
-    let fg = theme.foreground().unwrap();
-    let accent = theme.accent().unwrap();
+    let fg = theme.foreground();
+    let accent = theme.accent();
     let sw = f64::from(theme.style.stroke_width);
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 1) 标题淡入
     let text_path = font.outline_text("MoveAlongPath", 64.0).unwrap();
@@ -554,10 +554,10 @@ fn shapes_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::{Color, ItemId};
 
     let font = Font::from_system(None::<&str>)?;
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 1) 标题淡入
     let text_path = font.outline_text("TransformMatchingShapes", 52.0).unwrap();
@@ -625,10 +625,10 @@ fn shapes_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 fn riemann_area(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::Axes;
 
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     let f = |x: f64| x.sin();
     let pi = std::f64::consts::PI;
@@ -752,10 +752,10 @@ fn area_under(
 fn line_graph(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::Axes;
 
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 示例数据：12 个月测量值（点列定义一次，静态/动态共用）
     const PTS: [(f64, f64); 12] = [
@@ -858,10 +858,10 @@ const ANGLE_ARC_R: f64 = 70.0;
 fn angle_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::typst::{FormulaOptions, TypstEngine};
 
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // θ 标注排版一次：中心锚定到原点的字形，动态段仅做仿射平移（无逐帧重排）
     let mut engine = TypstEngine::new(8);
@@ -955,10 +955,10 @@ fn angle_group(
 fn circle_sine_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::Axes;
 
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     let tau = std::f64::consts::TAU;
     // 左：单位圆区（数据域 [-1.4,1.4]²）；右：正弦区（x 数据域 [0, 2π] 与相位同标度）
@@ -1042,9 +1042,9 @@ fn circle_sine_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 fn warp_grid_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::Axes;
 
-    let fg = theme.foreground().unwrap();
+    let fg = theme.foreground();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     let axes = Axes::new((-3.0, 3.0), (-2.0, 2.0))
         .with_size(780.0, 360.0)
@@ -1130,11 +1130,11 @@ fn boolean_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::BoolOp;
     use ffanim::typst::{FormulaOptions, TypstEngine};
 
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let font = Font::from_system(None::<&str>)?;
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 椭圆 A（小）与 B（大 = A ×2 右移）：右半交叠（manim RIGHT*3 关系）；布尔原语输入
     // A 常驻偏淡（alpha 150），布尔结果覆盖高填充（alpha 235）以区分本体与结果
@@ -1212,10 +1212,10 @@ fn boolean_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 /// 「已走过轨迹」——轨迹 = 起点到当前进度的逐段折线，每帧整体重绘
 /// （无 trace 专用件，生长语义由「进度截断的参数化重建」表达）。
 fn trace_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     // 方形轨迹框（弱描边 ≙ manim box）与周长参数化（t∈[0,1)，左下角起逆时针）
     // 常量元组使 square_pt 无捕获 → 可 move 进 'static updater
@@ -1274,10 +1274,10 @@ fn polygon_axes_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::Axes;
     use ffanim::typst::{DecimalNumberOptions, TypstEngine};
 
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     let axes = Axes::new((0.0, 8.0), (0.0, 5.0))
         .with_size(780.0, 380.0)
@@ -1337,10 +1337,10 @@ fn polygon_axes_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
 fn follow_cam_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     use ffanim::{Axes, Camera};
 
-    let accent = theme.accent().unwrap();
-    let fg = theme.foreground().unwrap();
+    let accent = theme.accent();
+    let fg = theme.foreground();
     let (w, h) = (960u32, 540u32);
-    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+    let mut tl = Timeline::new(w, h, fps, theme.background());
 
     let axes = Axes::new((-4.0, 4.0), (-1.6, 1.6))
         .with_size(880.0, 360.0)
