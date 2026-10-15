@@ -8,7 +8,7 @@
 
 use ffanim::kurbo::Shape as _;
 use ffanim::kurbo::{Affine, BezPath, Circle, Point, Rect};
-use ffanim::{Anim, Font, Item, Theme, Timeline};
+use ffanim::{Anim, Font, Item, RateFunc, Theme, Timeline};
 
 const FPS: u32 = 30;
 
@@ -28,6 +28,9 @@ const SCENES: &[&str] = &[
     "circle_sine_demo",
     "warp_grid_demo",
     "boolean_demo",
+    "trace_demo",
+    "polygon_axes_demo",
+    "follow_cam_demo",
 ];
 
 fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
@@ -46,6 +49,9 @@ fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
         "circle_sine_demo" => circle_sine_demo(theme, FPS),
         "warp_grid_demo" => warp_grid_demo(theme, FPS),
         "boolean_demo" => boolean_demo(theme, FPS),
+        "trace_demo" => trace_demo(theme, FPS),
+        "polygon_axes_demo" => polygon_axes_demo(theme, FPS),
+        "follow_cam_demo" => follow_cam_demo(theme, FPS),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -1195,6 +1201,216 @@ fn boolean_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
         ]);
     }
     tl.wait(0.3);
+    Ok(tl)
+}
+// ANCHOR_END
+
+// ANCHOR: trace_demo
+/// PointWithTrace 对齐场景：点沿方形走一圈，身后轨迹逐段生长。
+///
+/// 纯现有 API 拼装：tracker 匀速推进 + 双 updater 分别重建「动点」与
+/// 「已走过轨迹」——轨迹 = 起点到当前进度的逐段折线，每帧整体重绘
+/// （无 trace 专用件，生长语义由「进度截断的参数化重建」表达）。
+fn trace_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    // 方形轨迹框（弱描边 ≙ manim box）与周长参数化（t∈[0,1)，左下角起逆时针）
+    // 常量元组使 square_pt 无捕获 → 可 move 进 'static updater
+    const SQ: (f64, f64, f64) = (480.0, 290.0, 130.0); // cx, cy, half
+    let square_pt = |t: f64| {
+        let (cx, cy, half) = SQ;
+        let (a, f) = ((t * 4.0) as usize % 4, (t * 4.0) % 1.0);
+        match a {
+            0 => Point::new(cx - half + 2.0 * half * f, cy + half), // 底边 左→右
+            1 => Point::new(cx + half, cy + half - 2.0 * half * f), // 右边 下→上
+            2 => Point::new(cx + half - 2.0 * half * f, cy - half), // 顶边 右→左
+            _ => Point::new(cx - half, cy - half + 2.0 * half * f), // 左边 上→下
+        }
+    };
+    let mut sq = BezPath::new();
+    sq.move_to(square_pt(0.0));
+    for i in 1..=160 {
+        sq.line_to(square_pt(i as f64 / 160.0));
+    }
+    sq.close_path();
+    let box_id = tl.add(
+        Item::from_path(sq)
+            .with_stroke(fg.with_alpha(90))
+            .with_stroke_width(2.0),
+    );
+    tl.play(Anim::create(box_id).during(0.6));
+
+    // 进度 tracker：0 → 1 走一圈（Linear 匀速），双 updater 联动
+    let t = tl.add_tracker(0.0);
+    let dot = tl.add_updater(&[t], move |v| {
+        Item::circle(Circle::new(square_pt(v[0]), 10.0)).with_fill(accent)
+    });
+    tl.play(Anim::fade_in(dot).during(0.3));
+    const N: usize = 240; // 轨迹离散段数
+    tl.add_updater(&[t], move |v| {
+        let n = (v[0] * N as f64).ceil() as usize;
+        let mut path = BezPath::new();
+        path.move_to(square_pt(0.0));
+        for i in 1..=n {
+            path.line_to(square_pt(i as f64 / N as f64));
+        }
+        Item::from_path(path).with_stroke(fg).with_stroke_width(2.5)
+    });
+    tl.play(Anim::set_value(t, 1.0).during(4.0).rate(RateFunc::Linear));
+    tl.wait(0.5);
+    Ok(tl)
+}
+// ANCHOR_END
+
+// ANCHOR: polygon_axes_demo
+/// PolygonOnAxes 对齐场景：矩形贴轴随 tracker 重绘 + 面积数字联动。
+///
+/// 纯现有 API 拼装：宽高双 tracker 驱动 updater 每帧重建矩形与两个轴上
+/// 拖点（≙ manim 拖拽点），面积 = DecimalNumber 信号取 v[0]·v[1] 组合。
+fn polygon_axes_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
+    use ffanim::Axes;
+    use ffanim::typst::{DecimalNumberOptions, TypstEngine};
+
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    let axes = Axes::new((0.0, 8.0), (0.0, 5.0))
+        .with_size(780.0, 380.0)
+        .with_center(430.0, 290.0);
+    let ax = tl.add(axes.to_item(&theme.style));
+    tl.play(Anim::create(ax).during(0.8));
+
+    // 矩形 + 两个轴上拖点：双 tracker 驱动逐帧重建（左下角固定数据原点）
+    let rw = tl.add_tracker(3.0);
+    let rh = tl.add_tracker(2.0);
+    let rect = tl.add_updater(&[rw, rh], move |v| {
+        Item::group(vec![
+            Item::rect(Rect::from_points(axes.c2p(0.0, 0.0), axes.c2p(v[0], v[1])))
+                .with_fill(accent.with_alpha(90))
+                .with_stroke(accent)
+                .with_stroke_width(2.5),
+            Item::circle(Circle::new(axes.c2p(v[0], 0.0), 6.0)).with_fill(fg),
+            Item::circle(Circle::new(axes.c2p(0.0, v[1]), 6.0)).with_fill(fg),
+        ])
+    });
+    tl.play(Anim::fade_in(rect).during(0.5));
+
+    // 面积数字联动：DecimalNumber 信号读 v[0]·v[1]（锚在画面右上区）
+    let sig = TypstEngine::decimal_signal(
+        Point::new(820.0, 150.0),
+        DecimalNumberOptions {
+            decimals: 1,
+            group_with_commas: false,
+            include_sign: false,
+            font_size_pt: 40.0,
+            text_color: fg,
+        },
+    )?;
+    let area = tl.add_updater(&[rw, rh], move |v| sig(&[v[0] * v[1]]));
+    tl.play(Anim::fade_in(area).during(0.5));
+
+    // 拉宽 → 拉高 → 双向同时收缩（数字全程滚动）
+    tl.wait(0.3);
+    tl.play(Anim::set_value(rw, 6.0).during(1.2));
+    tl.play(Anim::set_value(rh, 4.0).during(1.2));
+    tl.together([
+        Anim::set_value(rw, 4.0).during(1.2),
+        Anim::set_value(rh, 1.5).during(1.2),
+    ]);
+    tl.wait(0.5);
+    Ok(tl)
+}
+// ANCHOR_END
+
+// ANCHOR: follow_cam_demo
+/// FollowingGraphCamera 对齐场景：相机推近后沿曲线跟随动点平移。
+///
+/// 纯现有 API 拼装：相机即 Item —— `transform_to` 推近注视曲线左端，
+/// 之后相机与动点**同窗 `move_along_path`** 精确同步。
+/// 相机 transform 是 world→screen 仿射，MoveAlongPath 位移左乘即世界
+/// 平移取反 → 相机走**镜像路径**（位移 = 动点位移取负）：注视点始终锁住动点。
+fn follow_cam_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
+    use ffanim::{Axes, Camera};
+
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    let axes = Axes::new((-4.0, 4.0), (-1.6, 1.6))
+        .with_size(880.0, 360.0)
+        .with_center(480.0, 270.0);
+    let f = |x: f64| 1.2 * (1.3 * x).sin();
+    let curve = tl.add(
+        axes.plot(|x| 1.2 * (1.3 * x).sin(), (-4.0, 4.0))
+            .with_stroke(accent)
+            .with_stroke_width(3.0),
+    );
+    tl.play(Anim::create(curve).during(0.8));
+
+    // 动点路径：曲线 32 段 c2p 采样折线（左 → 右）；相机路径 = 镜像补偿：
+    // zoom z 下屏上位移被放大 z 倍 → 相机世界位移须 = −z·(q_i − q0)，
+    // 即 cam_path 点 r_i = (1+z)·q0 − z·q_i（位移严格 = 动点位移 × −z）
+    const ZOOM: f64 = 1.5;
+    let mut dot_path = BezPath::new();
+    let mut pts: Vec<Point> = Vec::new();
+    for i in 0..=32 {
+        let x = -4.0 + 8.0 * i as f64 / 32.0;
+        pts.push(axes.c2p(x, f(x)));
+        if i == 0 {
+            dot_path.move_to(pts[0]);
+        } else {
+            dot_path.line_to(pts[i]);
+        }
+    }
+    let cam_path = {
+        let s = pts[0];
+        let mut r = BezPath::new();
+        r.move_to(s);
+        for p in &pts[1..] {
+            r.line_to(Point::new(
+                (1.0 + ZOOM) * s.x - ZOOM * p.x,
+                (1.0 + ZOOM) * s.y - ZOOM * p.y,
+            ));
+        }
+        r
+    };
+
+    // 动点置于曲线左端；相机先推近（zoom 1.5 注视左端），再与动点同窗跟随
+    let dot = tl.add(Item::circle(Circle::new(axes.c2p(-4.0, f(-4.0)), 9.0)).with_fill(fg));
+    tl.play(Anim::fade_in(dot).during(0.3));
+    let camera = tl.camera(Camera::at(w, h));
+    let head = axes.c2p(-4.0, f(-4.0));
+    tl.play(
+        Anim::transform_to(
+            camera,
+            Camera {
+                center: ffanim::kurbo::Vec2::new(head.x, head.y),
+                zoom: 1.5,
+                rotation: 0.0,
+            }
+            .affine(w, h),
+        )
+        .during(0.8),
+    );
+    tl.wait(0.2);
+    tl.together([
+        Anim::move_along_path(dot, &dot_path)
+            .during(4.0)
+            .rate(RateFunc::Linear),
+        Anim::move_along_path(camera, &cam_path)
+            .during(4.0)
+            .rate(RateFunc::Linear),
+    ]);
+
+    // 相机拉回全景收尾
+    tl.play(Anim::transform_to(camera, Camera::at(w, h).affine(w, h)).during(0.8));
+    tl.wait(0.5);
     Ok(tl)
 }
 // ANCHOR_END

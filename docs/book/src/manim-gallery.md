@@ -1,9 +1,9 @@
 # 附录：与 manim gallery 对照
 
 以 [manim 官方 Example Gallery]（`docs/source/examples.rst`，5 大节 20 例）
-为对照表逐项核对。结论先行：**21 例中 18 例已有对应示例，3 例可用现有
-词汇拼出**（下表 🟡），硬缺口全部清零（布尔已落地原语、画中画出片层
-拼装闭环）；3D 类按定位不追。
+为对照表逐项核对。结论先行：**21 例全部有对应示例**（下表 ✅），
+硬缺口全部清零——布尔落地原语、画中画出片层拼装闭环、轨迹/贴轴多边形/
+跟随相机三个 🟡 项均已纯现有 API 拼装闭环；3D 类按定位不追。
 
 ## 逐项对照
 
@@ -21,13 +21,13 @@
 | MovingGroupToDestination | 组整体对齐目标点 | `move_to` + group | ✅ |
 | MovingFrameBox | 公式框选强调 | `annotate_demo`（circumscribe/surrounding_rect） | ✅ |
 | RotationUpdater | dt 自转 updater | 信号节点（求值期纯函数重建，语义等价） | ✅ |
-| PointWithTrace | 点运动轨迹拖尾 | 逐帧拼 path 可模拟，无现成 trace 件 | 🟡 可拼 |
+| PointWithTrace | 点运动轨迹拖尾 | `trace_demo`（进度截断参数化重建 + 双 updater 联动） | ✅ |
 | SinAndCosFunctionPlot | Axes.plot 双曲线 + 竖线标注 | `sine_demo`（`Coords::plot` + 轴标注） | ✅ |
 | ArgMinExample | 函数图像 + 动点跟随 | `Coords::c2p` + tracker（sine_demo 同族） | ✅ |
 | GraphAreaPlot | 曲线下面积填充 + 黎曼矩形 | `riemann_area`（c2p 采样拼多边形 + tracker 收敛） | ✅ |
-| PolygonOnAxes | 多边形随 tracker 重绘 | polygon + tracker 拼组 | 🟡 可拼 |
+| PolygonOnAxes | 多边形随 tracker 重绘 | `polygon_axes_demo`（双 tracker 重建矩形+轴上拖点 + 面积数字联动） | ✅ |
 | HeatDiagramPlot | 折线/散点图 `plot_line_graph` | `line_graph`（polyline + scatter 拼装） | ✅ |
-| FollowingGraphCamera | 相机跟随曲线 | Camera 即 Item + `transform_to`（M8.1） | 🟡 可拼 |
+| FollowingGraphCamera | 相机跟随曲线 | `follow_cam_demo`（相机 `move_along_path` 镜像补偿路径，与动点同窗同步） | ✅ |
 | OpeningManim | 公式 Write + 网格非线性形变 | 公式族 + `warp_grid_demo`（逐点形变拼装） | ✅ |
 | SineCurveUnitCircle | 单位圆展开正弦波 | `circle_sine_demo`（圆拆两半 `plot` + tracker 联动） | ✅ |
 
@@ -43,7 +43,7 @@
 | ~~3~~ | ~~网格逐点形变~~ | `apply_function` + `prepare_for_nonlinear_transform` | — | ✅ 已由 `warp_grid_demo` 纯现有 API 拼装实现（basic.rs） |
 | ~~4~~ | ~~Angle 角度测量件~~ | `Angle(line1, line2)` | — | ✅ 已由 `angle_demo` 纯现有 API 拼装实现（basic.rs） |
 | ~~5~~ | ~~布尔路径运算~~ | `Union/Intersection/Exclusion` | — | ✅ 已落地 `Item::boolean` 原语（i_overlay）+ `boolean_demo` 对齐场景 |
-| 6 | 轨迹拖尾件 | PointWithTrace 模式 | S | 低频，可拼 |
+| ~~6~~ | ~~轨迹拖尾件~~ | PointWithTrace 模式 | — | ✅ 已由 `trace_demo` 纯现有 API 拼装实现（进度截断参数化重建，basic.rs） |
 | ~~7~~ | ~~画中画缩放~~ | `ZoomedScene` | — | ✅ 已由 `pip.rs` 纯出片层拼装实现（`render_frame` + 小帧矢量重渲染 + blit，零新增 API） |
 
 ## 入门梯度缺口
