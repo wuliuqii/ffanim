@@ -19,3 +19,5 @@ ffanim-typst = { path = "../ffanim-typst" }
 [dev-dependencies]
 # 集成测试直接用 CPU 后端做像素级断言（与 mp4 输出同一渲染路径）
 ffanim-render = { path = "../ffanim-render" }
+# examples 的 --json 调度表输出（与 ffanim timeline 同形状）
+serde_json = { workspace = true }

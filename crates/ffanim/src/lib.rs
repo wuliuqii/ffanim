@@ -6,15 +6,16 @@
 pub use ffanim_core::kurbo;
 pub use ffanim_core::{
     Anim, AnimKind, Axes, Camera, Color, CompiledTimeline, Direction, DrawList, Error, Font,
-    ImageAsset, Item, MatchPlan, PoseDelta, RateFunc, Result, Style, TableOptions, TableSpec,
-    Theme, Timeline, arrange, from_svg_file, from_svg_str, match_shapes, render_frame, table,
+    ImageAsset, Item, ItemId, MatchPlan, PoseDelta, RateFunc, Result, Style, TableOptions,
+    TableSpec, Theme, Timeline, arrange, from_svg_file, from_svg_str, match_shapes, render_frame,
+    table,
 };
 
 /// 公式/富文本排版子系统（Typst 嵌入）：TypstEngine / Formula / Text / match_formulas。
 pub mod typst {
     pub use ffanim_typst::{
-        ArrowKind, CodeOptions, CodeTheme, Delimiter, Formula, FormulaOptions, TextOptions,
-        TypstEngine, find_cjk_font, match_formulas,
+        ArrowKind, CodeOptions, CodeTheme, DecimalNumberOptions, Delimiter, Formula,
+        FormulaOptions, TextOptions, TypstEngine, find_cjk_font, match_formulas,
     };
 }
 
