@@ -26,6 +26,7 @@ const SCENES: &[&str] = &[
     "line_graph",
     "angle_demo",
     "circle_sine_demo",
+    "warp_grid_demo",
 ];
 
 fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
@@ -42,6 +43,7 @@ fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
         "line_graph" => line_graph(theme, FPS),
         "angle_demo" => angle_demo(theme, FPS),
         "circle_sine_demo" => circle_sine_demo(theme, FPS),
+        "warp_grid_demo" => warp_grid_demo(theme, FPS),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -1020,5 +1022,91 @@ fn circle_sine_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     ]);
     tl.wait(0.8);
     Ok(tl)
+}
+// ANCHOR_END
+
+// ANCHOR: warp_grid_demo
+/// OpeningManim 对齐场景：网格逐点非线性形变（`apply_function` 对标）。
+///
+/// 纯现有 API 拼装：网格 = 自采样折线构造（`c2p`/`from_path` 公开）；
+/// 形变 = 逐点 `p → lerp(p, f(p), t)` 作用于数据坐标；tracker 强度
+/// 0→1→0 驱动 updater 每帧重建，形变与复原同构（纯函数语义）。
+fn warp_grid_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
+    use ffanim::Axes;
+
+    let fg = theme.foreground().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    let axes = Axes::new((-3.0, 3.0), (-2.0, 2.0))
+        .with_size(780.0, 360.0)
+        .with_center(480.0, 270.0);
+    // 形变映射：数据域波浪扭曲（apply_function 的逐点 λp）
+    let warp = |x: f64, y: f64| (x + 0.25 * (2.0 * y).sin(), y + 0.25 * (2.0 * x).sin());
+
+    // 强度 tracker：0 = 直网格，1 = 完全形变；updater 每帧重建整张网格
+    let strength = tl.add_tracker(0.0);
+    let grid = tl.add_updater(&[strength], move |v| {
+        warp_grid_item(&axes, warp, v[0], fg.with_alpha(90))
+    });
+    let ax = tl.add(axes.to_item(&theme.style));
+    tl.together([
+        Anim::fade_in(grid).during(0.8),
+        Anim::create(ax).during(0.8),
+    ]);
+
+    tl.wait(0.3);
+    tl.play(Anim::set_value(strength, 1.0).during(1.6)); // 形变
+    tl.wait(0.5);
+    tl.play(Anim::set_value(strength, 0.0).during(1.4)); // 复原
+    tl.wait(0.8);
+    Ok(tl)
+}
+
+/// 逐点形变网格：竖横两组线各离散为折线，采样点经 `p → lerp(p, f(p), t)`
+/// 后 `c2p`。t=0 时 lerp 恒等 ≙ 直网格——这是 apply_function 的拼装实现。
+fn warp_grid_item(
+    axes: &ffanim::Axes,
+    f: impl Fn(f64, f64) -> (f64, f64),
+    t: f64,
+    color: ffanim::Color,
+) -> Item {
+    const K: usize = 32; // 每条线离散段数
+    let (x0, x1) = axes.x_range;
+    let (y0, y1) = axes.y_range;
+    let mut path = BezPath::new();
+    // 竖线族：x = 整数步进，沿线 y 离散采样
+    let mut x = x0.ceil();
+    while x <= x1 {
+        for i in 0..=K {
+            let y = y0 + (y1 - y0) * i as f64 / K as f64;
+            let (wx, wy) = f(x, y);
+            let p = axes.c2p(x + (wx - x) * t, y + (wy - y) * t);
+            if i == 0 {
+                path.move_to(p);
+            } else {
+                path.line_to(p);
+            }
+        }
+        x += 1.0;
+    }
+    // 横线族：y = 整数步进，沿线 x 离散采样
+    let mut y = y0.ceil();
+    while y <= y1 {
+        for i in 0..=K {
+            let x = x0 + (x1 - x0) * i as f64 / K as f64;
+            let (wx, wy) = f(x, y);
+            let p = axes.c2p(x + (wx - x) * t, y + (wy - y) * t);
+            if i == 0 {
+                path.move_to(p);
+            } else {
+                path.line_to(p);
+            }
+        }
+        y += 1.0;
+    }
+    Item::from_path(path)
+        .with_stroke(color)
+        .with_stroke_width(1.0)
 }
 // ANCHOR_END
