@@ -1,8 +1,8 @@
 [book]
-title = "ffanim 示例画廊"
+title = "ffanim 数学动画引擎"
 authors = ["ffanim"]
 language = "zh"
-description = "ffanim 官方示例：每个场景一段视频 + 一段可复现的源码（对齐 manim example gallery 形态）"
+description = "ffanim 官方书：效果画廊 + 入门教程 + 全部场景源码（对齐 manim example gallery 形态）"
 
 [build]
 build-dir = "book"

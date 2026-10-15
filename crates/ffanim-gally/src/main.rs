@@ -2,11 +2,17 @@
 //!
 //! 流程：扫描 crates/ffanim/examples/*.rs（//! 标题 / SCENES 清单 / 每场景 doc 摘要）
 //! → 渲染缺失的 out/<场景>.mp4（子进程复用 examples 出片管线）
-//! → 拷贝产物到 docs/book/src/media/ → 生成 SUMMARY.md 与各章节 .md。
+//! → 拷贝产物到 docs/book/src/media/ → 生成 SUMMARY.md 与画廊章节 .md。
 //!
-//! 章节页格式：`## 场景名` + doc 摘要 + `<video>` + `{{#include}}` 锚点代码段
-//! （examples 源文件中以 `// ANCHOR: 场景名` / `// ANCHOR_END` 标注函数体）。
-//! 无 SCENES 常量的创作示例（fourier/media）视为单场景：整文件 include。
+//! **混合模式**：只有登记为画廊章节的 example 才生成页面（SUMMARY Part
+//! 「场景画廊」之下）；素材文件（`Asset`，如入门示例 getting_started）只
+//! 渲染出片 + 拷媒体，正文由手写教程页引用（`{{#include}}` / `<video>`），
+//! 生成器永不触碰手写页。
+//!
+//! 画廊章节页格式：`## 场景名` + doc 摘要 + `<video>` + `<details>` 折叠的
+//! `{{#include}}` 锚点代码段（examples 源文件中以 `// ANCHOR: 场景名` /
+//! `// ANCHOR_END` 标注函数体）。
+//! 无 SCENES 常量的创作示例（fourier/media/pip）视为单场景：整文件 include。
 //!
 //! 用法（仓库根）：
 //! `cargo run --release -p ffanim-gally`（渲染缺失产物 + 生成书源）
@@ -34,6 +40,31 @@ struct Example {
     scenes: Vec<Scene>,
     /// 无 SCENES 常量的创作示例：单场景、渲染不带场景参数、整文件 include
     single: bool,
+}
+
+/// 章节类型：画廊章节生成页面，素材文件只出片供手写页引用。
+enum ChapterKind {
+    /// 生成画廊章节页 + SUMMARY 条目（order 定呈现序，label 为短标签）。
+    Gallery(usize, &'static str),
+    /// 素材文件：只渲染出片 + 拷媒体（场景名 = 文件名），不生成任何页面。
+    Asset,
+}
+
+/// example 文件的章节归属（examples 是场景清单的唯一真相源）。
+fn chapter_kind(stem: &str) -> ChapterKind {
+    match stem {
+        // 入门素材：正文由 first-animation.md 逐行讲解，不生成章节页
+        "getting_started" => ChapterKind::Asset,
+        "basic" => ChapterKind::Gallery(0, "基础动画"),
+        "typography" => ChapterKind::Gallery(1, "文字与公式"),
+        "assemblies" => ChapterKind::Gallery(2, "装配件"),
+        "tables" => ChapterKind::Gallery(3, "表格"),
+        "fourier" => ChapterKind::Gallery(4, "创作示例：傅里叶级数"),
+        "media" => ChapterKind::Gallery(5, "创作示例：SVG 与图片"),
+        "pip" => ChapterKind::Gallery(6, "创作示例：画中画"),
+        // 未登记的新 example 追加在后（字母序），场景清单仍自动提取
+        _ => ChapterKind::Gallery(usize::MAX, ""),
+    }
 }
 
 fn repo_root() -> PathBuf {
@@ -149,20 +180,6 @@ fn render_scene(example: &str, scene: Option<&str>) -> bool {
     cmd.status().map(|s| s.success()).unwrap_or(false)
 }
 
-/// 书章标签（呈现顺序与短标签；examples 是场景清单的唯一真相源）。
-fn chapter_meta(stem: &str) -> (usize, &'static str) {
-    match stem {
-        "basic" => (0, "基础动画"),
-        "typography" => (1, "文字与公式"),
-        "assemblies" => (2, "装配件"),
-        "tables" => (3, "表格"),
-        "fourier" => (4, "创作示例：傅里叶级数"),
-        "media" => (5, "创作示例：SVG 与图片"),
-        // 未登记的新 example 追加在后（字母序），场景清单仍自动提取
-        _ => (usize::MAX, ""),
-    }
-}
-
 /// 章节页：H1（//! 标题）+ 运行提示 + 逐场景（视频 + doc 摘要 + 锚点代码段）。
 fn gen_chapter_md(ex: &Example) -> String {
     let mut md = String::new();
@@ -191,7 +208,9 @@ fn gen_chapter_md(ex: &Example) -> String {
         } else {
             md.push_str(&format!("> 渲染产物缺失（out/{}.mp4）\n\n", sc.name));
         }
-        // include 相对路径：docs/book/src/ → 仓库根需三层上跳
+        // include 相对路径：docs/book/src/ → 仓库根需三层上跳；全量源码折叠
+        // （<details> 开标签后空行断开 HTML 块，内部 markdown/代码围栏正常解析）
+        md.push_str("<details>\n<summary>完整源码</summary>\n\n");
         if ex.single {
             md.push_str(&format!(
                 "```rust\n{{{{#include ../../../crates/ffanim/examples/{}.rs}}}}\n```\n\n",
@@ -203,13 +222,19 @@ fn gen_chapter_md(ex: &Example) -> String {
                 ex.name, sc.name
             ));
         }
+        md.push_str("</details>\n\n");
     }
     md
 }
 
-/// SUMMARY.md：介绍 + 各章节（手写 index.md / manim-gallery.md 为固定条目）。
+/// SUMMARY.md：Part 骨架（手写页固定条目）+ 生成画廊章节 + 手写附录。
+///
+/// Part 标题（`# …` 行）为 mdBook 原生语法；手写页（index / effect-gallery /
+/// first-animation / manim-gallery）由人维护，生成器只填「场景画廊」一组。
 fn gen_summary_md(chapters: &[(String, String)]) -> String {
-    let mut s = String::from("# Summary\n\n- [介绍](index.md)\n\n");
+    let mut s = String::from(
+        "# Summary\n\n# 认识 ffanim\n\n- [介绍](index.md)\n- [效果画廊](effect-gallery.md)\n\n# 动手写动画\n\n- [第一个动画](first-animation.md)\n\n# 场景画廊\n\n",
+    );
     for (file, label) in chapters {
         if label.is_empty() {
             s.push_str(&format!("- [{file}]({file}.md)\n"));
@@ -217,7 +242,7 @@ fn gen_summary_md(chapters: &[(String, String)]) -> String {
             s.push_str(&format!("- [{label}]({file}.md)\n"));
         }
     }
-    s.push_str("\n- [附录：与 manim gallery 对照](manim-gallery.md)\n");
+    s.push_str("\n# 参考\n\n- [附录：与 manim gallery 对照](manim-gallery.md)\n");
     s
 }
 
@@ -232,14 +257,18 @@ fn main() -> std::io::Result<()> {
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| p.extension().is_some_and(|x| x == "rs"))
         .collect();
-    // 呈现顺序：chapter_meta 序优先，未登记文件按文件名排后
+    // 呈现顺序：画廊章节按登记序优先，未登记文件按文件名排后（素材文件排最后）
     paths.sort_by_key(|p| {
         let stem = p
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("")
             .to_string();
-        (chapter_meta(&stem).0, stem)
+        let order = match chapter_kind(&stem) {
+            ChapterKind::Gallery(order, _) => order,
+            ChapterKind::Asset => usize::MAX,
+        };
+        (order, stem)
     });
     let mut examples: Vec<Example> = paths.iter().filter_map(|p| parse_example(p)).collect();
 
@@ -265,13 +294,14 @@ fn main() -> std::io::Result<()> {
         }
     }
 
-    // 生成章节页 + SUMMARY
+    // 生成画廊章节页 + SUMMARY（素材文件只出片拷媒体，不生成页面）
     fs::create_dir_all(&book_src)?;
     let mut chapters: Vec<(String, String)> = Vec::new();
     for ex in &examples {
-        fs::write(book_src.join(format!("{}.md", ex.name)), gen_chapter_md(ex))?;
-        let (_, label) = chapter_meta(&ex.name);
-        chapters.push((ex.name.clone(), label.to_string()));
+        if let ChapterKind::Gallery(_, label) = chapter_kind(&ex.name) {
+            fs::write(book_src.join(format!("{}.md", ex.name)), gen_chapter_md(ex))?;
+            chapters.push((ex.name.clone(), label.to_string()));
+        }
     }
     fs::write(book_src.join("SUMMARY.md"), gen_summary_md(&chapters))?;
 

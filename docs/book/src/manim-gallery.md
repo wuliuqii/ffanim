@@ -48,8 +48,10 @@
 
 ## 入门梯度缺口
 
-manim gallery 的 `ManimCELogo` 仅 ~14 行；ffanim 最短场景 `demo_anim`
-约 55 行。R4 规划的 `getting_started.rs`（~15 行：矩形 create + 圆
-transform + fade_out）仍待补，是入门体验的最大缺口。
+~~manim gallery 的 `ManimCELogo` 仅 ~14 行；ffanim 最短场景 55 行。~~
+`getting_started.rs` 已落地（矩形 create → 变圆 → fade_out，核心三段
+各 ~6 行，教程页 first-animation.md 逐段讲解）——示例书同期重构为
+「认识 → 上手 → 场景画廊 → 参考」四层（效果画廊按"想要什么效果"组织，
+零代码浏览；画廊源码折叠为 `<details>`），入门梯度缺口关闭。
 
 [manim 官方 Example Gallery]: https://docs.manim.community/en/stable/examples.html

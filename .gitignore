@@ -8,7 +8,8 @@ frames/*
 !frames/baseline/
 *.diff.png
 
-# mdBook 示例书：生成物不入库（book.toml 与手写 index.md/manim-gallery.md 除外）
+# mdBook 示例书：生成物不入库（book.toml 与手写页 index/effect-gallery/
+# first-animation/manim-gallery 除外）
 .trae/
 docs/book/book/
 docs/book/src/SUMMARY.md
@@ -18,4 +19,5 @@ docs/book/src/assemblies.md
 docs/book/src/tables.md
 docs/book/src/fourier.md
 docs/book/src/media.md
+docs/book/src/pip.md
 docs/book/src/media/

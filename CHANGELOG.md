@@ -7,6 +7,16 @@
 
 ### Added
 
+- feat(book): 示例书重规划批 1——从「源码堆砌的画廊」重构为四层
+  （认识 → 动手写动画 → 场景画廊 → 参考）：新增**效果画廊**手写页
+  （按「想要什么效果→词汇」组织 11 类，零代码浏览 + 代表视频）与
+  **第一个动画**教程页（环境准备 + 逐段讲解 + 改练清单）；新增
+  `getting_started.rs` 入门素材（矩形 create → 变圆 → fade_out，核心
+  三段各 ~6 行，对标 manim SquareToCircle，关闭 manim 对照「入门梯度
+  缺口」）；画廊章节全量源码折叠 `<details>`；ffanim-gally 改混合模式
+  （`ChapterKind`：画廊章节生成页面 / 素材文件只出片供手写页引用，
+  SUMMARY 按 mdBook Part 骨架生成，手写页永不触碰）；pip.rs 登记为
+  「创作示例：画中画」章节
 - feat(gally): 示例书工具链——`ffanim-gally` 转型为 mdBook 书源生成器
   （rust-lang 官方 mdBook 0.5.4）：扫描 `crates/ffanim/examples/*.rs` 自动
   提取标题/场景清单/doc 摘要（零硬编码数据源），渲染缺失产物并拷贝
