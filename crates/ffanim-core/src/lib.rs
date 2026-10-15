@@ -10,6 +10,7 @@ pub mod eval;
 pub mod item;
 pub mod layout;
 pub mod match_shape;
+pub mod math;
 pub mod ops;
 pub mod path_util;
 pub mod rate;
