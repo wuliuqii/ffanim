@@ -53,6 +53,7 @@ impl Item {
             shape: Shape::Path(rebuild_path(&shapes)),
             paint: self.paint.clone(),
             transform: self.transform,
+            clip: None,
         })
     }
 }

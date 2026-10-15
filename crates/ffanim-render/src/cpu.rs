@@ -1,6 +1,6 @@
 //! CPU 兜底后端：vello_cpu（sparse strips），无 GPU 依赖，CI 与无 GPU 环境使用。
 
-use crate::{RenderBackend, render_cpu_item, walk_items};
+use crate::{RenderBackend, WalkEvent, render_cpu_item, walk_events};
 use ffanim_core::DrawList;
 
 /// CPU 渲染后端。
@@ -37,12 +37,20 @@ impl RenderBackend for CpuBackend {
             f64::from(h),
         ));
 
-        // 场景对象：深度优先遍历，Group 的子项继承累积变换
-        walk_items(
+        // 场景对象：深度优先遍历，Group 的子项继承累积变换；
+        // clip 层用 vello_cpu 的栈式 push/pop（clip path 变换在 push 时刻固化）
+        walk_events(
             &draw.items,
             vello_cpu::kurbo::Affine::IDENTITY,
-            &mut |t, item| {
-                render_cpu_item(&mut ctx, crate::to_kurbo(t), item);
+            &mut |ev| match ev {
+                WalkEvent::Draw(t, item) => {
+                    render_cpu_item(&mut ctx, crate::to_kurbo(t), item);
+                }
+                WalkEvent::PushClip(t, clip) => {
+                    ctx.set_transform(crate::to_kurbo(t));
+                    ctx.push_clip_layer(clip);
+                }
+                WalkEvent::PopClip => ctx.pop_layer(),
             },
         );
 
@@ -123,6 +131,7 @@ mod tests {
             ]),
             paint: Default::default(),
             transform: Affine::translate((32.0, 32.0)),
+            clip: None,
         });
 
         let mut backend = CpuBackend;
@@ -148,6 +157,7 @@ mod tests {
             ]),
             paint: Default::default(),
             transform: Affine::IDENTITY,
+            clip: None,
         });
 
         let mut backend = CpuBackend;
@@ -211,7 +221,7 @@ mod tests {
 
     #[test]
     fn 图片透明度渲染() {
-        // 2x2 纯红图片 opacity 0.5 叠在黑底上 → 中心 ≈ 128 红
+        // 2x2 纯红图片平移到 (3,3)，画布 8x8
         let mut rgba = vec![0u8; 4 * 4];
         for px in rgba.chunks_exact_mut(4) {
             px.copy_from_slice(&[255, 0, 0, 255]);
@@ -227,5 +237,54 @@ mod tests {
             "透明度 0.5 中心应为半红: {:?}",
             &buf[idx..idx + 4]
         );
+    }
+
+    /// clip 矩形路径（局部坐标）。
+    fn clip_rect(r: kurbo::Rect) -> kurbo::BezPath {
+        let mut p = kurbo::BezPath::new();
+        p.move_to((r.x0, r.y0));
+        p.line_to((r.x1, r.y0));
+        p.line_to((r.x1, r.y1));
+        p.line_to((r.x0, r.y1));
+        p.close_path();
+        p
+    }
+
+    #[test]
+    fn 裁剪叶子只保留窗口内像素() {
+        // 红矩形 (8,8)-(56,56)，clip 左半 (8,8)-(32,56)：左半红右半背景
+        let mut draw = DrawList::new(64, 64, Color::new(0, 0, 0, 255));
+        draw.push(
+            Item::rect(kurbo::Rect::new(8.0, 8.0, 56.0, 56.0))
+                .with_fill(Color::new(255, 0, 0, 255))
+                .with_clip(clip_rect(kurbo::Rect::new(8.0, 8.0, 32.0, 56.0))),
+        );
+        let buf = CpuBackend.render(&draw);
+        let px = |x: usize, y: usize| buf[(y * 64 + x) * 4];
+        assert_eq!(px(16, 32), 255, "clip 窗口内应为红");
+        assert_eq!(px(48, 32), 0, "clip 窗口外应为背景");
+    }
+
+    #[test]
+    fn 裁剪组合作用于整棵子树且随变换() {
+        // Group（整体右移 16px）含左红圆右蓝圆，clip = group 局部 (0,0)-(24,64)；
+        // 变换后 clip 窗口在屏幕 (16,0)-(40,64)：窗口内的红圆可见，窗口外的蓝圆被裁
+        let mut draw = DrawList::new(64, 64, Color::new(0, 0, 0, 255));
+        draw.push(
+            Item::group(vec![
+                Item::circle(Circle::new((12.0, 32.0), 8.0)).with_fill(Color::new(255, 0, 0, 255)),
+                Item::circle(Circle::new((36.0, 32.0), 8.0)).with_fill(Color::new(0, 0, 255, 255)),
+            ])
+            .with_translate(16.0, 0.0)
+            .with_clip(clip_rect(kurbo::Rect::new(0.0, 0.0, 24.0, 64.0))),
+        );
+        let buf = CpuBackend.render(&draw);
+        let px = |x: usize, y: usize| buf[(y * 64 + x) * 4];
+        // 红圆屏幕心 (28,32) 在窗口内 → 可见
+        assert_eq!(px(28, 32), 255, "窗口内的红圆应为红");
+        // 蓝圆屏幕心 (52,32) 在窗口外 → 整圆被裁
+        assert_eq!(px(52, 32), 0, "窗口外的蓝圆应为背景");
+        // 红圆左缘屏幕 20 > 窗口左界 16 的左侧均为背景
+        assert_eq!(px(12, 32), 0, "窗口左侧应为背景");
     }
 }

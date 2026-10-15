@@ -4,7 +4,7 @@
 //!
 //! vello 0.11 新架构：无状态机 API，fill/stroke 每次调用显式传变换与画笔。
 
-use crate::{RenderBackend, to_peniko, walk_items};
+use crate::{RenderBackend, WalkEvent, to_peniko, walk_events};
 use ffanim_core::DrawList;
 
 /// GPU 渲染后端（持有 wgpu 设备与 vello 渲染器）。
@@ -74,69 +74,81 @@ impl GpuBackend {
             &vello::kurbo::Rect::new(0.0, 0.0, f64::from(draw.width), f64::from(draw.height)),
         );
 
-        walk_items(
+        walk_events(
             &draw.items,
             vello::kurbo::Affine::IDENTITY,
-            &mut |t, item| {
-                let paint = &item.paint;
-                match &item.shape {
-                    ffanim_core::Shape::Image(img) => {
-                        // Blob::new 需要 Arc<dyn AsRef<[u8]>>：unsize 强转要求源类型
-                        // Sized，Arc<[u8]> 无法直接转，故拷贝进 Arc<Vec<u8>>
-                        // （GPU 纹理上传本身也要拷贝，此处一次性 memcpy 可接受）
-                        let data = vello::peniko::ImageData {
-                            data: vello::peniko::Blob::new(std::sync::Arc::new(img.rgba.to_vec())),
-                            format: vello::peniko::ImageFormat::Rgba8,
-                            alpha_type: vello::peniko::ImageAlphaType::AlphaPremultiplied,
-                            width: img.width,
-                            height: img.height,
-                        };
-                        let brush = vello::peniko::ImageBrush {
-                            image: data,
-                            sampler: Default::default(),
-                        };
-                        let alpha = paint.opacity as f32;
-                        if alpha < 1.0 {
-                            scene.push_layer(
-                                vello::peniko::Fill::NonZero,
-                                vello::peniko::Mix::Normal,
-                                alpha,
-                                vello::kurbo::Affine::IDENTITY,
-                                &vello::kurbo::Rect::new(
-                                    0.0,
-                                    0.0,
-                                    f64::from(img.width),
-                                    f64::from(img.height),
-                                ),
-                            );
+            &mut |ev| match ev {
+                WalkEvent::Draw(t, item) => {
+                    let paint = &item.paint;
+                    match &item.shape {
+                        ffanim_core::Shape::Image(img) => {
+                            // Blob::new 需要 Arc<dyn AsRef<[u8]>>：unsize 强转要求源类型
+                            // Sized，Arc<[u8]> 无法直接转，故拷贝进 Arc<Vec<u8>>
+                            // （GPU 纹理上传本身也要拷贝，此处一次性 memcpy 可接受）
+                            let data = vello::peniko::ImageData {
+                                data: vello::peniko::Blob::new(std::sync::Arc::new(
+                                    img.rgba.to_vec(),
+                                )),
+                                format: vello::peniko::ImageFormat::Rgba8,
+                                alpha_type: vello::peniko::ImageAlphaType::AlphaPremultiplied,
+                                width: img.width,
+                                height: img.height,
+                            };
+                            let brush = vello::peniko::ImageBrush {
+                                image: data,
+                                sampler: Default::default(),
+                            };
+                            let alpha = paint.opacity as f32;
+                            if alpha < 1.0 {
+                                scene.push_layer(
+                                    vello::peniko::Fill::NonZero,
+                                    vello::peniko::Mix::Normal,
+                                    alpha,
+                                    vello::kurbo::Affine::IDENTITY,
+                                    &vello::kurbo::Rect::new(
+                                        0.0,
+                                        0.0,
+                                        f64::from(img.width),
+                                        f64::from(img.height),
+                                    ),
+                                );
+                            }
+                            scene.draw_image(&brush, vello::kurbo::Affine::new(t.as_coeffs()));
+                            if alpha < 1.0 {
+                                scene.pop_layer();
+                            }
                         }
-                        scene.draw_image(&brush, vello::kurbo::Affine::new(t.as_coeffs()));
-                        if alpha < 1.0 {
-                            scene.pop_layer();
+                        ffanim_core::Shape::Path(path) => {
+                            if let Some(fill) = paint.fill {
+                                scene.fill(
+                                    vello::peniko::Fill::NonZero,
+                                    vello::kurbo::Affine::new(t.as_coeffs()),
+                                    &vello::peniko::Brush::from(to_peniko(fill)),
+                                    None,
+                                    path,
+                                );
+                            }
+                            if let Some(stroke) = paint.stroke {
+                                scene.stroke(
+                                    &vello::kurbo::Stroke::new(paint.stroke_width),
+                                    vello::kurbo::Affine::new(t.as_coeffs()),
+                                    &vello::peniko::Brush::from(to_peniko(stroke)),
+                                    None,
+                                    path,
+                                );
+                            }
                         }
+                        ffanim_core::Shape::Group(_) => {} // Group 由 walk_events 展开
                     }
-                    ffanim_core::Shape::Path(path) => {
-                        if let Some(fill) = paint.fill {
-                            scene.fill(
-                                vello::peniko::Fill::NonZero,
-                                vello::kurbo::Affine::new(t.as_coeffs()),
-                                &vello::peniko::Brush::from(to_peniko(fill)),
-                                None,
-                                path,
-                            );
-                        }
-                        if let Some(stroke) = paint.stroke {
-                            scene.stroke(
-                                &vello::kurbo::Stroke::new(paint.stroke_width),
-                                vello::kurbo::Affine::new(t.as_coeffs()),
-                                &vello::peniko::Brush::from(to_peniko(stroke)),
-                                None,
-                                path,
-                            );
-                        }
-                    }
-                    ffanim_core::Shape::Group(_) => {} // Group 由 walk_items 展开
                 }
+                // 裁剪域：clip 路径为 Item 局部坐标，显式乘累积变换
+                // （vello 层栈不保存变换，后续绘制变换不受影响）
+                WalkEvent::PushClip(t, clip) => scene.push_clip_layer(
+                    vello::peniko::Fill::NonZero,
+                    vello::kurbo::Affine::new(t.as_coeffs()),
+                    clip,
+                ),
+                WalkEvent::PopClip => scene.pop_layer(),
             },
         );
         scene
@@ -260,5 +272,37 @@ mod tests {
             "GPU 中心应为红色: {:?}",
             &buf[center..center + 4]
         );
+    }
+
+    /// clip 层冒烟：矩形裁半（GPU 可用才验证，语义与 CPU 后端一致）。
+    #[test]
+    fn gpu裁剪冒烟() {
+        let mut gpu = match GpuBackend::new() {
+            Ok(g) => g,
+            Err(_) => {
+                eprintln!("跳过：无可用 GPU 适配器");
+                return;
+            }
+        };
+        let mut clip = kurbo::BezPath::new();
+        clip.move_to((8.0, 8.0));
+        clip.line_to((32.0, 8.0));
+        clip.line_to((32.0, 56.0));
+        clip.line_to((8.0, 56.0));
+        clip.close_path();
+        let mut draw = DrawList::new(64, 64, Color::new(0, 0, 0, 255));
+        draw.push(
+            Item::rect(kurbo::Rect::new(8.0, 8.0, 56.0, 56.0))
+                .with_fill(Color::new(255, 0, 0, 255))
+                .with_clip(clip),
+        );
+        let buf = gpu.render(&draw);
+        let px = |x: usize, y: usize| buf[(y * 64 + x) * 4];
+        assert!(
+            px(16, 32) > 200,
+            "clip 窗口内应为红: {:?}",
+            &buf[(32 * 64 + 16) * 4..][..4]
+        );
+        assert_eq!(px(48, 32), 0, "clip 窗口外应为背景");
     }
 }

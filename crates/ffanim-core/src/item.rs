@@ -123,6 +123,9 @@ pub struct Item {
     pub paint: Paint,
     /// 仿射变换（挂在 Item 上，不烘焙进点阵）。
     pub transform: Affine,
+    /// 裁剪路径（Item 局部坐标，随 `transform` 一起变换；None = 不裁剪）。
+    /// 作用于自身（Group 含整棵子树），透镜/区间显示/滚动窗口的基元。
+    pub clip: Option<BezPath>,
 }
 
 impl Item {
@@ -133,6 +136,7 @@ impl Item {
             shape: Shape::Path(path),
             paint: Paint::default(),
             transform: Affine::IDENTITY,
+            clip: None,
         }
     }
 
@@ -144,6 +148,7 @@ impl Item {
             shape: Shape::Image(asset),
             paint: Paint::default(),
             transform: Affine::IDENTITY,
+            clip: None,
         })
     }
 
@@ -244,6 +249,7 @@ impl Item {
             shape: Shape::Group(children),
             paint: Paint::default(),
             transform: Affine::IDENTITY,
+            clip: None,
         }
     }
 
@@ -394,6 +400,13 @@ impl Item {
         self
     }
 
+    /// 设置裁剪路径（构建器风格；路径为 Item 局部坐标，随 `transform` 一起变换）。
+    /// 作用于自身（Group 含整棵子树）：透镜/区间显示/滚动窗口的基元。
+    pub fn with_clip(mut self, clip: BezPath) -> Self {
+        self.clip = Some(clip);
+        self
+    }
+
     /// 平移快捷方式。
     pub fn with_translate(self, dx: f64, dy: f64) -> Self {
         self.with_transform(Affine::translate((dx, dy)))
@@ -526,6 +539,7 @@ mod tests {
             ]),
             paint: Paint::default(),
             transform: Affine::IDENTITY,
+            clip: None,
         };
         let bb = g.bbox();
         assert!(
@@ -541,6 +555,7 @@ mod tests {
             shape: Shape::Group(vec![Item::circle(Circle::new((0.0, 0.0), 10.0))]),
             paint: Paint::default(),
             transform: Affine::IDENTITY,
+            clip: None,
         };
         let Shape::Group(children) = group.shape else {
             panic!("应为组合");

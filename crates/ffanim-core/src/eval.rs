@@ -384,6 +384,7 @@ fn morph_items(a: &Item, b: &Item, t: f64) -> Vec<Item> {
             shape: Shape::Path(path),
             paint,
             transform,
+            clip: a.clip.clone(), // 形变期间保持 from 侧裁剪域
         }];
     }
     // 退化：交叉淡化（过滤完全透明项）
@@ -433,6 +434,7 @@ mod tests {
             ]),
             paint: Paint::default(),
             transform: Affine::IDENTITY,
+            clip: None,
         });
         tl.play(Anim::fade_in(group).during(1.0));
         let draw = render_frame(&tl.compile(), 15);

@@ -17,6 +17,7 @@ pub use cpu::CpuBackend;
 pub use gpu::GpuBackend;
 
 use ffanim_core::{Color, DrawList, Item, Shape};
+use kurbo::BezPath;
 
 /// 渲染后端抽象：DrawList → 非预乘 RGBA8 像素缓冲。
 pub trait RenderBackend {
@@ -24,17 +25,49 @@ pub trait RenderBackend {
     fn render(&mut self, draw: &DrawList) -> Vec<u8>;
 }
 
-/// 每帧场景编码的公共遍历：按深度优先顺序产出 (累积变换, Item)。
-pub fn walk_items<'a>(
+/// 深度优先遍历事件：裁剪以栈式 push/pop 表达，渲染层直接映射到
+/// clip 层（vello 的 `push_clip_layer` / `pop_layer`）。
+#[derive(Debug)]
+pub enum WalkEvent<'a> {
+    /// 绘制一个叶子（Path/Image；Group 本身无绘制，只展开子树）。
+    Draw(kurbo::Affine, &'a Item),
+    /// 进入裁剪域：clip 路径为 Item 局部坐标，配 `t`（累积变换）映射到屏幕系。
+    /// 之后直到配对的 `PopClip`，所有绘制都限制在裁剪域内。
+    PushClip(kurbo::Affine, &'a BezPath),
+    /// 退出最近进入的裁剪域。
+    PopClip,
+}
+
+/// 每帧场景编码的公共遍历：深度优先产出绘制/裁剪事件流。
+///
+/// 事件顺序保证：`PushClip` 与 `PopClip` 严格配对嵌套（栈式），
+/// Group 的 clip 作用于整棵子树，叶子（Path/Image）的 clip 只作用于自身。
+pub fn walk_events<'a>(
     items: &'a [Item],
     parent: kurbo::Affine,
-    f: &mut impl FnMut(kurbo::Affine, &'a Item),
+    f: &mut impl FnMut(WalkEvent<'a>),
 ) {
     for item in items {
         let transform = parent * item.transform;
-        f(transform, item);
-        if let Shape::Group(children) = &item.shape {
-            walk_items(children, transform, f);
+        match &item.shape {
+            Shape::Group(children) => {
+                if let Some(clip) = &item.clip {
+                    f(WalkEvent::PushClip(transform, clip));
+                }
+                walk_events(children, transform, f);
+                if item.clip.is_some() {
+                    f(WalkEvent::PopClip);
+                }
+            }
+            _ => {
+                if let Some(clip) = &item.clip {
+                    f(WalkEvent::PushClip(transform, clip));
+                    f(WalkEvent::Draw(transform, item));
+                    f(WalkEvent::PopClip);
+                } else {
+                    f(WalkEvent::Draw(transform, item));
+                }
+            }
         }
     }
 }

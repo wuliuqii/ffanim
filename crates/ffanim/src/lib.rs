@@ -4,11 +4,12 @@
 //! 最小出片路径：[`Timeline`] 描述动画 → [`render_to_mp4`] 一步出片。
 
 pub use ffanim_core::kurbo;
+pub use ffanim_core::math;
 pub use ffanim_core::{
     Anim, AnimKind, Axes, BoolOp, Camera, Color, CompiledTimeline, Direction, DrawList, Error,
-    Font, ImageAsset, Item, ItemId, MatchPlan, PoseDelta, RateFunc, RateTable, Result, Style,
-    TableOptions, TableSpec, Theme, Timeline, arrange, from_svg_file, from_svg_str, match_shapes,
-    render_frame, table,
+    Font, ImageAsset, Item, ItemId, MatchPlan, PoseDelta, RateFunc, RateTable, Result, Shape,
+    Style, TableOptions, TableSpec, Theme, Timeline, arrange, from_svg_file, from_svg_str,
+    match_shapes, render_frame, table,
 };
 pub use ffanim_render::FrameBackend;
 

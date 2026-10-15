@@ -45,6 +45,7 @@ fn convert_group(group: &usvg::Group) -> Result<Item> {
         shape: Shape::Group(children),
         paint: Paint::default(),
         transform: Affine::IDENTITY,
+        clip: None,
     })
 }
 
