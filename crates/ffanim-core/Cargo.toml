@@ -23,3 +23,4 @@ fontdb = "0.23"
 # SVG 导入（M8.4）：usvg 解析 + tiny-skia-path 段 → kurbo；不启用 text（跳过文本节点）
 usvg = { version = "0.45", default-features = false }
 tiny-skia-path = "0.11"
+i_overlay = "9.1.0"

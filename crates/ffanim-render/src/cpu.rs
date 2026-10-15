@@ -164,6 +164,26 @@ mod tests {
     }
 
     #[test]
+    fn 布尔挖洞形状渲染() {
+        use ffanim_core::ops::BoolOp;
+        // (8,8)-(56,56) 差掉 (24,24)-(40,40)：环形填充，洞应透出背景
+        let a = ffanim_core::Item::rect(kurbo::Rect::new(8.0, 8.0, 56.0, 56.0))
+            .with_fill(Color::new(255, 0, 0, 255));
+        let b = ffanim_core::Item::rect(kurbo::Rect::new(24.0, 24.0, 40.0, 40.0));
+        let ring = a.boolean(BoolOp::Difference, &b).unwrap();
+
+        let mut draw = DrawList::new(64, 64, Color::new(0, 0, 0, 255));
+        draw.push(ring);
+        let buf = CpuBackend.render(&draw);
+
+        fn px(buf: &[u8], x: usize, y: usize) -> u8 {
+            buf[(y * 64 + x) * 4]
+        }
+        assert_eq!(px(&buf, 16, 32), 255, "环体应为红");
+        assert_eq!(px(&buf, 32, 32), 0, "洞中心应为背景");
+    }
+
+    #[test]
     fn 图片渲染冒烟() {
         // 2x2 纯红图片平移到 (3,3)，画布 8x8
         let mut rgba = vec![0u8; 4 * 4];
