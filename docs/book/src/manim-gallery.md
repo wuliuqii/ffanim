@@ -1,8 +1,8 @@
 # 附录：与 manim gallery 对照
 
 以 [manim 官方 Example Gallery]（`docs/source/examples.rst`，5 大节 20 例）
-为对照表逐项核对。结论先行：**20 例中 10 例已有对应示例/能力，5 例可用
-现有词汇拼出，5 例存在真实能力缺口**（下表 🟡/❌），3D 类按定位不追。
+为对照表逐项核对。结论先行：**20 例中 11 例已有对应示例/能力，5 例可用
+现有词汇拼出，4 例存在真实能力缺口**（下表 🟡/❌），3D 类按定位不追。
 
 ## 逐项对照
 
@@ -23,7 +23,7 @@
 | PointWithTrace | 点运动轨迹拖尾 | 逐帧拼 path 可模拟，无现成 trace 件 | 🟡 可拼 |
 | SinAndCosFunctionPlot | Axes.plot 双曲线 + 竖线标注 | `sine_demo`（`Coords::plot` + 轴标注） | ✅ |
 | ArgMinExample | 函数图像 + 动点跟随 | `Coords::c2p` + tracker（sine_demo 同族） | ✅ |
-| GraphAreaPlot | 曲线下面积填充 + 黎曼矩形 | 无 `get_area`/`get_riemann_rectangles` | ❌ 缺口 |
+| GraphAreaPlot | 曲线下面积填充 + 黎曼矩形 | `riemann_area`（c2p 采样拼多边形 + tracker 收敛） | ✅ |
 | PolygonOnAxes | 多边形随 tracker 重绘 | polygon + tracker 拼组 | 🟡 可拼 |
 | HeatDiagramPlot | 折线/散点图 `plot_line_graph` | 无折线图构造器 | ❌ 缺口 |
 | FollowingGraphCamera | 相机跟随曲线 | Camera 即 Item + `transform_to`（M8.1） | 🟡 可拼 |
@@ -37,7 +37,7 @@
 
 | # | 缺口 | manim 对应 | 工作量 | 建议 |
 |---|---|---|---|---|
-| 1 | 曲线下面积填充 + 黎曼矩形 | `get_area` / `get_riemann_rectangles` | M | 微积分教学高频，优先 |
+| ~~1~~ | ~~曲线下面积填充 + 黎曼矩形~~ | `get_area` / `get_riemann_rectangles` | — | ✅ 已由 `riemann_area` 纯现有 API 拼装实现（basic.rs） |
 | 2 | 折线/散点图 | `Axes.plot_line_graph` | S~M | 数据展示场景常用 |
 | 3 | 网格逐点形变 | `apply_function` + `prepare_for_nonlinear_transform` | M | OpeningManim 级演示效果 |
 | 4 | Angle 角度测量件 | `Angle(line1, line2)` | S~M | 几何教学常用 |

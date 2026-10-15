@@ -22,6 +22,7 @@ const SCENES: &[&str] = &[
     "sugar_demo",
     "move_demo",
     "shapes_demo",
+    "riemann_area",
 ];
 
 fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
@@ -34,6 +35,7 @@ fn build(name: &str, theme: &Theme, font: &Font) -> ffanim::Result<Timeline> {
         "sugar_demo" => Ok(sugar_demo(theme, FPS)),
         "move_demo" => move_demo(theme, FPS),
         "shapes_demo" => shapes_demo(theme, FPS),
+        "riemann_area" => riemann_area(theme, FPS),
         other => Err(ffanim::Error::Other(format!(
             "未知场景 {other}，可用场景: {}",
             SCENES.join(", ")
@@ -598,3 +600,130 @@ fn shapes_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     Ok(tl)
 }
 // ANCHOR_END
+
+// ANCHOR: riemann_area
+/// GraphAreaPlot 对齐场景：曲线下面积 + 黎曼矩形近似（纯现有 API 拼装，∫₀^π sin x dx = 2）。
+///
+/// sin 曲线画出 → n=8 黎曼矩形逐块错峰入场 → 同位交叉淡切动态组（tracker 驱动）→
+/// n 8→64 收敛 → 精确面积渐显叠加对比。
+fn riemann_area(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
+    use ffanim::Axes;
+
+    let accent = theme.accent().unwrap();
+    let fg = theme.foreground().unwrap();
+    let (w, h) = (960u32, 540u32);
+    let mut tl = Timeline::new(w, h, fps, theme.background().unwrap());
+
+    let f = |x: f64| x.sin();
+    let pi = std::f64::consts::PI;
+    let axes = Axes::new((0.0, 10.0), (-1.3, 1.3))
+        .with_size(840.0, 400.0)
+        .with_center(f64::from(w) / 2.0, f64::from(h) / 2.0);
+
+    // 网格 + 轴
+    let grid = tl.add(axes.grid_item(fg.with_alpha(40), 1.0));
+    tl.play(Anim::fade_in(grid).during(0.6));
+    let ax = tl.add(axes.to_item(&theme.style));
+    tl.overlap(0.4);
+    tl.play(Anim::create(ax).during(1.0));
+
+    // 函数曲线 [0, 10]
+    let curve = tl.add(
+        axes.plot(f, (0.0, 10.0))
+            .with_stroke(accent)
+            .with_stroke_width(3.0),
+    );
+    tl.wait(0.2);
+    tl.play(Anim::create(curve).during(1.4));
+
+    // 静态黎曼矩形 n=8：逐块错峰入场（manim lagged_start 同款）
+    let rects = riemann_rects(
+        &axes,
+        f,
+        8,
+        0.0,
+        pi,
+        accent.with_alpha(90),
+        accent.with_alpha(220),
+    );
+    let static_ids = tl.add_group(rects);
+    tl.wait(0.2);
+    tl.lagged_start(
+        static_ids.iter().map(|&id| Anim::fade_in(id).during(0.4)),
+        0.4,
+    );
+
+    // 动态黎曼矩形：n 由 tracker 驱动，updater 每帧重建整组；
+    // 初始 n=8 与静态组同形，交叉淡化无缝切换 → n 8→64 收敛
+    let n = tl.add_tracker(8.0);
+    let fill = accent.with_alpha(90);
+    let stroke = accent.with_alpha(220);
+    let dyn_rects = tl.add_updater(&[n], move |v| {
+        let n = (v[0].round() as usize).max(1);
+        Item::group(riemann_rects(&axes, f, n, 0.0, pi, fill, stroke))
+    });
+    let mut cross: Vec<_> = static_ids
+        .iter()
+        .map(|&id| Anim::fade_out(id).during(0.5))
+        .collect();
+    cross.push(Anim::fade_in(dyn_rects).during(0.5));
+    tl.together(cross);
+    tl.play(Anim::set_value(n, 64.0).during(2.0));
+
+    // 精确面积：曲线采样 + 底边折返闭合，半透明叠加对比矩形近似
+    let area = tl.add(area_under(&axes, f, 0.0, pi, accent.with_alpha(60)));
+    tl.wait(0.3);
+    tl.play(Anim::fade_in(area).during(1.0));
+    tl.wait(0.8);
+    Ok(tl)
+}
+// ANCHOR_END
+
+/// 黎曼矩形组：中点法取样，4 顶点经 c2p 变换后闭合（正负段均成立）。
+fn riemann_rects(
+    axes: &ffanim::Axes,
+    f: impl Fn(f64) -> f64,
+    n: usize,
+    x0: f64,
+    x1: f64,
+    fill: ffanim::Color,
+    stroke: ffanim::Color,
+) -> Vec<Item> {
+    let dx = (x1 - x0) / n as f64;
+    (0..n)
+        .map(|i| {
+            let xa = x0 + i as f64 * dx;
+            let y = f(xa + dx / 2.0);
+            let mut path = BezPath::new();
+            path.move_to(axes.c2p(xa, 0.0));
+            path.line_to(axes.c2p(xa + dx, 0.0));
+            path.line_to(axes.c2p(xa + dx, y));
+            path.line_to(axes.c2p(xa, y));
+            path.close_path();
+            Item::from_path(path)
+                .with_fill(fill)
+                .with_stroke(stroke)
+                .with_stroke_width(1.0)
+        })
+        .collect()
+}
+
+/// 曲线下面积：沿曲线采样 a→b、底边 y=0 折返闭合；单值函数不自交，填充天然正确。
+fn area_under(
+    axes: &ffanim::Axes,
+    f: impl Fn(f64) -> f64,
+    a: f64,
+    b: f64,
+    fill: ffanim::Color,
+) -> Item {
+    const SAMPLES: usize = 120;
+    let mut path = BezPath::new();
+    path.move_to(axes.c2p(a, 0.0));
+    for i in 0..=SAMPLES {
+        let x = a + (b - a) * i as f64 / SAMPLES as f64;
+        path.line_to(axes.c2p(x, f(x)));
+    }
+    path.line_to(axes.c2p(b, 0.0));
+    path.close_path();
+    Item::from_path(path).with_fill(fill)
+}
