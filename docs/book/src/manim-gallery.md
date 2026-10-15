@@ -2,7 +2,8 @@
 
 以 [manim 官方 Example Gallery]（`docs/source/examples.rst`，5 大节 20 例）
 为对照表逐项核对。结论先行：**21 例中 18 例已有对应示例，3 例可用现有
-词汇拼出**（下表 🟡），硬缺口仅剩画中画（暂缓）；3D 类按定位不追。
+词汇拼出**（下表 🟡），硬缺口全部清零（布尔已落地原语、画中画出片层
+拼装闭环）；3D 类按定位不追。
 
 ## 逐项对照
 
@@ -43,7 +44,7 @@
 | ~~4~~ | ~~Angle 角度测量件~~ | `Angle(line1, line2)` | — | ✅ 已由 `angle_demo` 纯现有 API 拼装实现（basic.rs） |
 | ~~5~~ | ~~布尔路径运算~~ | `Union/Intersection/Exclusion` | — | ✅ 已落地 `Item::boolean` 原语（i_overlay）+ `boolean_demo` 对齐场景 |
 | 6 | 轨迹拖尾件 | PointWithTrace 模式 | S | 低频，可拼 |
-| 7 | 画中画缩放 | `ZoomedScene` | L | 低频，暂缓 |
+| ~~7~~ | ~~画中画缩放~~ | `ZoomedScene` | — | ✅ 已由 `pip.rs` 纯出片层拼装实现（`render_frame` + 小帧矢量重渲染 + blit，零新增 API） |
 
 ## 入门梯度缺口
 
