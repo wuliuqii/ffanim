@@ -28,7 +28,7 @@
 | HeatDiagramPlot | 折线/散点图 `plot_line_graph` | `line_graph`（polyline + scatter 拼装） | ✅ |
 | FollowingGraphCamera | 相机跟随曲线 | Camera 即 Item + `transform_to`（M8.1） | 🟡 可拼 |
 | OpeningManim | 公式 Write + 网格非线性形变 | 公式族 ✅；`apply_function` 逐点形变 ❌ | 🟡 半覆盖 |
-| SineCurveUnitCircle | 单位圆展开正弦波 | `circle_sine_demo`（`plot_parametric` + tracker 联动） | ✅ |
+| SineCurveUnitCircle | 单位圆展开正弦波 | `circle_sine_demo`（圆拆两半 `plot` + tracker 联动） | ✅ |
 
 > 3D 全家桶（ThreeDScene/Surface/ThreeDAxes 共 4 例）超出 2D 目标场景，
 > 已在仓库 `docs/05-manim功能差距清单.md` P2 登记，不追。

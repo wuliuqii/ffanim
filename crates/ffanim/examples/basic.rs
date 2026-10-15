@@ -938,7 +938,8 @@ fn angle_group(
 // ANCHOR: circle_sine_demo
 /// SineCurveUnitCircle 对齐场景：单位圆动点绕转 ↔ 正弦曲线逐段展开（联动）。
 ///
-/// `plot_parametric` 画单位圆（新 API 验收：参数曲线超越 y=f(x) 单值限制）→
+/// 纯现有 API 拼装：圆 = 上下两半 plot（y=f(x) 单值约束的拆解）+ 同步 create
+/// （两半同长反向生长 ≙ 单路径描边一圈）；正弦 = plot 直接；
 /// 动点/曲线前沿点/引导线由 phase tracker 每帧重建 → 同窗同步：
 /// 正弦曲线 create 与点绕圆一圈等长（同 Smooth rate，进度一致）。
 fn circle_sine_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
@@ -970,19 +971,29 @@ fn circle_sine_demo(theme: &Theme, fps: u32) -> ffanim::Result<Timeline> {
     tl.overlap(0.3);
     tl.together([Anim::create(ax1).during(1.0), Anim::create(ax2).during(1.0)]);
 
-    // 单位圆：plot_parametric（cos, sin）
-    let circle = tl.add(
+    // 单位圆：拆上下两半各 plot（圆非 y=f(x) 单值，两半拼接 ≙ 完整圆）
+    let circle_u = tl.add(
         circle_axes
-            .plot_parametric(|t| t.cos(), |t| t.sin(), (0.0, tau))
+            .plot(|x| (1.0 - x * x).sqrt(), (-1.0, 1.0))
             .with_stroke(fg)
             .with_stroke_width(3.0),
     );
-    tl.play(Anim::create(circle).during(1.2));
+    let circle_l = tl.add(
+        circle_axes
+            .plot(|x| -(1.0 - x * x).sqrt(), (-1.0, 1.0))
+            .with_stroke(fg)
+            .with_stroke_width(3.0),
+    );
+    // 两半同步生长：都从左端点 (-1,0) 长到右端点 (1,0)，合成"从左侧双向展开一圈"
+    tl.together([
+        Anim::create(circle_u).during(1.2),
+        Anim::create(circle_l).during(1.2),
+    ]);
 
-    // 正弦曲线：参数化 (t, sin t)，x 数据域 [0, 2π] 恰好铺满
+    // 正弦曲线：y=sin(x) 单值，plot 直接；x 数据域 [0, 2π] 恰好铺满
     let sine = tl.add(
         sine_axes
-            .plot_parametric(|t| t, |t| t.sin(), (0.0, tau))
+            .plot(|x| x.sin(), (0.0, tau))
             .with_stroke(accent)
             .with_stroke_width(3.0),
     );
