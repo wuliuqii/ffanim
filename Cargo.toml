@@ -9,6 +9,7 @@ members = [
     "crates/ffanim-preview",
     "crates/ffanim-cli",
     "crates/ffanim",
+    "crates/ffanim-gally",
 ]
 
 [workspace.package]

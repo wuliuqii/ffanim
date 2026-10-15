@@ -1075,10 +1075,6 @@ dependencies = [
  "ffanim",
  "ffanim-audio",
  "ffanim-core",
- "ffanim-encode",
- "ffanim-preview",
- "ffanim-render",
- "ffanim-typst",
  "log",
  "serde_json",
 ]
@@ -1106,6 +1102,10 @@ dependencies = [
  "ffanim-core",
  "log",
 ]
+
+[[package]]
+name = "ffanim-gally"
+version = "0.1.0"
 
 [[package]]
 name = "ffanim-preview"

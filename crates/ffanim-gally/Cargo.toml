@@ -1,0 +1,10 @@
+[package]
+name = "ffanim-gally"
+description = "ffanim 网页画廊生成器：examples 元数据 → 静态 index.html"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
