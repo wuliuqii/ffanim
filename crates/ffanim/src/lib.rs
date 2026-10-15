@@ -97,6 +97,42 @@ pub fn render_to_mp4_cpu(tl: &CompiledTimeline, out: impl AsRef<std::path::Path>
     })
 }
 
+/// PNG 序列帧导出：`{dir}/{n:04}.png`（0000 起，全片）——下游剪辑/审片的
+/// 标准中间格式、论文插图逐帧提取。渲染走与出片相同的后端自动选择
+/// （GPU 优先）；PNG 编码纯 Rust（不走 ffmpeg），worker 数为核数一半。
+///
+/// # Errors
+/// 目录创建/文件写出失败时返回 [`Error::Other`]。
+pub fn render_to_png_frames(tl: &CompiledTimeline, dir: impl AsRef<std::path::Path>) -> Result<()> {
+    render_to_png_frames_range(tl, dir, 0..tl.duration_frames)
+}
+
+/// PNG 序列帧导出（片段）：只写 `frames` 帧区间（半开），帧内容取自全片
+/// 时间轴，文件名仍为全片帧号（`{dir}/{first+f:04}.png`），便于与 mp4 对帧。
+pub fn render_to_png_frames_range(
+    tl: &CompiledTimeline,
+    dir: impl AsRef<std::path::Path>,
+    frames: std::ops::Range<usize>,
+) -> Result<()> {
+    if frames.is_empty() || frames.end > tl.duration_frames {
+        return Err(Error::Other(format!(
+            "帧区间 {frames:?} 越界：全片共 {} 帧（{:.2}s）",
+            tl.duration_frames,
+            tl.duration_frames as f64 / f64::from(tl.fps),
+        )));
+    }
+    use ffanim_render::RenderBackend as _;
+    use std::sync::Mutex;
+    let backend = Mutex::new(ffanim_render::FrameBackend::auto());
+    let dir = dir.as_ref();
+    let first = frames.start;
+    ffanim_render::write_png_sequence(dir, tl.width, tl.height, first, frames.len(), &|f| {
+        let draw = ffanim_core::render_frame(tl, first + f);
+        backend.lock().unwrap().render(&draw)
+    })
+    .map_err(|e| Error::Other(format!("PNG 序列写出失败: {e}")))
+}
+
 /// 指定后端构造器的片段出片（`make_backend` 在编码启动前调用一次，
 /// 同一实例被并行帧闭包经 `Mutex` 共享）。
 fn render_to_mp4_frames_with(

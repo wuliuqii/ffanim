@@ -133,6 +133,53 @@ pub fn load_png(path: impl AsRef<std::path::Path>) -> std::io::Result<(u32, u32,
     Ok((width, height, img.into_raw()))
 }
 
+/// 帧序列并行写为 PNG（`{dir}/{start+n:04}.png`）——下游剪辑/审片的
+/// 标准中间格式。`frames(i)` 产出第 `start+i` 帧像素（通常 = 后端渲染 +
+/// 查表求值）；片段导出时传全片帧号偏移可保持文件名与 mp4 对帧。
+/// 原子计数器动态分派帧号（首帧排版冷启动慢，静态均分易负载倾斜），
+/// worker 数为核数一半（与分段编码同策略，不超订阅）。
+pub fn write_png_sequence(
+    dir: impl AsRef<std::path::Path>,
+    width: u32,
+    height: u32,
+    start: usize,
+    total: usize,
+    frames: &(impl Fn(usize) -> Vec<u8> + Sync),
+) -> std::io::Result<()> {
+    use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+    let dir = dir.as_ref();
+    std::fs::create_dir_all(dir)?;
+    let workers = std::thread::available_parallelism()
+        .map(|n| (n.get() / 2).max(1))
+        .unwrap_or(1)
+        .min(total.max(1));
+    let next = AtomicUsize::new(0);
+    let first_err: std::sync::Mutex<Option<std::io::Error>> = std::sync::Mutex::new(None);
+    std::thread::scope(|s| {
+        for _ in 0..workers {
+            s.spawn(|| {
+                loop {
+                    let i = next.fetch_add(1, Relaxed);
+                    if i >= total {
+                        break;
+                    }
+                    let rgba = frames(i);
+                    debug_assert_eq!(rgba.len(), (width * height * 4) as usize);
+                    let path = dir.join(format!("{:04}.png", start + i));
+                    if let Err(e) = save_png(&path, width, height, &rgba) {
+                        first_err.lock().unwrap().replace(e);
+                        break;
+                    }
+                }
+            });
+        }
+    });
+    match first_err.into_inner().unwrap() {
+        Some(e) => Err(e),
+        None => Ok(()),
+    }
+}
+
 /// kurbo 版本桥接：core 的 kurbo 0.13 与 vello_cpu 的 re-export 同版本，按系数重建。
 pub(crate) fn to_kurbo(a: kurbo::Affine) -> vello_cpu::kurbo::Affine {
     vello_cpu::kurbo::Affine::new(a.as_coeffs())

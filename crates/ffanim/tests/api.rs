@@ -161,6 +161,37 @@ fn 出片后端自动选择与强制cpu() {
 }
 
 #[test]
+fn png序列导出与片段帧号对齐() {
+    let mut tl = ffanim::Timeline::new(32, 32, 30, ffanim::Color::new(0, 0, 0, 255));
+    let id = tl.add(
+        ffanim::Item::rect(ffanim::kurbo::Rect::new(0.0, 0.0, 32.0, 32.0))
+            .with_fill(ffanim::Color::new(255, 255, 255, 255)),
+    );
+    tl.play(ffanim::Anim::fade_in(id).during(1.0));
+    let c = tl.compile(); // 1s×30fps = 30 帧
+    let dir = std::env::temp_dir().join("ffanim-pngseq-test");
+    let _ = std::fs::remove_dir_all(&dir);
+    // 片段导出 10..15：文件名须为全片帧号 0010..0014（与 mp4 对帧）
+    ffanim::render_to_png_frames_range(&c, &dir, 10..15).expect("PNG 序列导出");
+    for n in [10u32, 11, 12, 13, 14] {
+        let p = dir.join(format!("{n:04}.png"));
+        assert!(p.exists(), "缺帧文件 {p:?}");
+    }
+    assert!(!dir.join("0000.png").exists(), "区间外帧不应写出");
+    // 内容冒烟：末帧淡入约 47% → 全帧应存在非背景像素（避免选点落在边界外）
+    let (w, h, rgba) = ffanim_render::load_png(dir.join("0014.png")).unwrap();
+    assert_eq!((w, h), (32, 32));
+    assert!(
+        rgba.chunks_exact(4)
+            .any(|px| px[0] > 0 || px[1] > 0 || px[2] > 0),
+        "末帧应存在已淡入的非背景像素"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    // 越界区间必须报错
+    assert!(ffanim::render_to_png_frames_range(&c, &dir, 29..31).is_err());
+}
+
+#[test]
 fn 自定义缓动注册表端到端() {
     // 注册二次缓入 → 挂动画 → 编译后按帧求值应快于线性（前半段进度落后、中点只有 0.25）
     let mut tl = ffanim::Timeline::new(100, 100, 30, ffanim::Color::new(0, 0, 0, 255));
