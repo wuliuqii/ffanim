@@ -13,8 +13,10 @@
   mp4 → 生成 `docs/book/src/SUMMARY.md` 与各章节页（`## 场景` + doc 摘要 +
   `<video>` + `{{#include}}` ANCHOR 锚点代码段，examples 源文件加
   `// ANCHOR: 场景名` 标注）；`just book` 一键构建 / `just book-serve`
-  热重载预览；手写 `book.toml`/`index.md` 与附录「与 manim gallery 对照」
-  入库，生成物 gitignore
+  热重载预览；手写 `book.toml`/`index.md` 入库，生成物 gitignore
+- docs: 附录「与 manim gallery 对照」——官方 gallery 5 节 20 例逐项核对：
+  10 例已覆盖 / 5 例可拼 / 5 例真实缺口（面积填充+黎曼矩形、折线图、
+  网格逐点形变、Angle 角度件、布尔运算），结论同步 docs/06 R4
 
 ### Changed
 
