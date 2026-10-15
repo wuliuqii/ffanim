@@ -7,6 +7,17 @@
 
 ### Added
 
+- feat(core): 3D 线代件（docs/07 §2.2，glam 修正案）——引入 glam 0.34（f64
+  全套：零传递依赖、仅启用 `std`+`f64` 精度特性、锁小版本对冲 API 变动），
+  `ffanim::math` re-export `DVec3`/`DMat4`/`DQuat` 为稳定数学面；相机/投影
+  构造在此**锁死约定**（右手系 + OpenGL 深度 [-1,1]，manim 对齐）：
+  `look_at`/`perspective`/`orthographic` 稳定别名，上层 1.2 投影管线不再
+  面对 rh/lh × NDC 约定选择题；6 项约定锁定测试（叉积右手性/旋转/look_at
+  视空间/透视与正交深度边界/四元数一致性），glam 小版本约定漂移即 CI 红。
+  沉淀约定坑：透视链路必须 `project_point3`（含 w 除法）——
+  `transform_point3` 为仿射专用（断言 w 行且丢弃 w），返回 clip 空间 z。
+  修正原评审「手写不引 glam」定案：glam 零传递依赖事实下不成立，手写
+  真正成本在投影矩阵约定正确性而非代码量
 - feat(render): clip 裁剪原语（docs/07 §1.1，透镜/区间显示/滚动窗口基元）——
   `Item` 新增 `clip: Option<BezPath>` 字段与 `with_clip` 构建器（路径为
   Item 局部坐标，随 `transform` 一起变换；Group 作用于整棵子树）；场景
