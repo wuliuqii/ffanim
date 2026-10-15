@@ -38,6 +38,7 @@ fn main() -> ffanim::Result<()> {
     let font = Font::from_system(None::<&str>)?;
 
     // —— 幕 1：标题淡入 ——
+    // ANCHOR: fourier_title
     let title = engine.text("傅里叶级数与方波", &TextOptions::new(52.0, fg))?;
     let title_place = title.fit_transform(f64::from(W) / 2.0, 48.0 + title.height_pt / 2.0, 1.0);
     let title_ids: Vec<_> = title
@@ -50,8 +51,10 @@ fn main() -> ffanim::Result<()> {
         0.0,
     );
     tl.wait(0.3);
+    // ANCHOR_END: fourier_title
 
     // —— 幕 2：级数公式逐字形写出 ——
+    // ANCHOR: fourier_write
     let fopts = FormulaOptions {
         font_size_pt: 30.0,
         text_color: fg,
@@ -76,8 +79,10 @@ fn main() -> ffanim::Result<()> {
         step,
     );
     tl.wait(0.5);
+    // ANCHOR_END: fourier_write
 
     // —— 幕 3：坐标系 + 方波目标 ——
+    // ANCHOR: fourier_axes
     let axes = Axes::new((-3.5, 3.5), (-1.5, 1.5))
         .with_size(880.0, 270.0)
         .with_center(f64::from(W) / 2.0, 350.0);
@@ -91,8 +96,10 @@ fn main() -> ffanim::Result<()> {
     tl.overlap(0.6);
     tl.play(Anim::fade_in(square).during(0.8));
     tl.wait(0.3);
+    // ANCHOR_END: fourier_axes
 
     // —— 幕 4：部分和 S_N 随 tracker N 逐阶升高 ——
+    // ANCHOR: fourier_tracker
     let sum = tl.add_tracker(1.0);
     let curve = tl.add_updater(&[sum], move |v| {
         let nn = v[0].round() as i64;
@@ -120,7 +127,7 @@ fn main() -> ffanim::Result<()> {
         tl.wait(0.2);
     }
 
-    // —— 推近镜头（M8.1 相机系统验收段）：相机即 Item，transform_to 到目标仿射 ——
+    // 推近镜头（M8.1 相机系统验收段）：相机即 Item，transform_to 到目标仿射 ——
     let camera = tl.camera(Camera::at(W, H));
     let push_target = Camera {
         center: Vec2::new(f64::from(W) / 2.0, 350.0), // 注视方波曲线中心
@@ -148,8 +155,10 @@ fn main() -> ffanim::Result<()> {
     tl.wait(1.2);
 
     let mut tl = tl.compile();
+    // ANCHOR_END: fourier_tracker
 
     // —— 出片 + 无看片诊断（agent 验证循环的库式用法）——
+    // ANCHOR: fourier_render
     // BGM 环境变量指向音频文件时：analyze → 片长延伸到音频长度（FromAudio 语义）
     // → 渲染临时文件 → 混流为成品
     let bgm_path = std::env::var("BGM").ok();

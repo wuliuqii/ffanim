@@ -232,8 +232,8 @@ fn gen_chapter_md(ex: &Example) -> String {
 /// SUMMARY.md：Part 骨架（手写页固定条目）+ 生成画廊章节 + 手写附录。
 ///
 /// Part 标题（`# …` 行）为 mdBook 原生语法；手写页（index / effect-gallery /
-/// first-animation / lesson-*.md 六课 / manim-gallery）由人维护，生成器只填
-/// 「场景画廊」一组。
+/// first-animation / lesson-*.md 六课 / fourier-walkthrough / recipes /
+/// vocabulary / manim-gallery）由人维护，生成器只填「场景画廊」一组。
 fn gen_summary_md(chapters: &[(String, String)]) -> String {
     let mut s = String::from(
         "# Summary\n\n# 认识 ffanim\n\n- [介绍](index.md)\n- [效果画廊](effect-gallery.md)\n\n# 动手写动画\n\n- [第一个动画](first-animation.md)\n\n# 分课教程\n\n- [第 1 课 · 形状与样式](lesson-shapes.md)\n- [第 2 课 · 动画词汇](lesson-anims.md)\n- [第 3 课 · 文字与公式](lesson-text.md)\n- [第 4 课 · 坐标系与函数图像](lesson-axes.md)\n- [第 5 课 · 布局与强调](lesson-layout.md)\n- [第 6 课 · 镜头语言](lesson-camera.md)\n\n# 场景画廊\n\n",
@@ -245,7 +245,9 @@ fn gen_summary_md(chapters: &[(String, String)]) -> String {
             s.push_str(&format!("- [{label}]({file}.md)\n"));
         }
     }
-    s.push_str("\n# 参考\n\n- [附录：与 manim gallery 对照](manim-gallery.md)\n");
+    s.push_str(
+        "\n# 实战与参考\n\n- [实战拆解：傅里叶级数](fourier-walkthrough.md)\n- [配方 FAQ](recipes.md)\n- [词汇速查](vocabulary.md)\n- [附录：与 manim gallery 对照](manim-gallery.md)\n",
+    );
     s
 }
 
