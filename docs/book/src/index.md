@@ -41,6 +41,13 @@ cargo run --release -p ffanim --example getting_started
 | `fourier.rs` | 创作示例：傅里叶级数 |
 | `media.rs` | 创作示例：SVG 与图片 |
 | `pip.rs` | 创作示例：画中画 |
+| `lens.rs` | 创作示例：放大镜透镜（clip 裁剪原语） |
+| `pendulum.rs` | 创作示例：单摆参数化（RK4 物理积分 + `--params`） |
+| `three_d_rotation.rs` | 3D：相机环境自转 |
+| `three_d_illusion.rs` | 3D：相机错觉振荡 |
+| `three_d_light.rs` | 3D：棋盘光照（球面棋盘替代光源明暗） |
+| `surface_plot.rs` | 3D：曲面绘制（高斯参数曲面） |
+| `fixed_in_frame.rs` | 3D：固定屏上层（`fixed_in_frame` 语义） |
 
 ## 本地构建本书
 

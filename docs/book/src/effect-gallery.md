@@ -101,6 +101,18 @@
 
 <video controls loop muted preload="metadata" src="media/follow_cam_demo.mp4"></video>
 
+## 三维空间（3D）
+
+| 你想要 | 用什么 | 源码 |
+|---|---|---|
+| 3D 场景 + 相机环境自转 | `space3`（`Camera3D` 球坐标 + `project` 画家算法） | [three_d_rotation](three_d_rotation.md#three_d_rotation) |
+| 相机轻微振荡的「错觉旋转」 | 相机 theta 挂 tracker + sin 相位叠加 | [three_d_illusion](three_d_illusion.md#three_d_illusion) |
+| 3D 坐标轴 + 参数曲面 | `axes3d` + `parametric_surface` | [surface_plot](surface_plot.md#surface_plot) |
+| 球面棋盘（替代光照明暗） | `parametric_surface` 球面 + 主题双色棋盘 | [three_d_light](three_d_light.md#three_d_light) |
+| 元素固定在屏幕上不随相机转 | 3D 层与 2D 层分离拼装 | [fixed_in_frame](fixed_in_frame.md#fixed_in_frame) |
+
+<video controls loop muted preload="metadata" src="media/three_d_rotation.mp4"></video>
+
 ## 进阶拼装
 
 ffanim 的设计原则是**最小原语**：下面这些"高级效果"没有专用类，
@@ -110,6 +122,9 @@ ffanim 的设计原则是**最小原语**：下面这些"高级效果"没有专�
 |---|---|---|
 | 布尔运算（并/交/差/异或） | `Item::boolean` | [boolean_demo](basic.md#boolean_demo) |
 | 网格逐点非线性形变 | 折线采样 + tracker 逐帧重建 | [warp_grid_demo](basic.md#warp_grid_demo) |
+| 矢量级局部放大透镜（零像素操作） | `Item::with_clip` + 局部重渲染 | [lens](lens.md) |
+| 物理驱动的动画（ODE 数值积分） | `rk4` 构建期预积分 + updater 查表 | [pendulum](pendulum.md) |
+| 同一场景按参数出片 | `load_params` + `--params x.json` | [pendulum](pendulum.md) |
 | 傅里叶级数逼近方波 | 全流程创作示例 | [fourier](fourier.md) |
 | SVG 导入与图片 | `from_svg` / `from_image` | [media](media.md) |
 

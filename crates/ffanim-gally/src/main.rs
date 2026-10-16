@@ -64,6 +64,14 @@ fn chapter_kind(stem: &str) -> ChapterKind {
         "fourier" => ChapterKind::Gallery(4, "创作示例：傅里叶级数"),
         "media" => ChapterKind::Gallery(5, "创作示例：SVG 与图片"),
         "pip" => ChapterKind::Gallery(6, "创作示例：画中画"),
+        // 3D 对照账五例（docs/07 §1.2 manim gallery 3D 5/5）+ 原语验收创作例
+        "lens" => ChapterKind::Gallery(7, "创作示例：放大镜透镜"),
+        "pendulum" => ChapterKind::Gallery(8, "创作示例：单摆参数化"),
+        "three_d_rotation" => ChapterKind::Gallery(9, "3D：相机环境自转"),
+        "three_d_illusion" => ChapterKind::Gallery(10, "3D：相机错觉振荡"),
+        "three_d_light" => ChapterKind::Gallery(11, "3D：棋盘光照"),
+        "surface_plot" => ChapterKind::Gallery(12, "3D：曲面绘制"),
+        "fixed_in_frame" => ChapterKind::Gallery(13, "3D：固定屏上层"),
         // 未登记的新 example 追加在后（字母序），场景清单仍自动提取
         _ => ChapterKind::Gallery(usize::MAX, ""),
     }

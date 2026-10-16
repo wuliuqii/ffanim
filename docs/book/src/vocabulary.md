@@ -1,7 +1,7 @@
 # 词汇速查
 
 ffanim 门面全部公开 API（与 `scripts/api_coverage.sh` 门禁同步，
-共 61 项）。按用途分组，每项一句话；「→」指向讲解它的课程或示例。
+共 73 项）。按用途分组，每项一句话；「→」指向讲解它的课程或示例。
 
 ## 时间轴与动画
 
@@ -23,11 +23,16 @@ ffanim 门面全部公开 API（与 `scripts/api_coverage.sh` 门禁同步，
 | 词汇 | 一句话 | 讲解 |
 |---|---|---|
 | `Item` | 万物皆 Item：形状/文本/公式统一表示，样式挂 Item | [第 1 课](lesson-shapes.md) |
+| `Shape` | 几何形状枚举（圆/矩形/折线/贝塞尔路径…），`Item::new` 的料 | [第 1 课](lesson-shapes.md) |
 | `Style` | 样式（填充/描边/宽度），主题驱动 | [第 1 课](lesson-shapes.md) |
 | `Color` | RGBA 颜色：`with_alpha` 调透明、`lerp` 派生 | [t2c_demo](typography.md#t2c_demo) |
 | `Theme` | 主题：从 JSON 读色板与描边宽度（代码零硬编码色） | [第一个动画](first-animation.md) |
 | `Axes` | 坐标系：`plot` 画函数、`c2p` 数据→像素、`grid_item/to_item` | [第 4 课](lesson-axes.md) |
 | `Camera` | 相机（注视点/缩放/旋转），`affine(w,h)` 编译为仿射 | [第 6 课](lesson-camera.md) |
+| `math` | 线代件：glam f64 向量/矩阵/四元数（右手系 + OpenGL NDC 约定） | — |
+| `space3` | 3D 子系统：`Camera3D` 球坐标 + `project()` 每帧纯函数重投影（画家算法） | [附录：3D 对照](manim-gallery.md#3d-对照账官方-gallery-26-例中-5-例真-3d) |
+| `hit_test` / `hit_test_first` | 命中测试：点拾取返回 z 序顶层在前的命中 id（fill 非零环绕、描边带容差、Group 递归） | — |
+| `Font` | 描边侧字体文件加载：`Font::from_path` 注入指定字体 | — |
 | `BoolOp` | 布尔四则 `Intersection/Union/Xor/Difference`（配 `Item::boolean`） | [配方：布尔](recipes.md) |
 | `Item::with_clip` | 裁剪域：Item 局部坐标路径随变换走，Group 作用整棵子树（透镜/滚动窗口基元） | [透镜](lens.md) |
 | `kurbo` | kurbo 几何库 re-export（`BezPath/Circle/Rect/Affine/Point/Vec2`） | [第 1 课](lesson-shapes.md) |
@@ -45,6 +50,7 @@ ffanim 门面全部公开 API（与 `scripts/api_coverage.sh` 门禁同步，
 | `TextOptions` | 文本选项（字号/颜色/限宽/行距） | [text_demo](typography.md#text_demo) |
 | `CodeOptions` / `CodeTheme` | 代码块选项与内嵌高亮主题 | [code_demo](typography.md#code_demo) |
 | `Delimiter` | 定界符种类（Typst MATH stretch 装配） | [delimiter_demo](assemblies.md#delimiter_demo) |
+| `ArrowKind` | 箭头种类（Typst MATH stretch 装配） | [arrow_demo](assemblies.md#arrow_demo) |
 | `find_cjk_font` | 系统 CJK 字体查找（中文文本必注入） | [第 3 课](lesson-text.md) |
 | `match_formulas` / `MatchPlan` | 公式结构匹配 → 逐字形形变计划 | [formula_demo](typography.md#formula_demo) |
 | `match_shapes` | 任意图形按片段匹配形变 | [shapes_demo](basic.md#shapes_demo) |
@@ -63,14 +69,25 @@ ffanim 门面全部公开 API（与 `scripts/api_coverage.sh` 门禁同步，
 | `from_svg_file` / `from_svg_str` | SVG → Item（矢量导入） | [media](media.md) |
 | `ImageAsset` | 位图资产 | [media](media.md) |
 
+## 场景参数
+
+| 词汇 | 一句话 | 讲解 |
+|---|---|---|
+| `load_params` / `params_from_str` | 场景参数声明化：typed struct 即 schema，JSON 只写要改的字段（overlay 语义，`deny_unknown_fields` 防 typo） | [pendulum](pendulum.md) |
+
 ## 渲染与输出
 
 | 词汇 | 一句话 | 讲解 |
 |---|---|---|
 | `render_to_mp4` | 整段出片（ffmpeg rawvideo 管道；GPU 优先，无 GPU 自动降级 CPU） | [第一个动画](first-animation.md) |
 | `render_to_mp4_frames` | 指定帧区间出片 | — |
+| `render_to_mp4_with` | 带 `EncodeOptions` 出片（透明通道 / 画质预设入口） | — |
 | `render_to_mp4_cpu` | 强制 CPU 出片（逐字节确定，回归比对/CI 用） | — |
+| `render_to_png_frames` / `_range` | PNG 序列帧导出（全片/片段，逐帧 `.png`） | — |
+| `EncodeOptions` | 编码选项：`alpha` 透明自动路由 ProRes 4444 / VP9 alpha；`quality` 选画质 | — |
+| `Quality` | 画质预设（`ql/qm/qh/qk`，≙ manim `-q*` 口径） | — |
 | `FrameBackend` | 渲染后端选择器：`auto()` GPU 探测失败自动降级，`cpu()` 显式锁定 | — |
+| `RenderBackend` | 渲染后端枚举（vello GPU / vello CPU） | — |
 | `render_frame` | 取单帧 `DrawList`（出片层拼装的入口） | [配方：画中画](recipes.md) |
 | `DrawList` | 一帧的绘制清单（可克隆改写后重渲染） | [配方：画中画](recipes.md) |
 | `sample_frames` | 全片均匀采样帧号（诊断图取帧） | [实战拆解](fourier-walkthrough.md) |

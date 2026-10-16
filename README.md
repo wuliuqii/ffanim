@@ -32,7 +32,7 @@ cargo run -p ffanim --example basic -- sine_demo   # 任意场景，或省略场
 just fourier                   # 傅里叶级数创作示例（Typst 公式 + BGM 混流）
 ```
 
-全部 20 个示例的**视频 + 源码**见[示例书](#文档)（`just book` 本地构建）。
+全部 16 个示例文件（44 个场景）的**视频 + 源码**见[示例书](#文档)（`just book` 本地构建）。
 
 ## CLI 工具箱
 
@@ -60,7 +60,7 @@ just fourier                   # 傅里叶级数创作示例（Typst 公式 + BG
 
 ## 文档
 
-- **[示例书](docs/book/src/index.md)** —— 全部 20 个示例：视频 + 可复现源码（`just book` 构建）
+- **[示例书](docs/book/src/index.md)** —— 全部 16 个示例文件（44 个场景）：视频 + 可复现源码（`just book` 构建）
 - [架构设计](docs/02-架构设计.md) —— 分层、时间轴模型、渲染管线
 - [路线图与风险](docs/03-路线图与风险.md) —— M0~M10 里程碑
 - [项目优化规划](docs/04-项目优化规划.md) —— v0.2.0 起的演进计划
