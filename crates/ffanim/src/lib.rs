@@ -16,7 +16,8 @@ pub use ffanim_core::{
     Style, TableOptions, TableSpec, Theme, Timeline, arrange, from_svg_file, from_svg_str,
     match_shapes, render_frame, table,
 };
-pub use ffanim_render::FrameBackend;
+pub use ffanim_encode::{EncodeOptions, Quality};
+pub use ffanim_render::{FrameBackend, RenderBackend};
 
 /// 场景创作糖层（docs/07 评审 D1/D3）：Stage 工作台 + 像素意图落位。
 ///
@@ -92,15 +93,58 @@ pub fn render_to_mp4_frames(
     out: impl AsRef<std::path::Path>,
     frames: std::ops::Range<usize>,
 ) -> Result<()> {
-    render_to_mp4_frames_with(tl, out, frames, ffanim_render::FrameBackend::auto)
+    render_to_mp4_frames_with(
+        tl,
+        out,
+        frames,
+        ffanim_render::FrameBackend::auto,
+        &EncodeOptions::default(),
+    )
+}
+
+/// 一键出片（自定义编码选项）：透明通道（`alpha`，docs/07 §1.3）、画质预设
+/// （`quality`）、分段数（`segments`）等细粒度控制。渲染后端自动选择
+/// （GPU 优先）；片段导出用 [`render_to_mp4_frames`]，确定性输出用
+/// [`render_to_mp4_cpu`]。
+///
+/// # 示例
+///
+/// 透明通道出片：背景 alpha=0（数据驱动透明底）+ `alpha: true`，
+/// 按 `.mov`/`.webm` 扩展名自动路由 ProRes 4444 / VP9 alpha：
+///
+/// ```no_run
+/// use ffanim::{Anim, Color, EncodeOptions, Item, Timeline};
+///
+/// let mut tl = Timeline::new(960, 540, 30, Color::new(0, 0, 0, 0)); // 透明底
+/// let cir = tl.add(Item::circle(ffanim::kurbo::Circle::new((480.0, 270.0), 80.0)));
+/// tl.play(Anim::create(cir).during(1.0));
+/// let opts = EncodeOptions { alpha: true, ..Default::default() };
+/// ffanim::render_to_mp4_with(&tl.compile(), "out/demo.mov", &opts).unwrap();
+/// ```
+pub fn render_to_mp4_with(
+    tl: &CompiledTimeline,
+    out: impl AsRef<std::path::Path>,
+    opts: &EncodeOptions,
+) -> Result<()> {
+    render_to_mp4_frames_with(
+        tl,
+        out,
+        0..tl.duration_frames,
+        ffanim_render::FrameBackend::auto,
+        opts,
+    )
 }
 
 /// 一键出片（强制 CPU）：与 [`render_to_mp4`] 同一管线，但帧渲染锁定
 /// vello_cpu 后端——逐字节确定，供回归比对 / CI / 无 GPU 环境显式选择。
 pub fn render_to_mp4_cpu(tl: &CompiledTimeline, out: impl AsRef<std::path::Path>) -> Result<()> {
-    render_to_mp4_frames_with(tl, out, 0..tl.duration_frames, || {
-        ffanim_render::FrameBackend::cpu()
-    })
+    render_to_mp4_frames_with(
+        tl,
+        out,
+        0..tl.duration_frames,
+        ffanim_render::FrameBackend::cpu,
+        &EncodeOptions::default(),
+    )
 }
 
 /// PNG 序列帧导出：`{dir}/{n:04}.png`（0000 起，全片）——下游剪辑/审片的
@@ -146,6 +190,7 @@ fn render_to_mp4_frames_with(
     out: impl AsRef<std::path::Path>,
     frames: std::ops::Range<usize>,
     make_backend: impl FnOnce() -> ffanim_render::FrameBackend,
+    opts: &EncodeOptions,
 ) -> Result<()> {
     if frames.is_empty() || frames.end > tl.duration_frames {
         return Err(Error::Other(format!(
@@ -168,13 +213,5 @@ fn render_to_mp4_frames_with(
         let draw = ffanim_core::render_frame(tl, first + f);
         backend.lock().unwrap().render(&draw)
     };
-    ffanim_encode::encode_video(
-        tl.width,
-        tl.height,
-        tl.fps,
-        total,
-        out,
-        &ffanim_encode::EncodeOptions::default(),
-        &frame_of,
-    )
+    ffanim_encode::encode_video(tl.width, tl.height, tl.fps, total, out, opts, &frame_of)
 }

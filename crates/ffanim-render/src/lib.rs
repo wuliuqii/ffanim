@@ -83,6 +83,19 @@ pub fn to_peniko(color: Color) -> vello_cpu::peniko::Color {
     ])
 }
 
+/// 预乘分量还原：`c = c' / a`（a=0/255 直通）。vello_cpu 输出 premultiplied
+/// RGBA8，CPU 路径读回需还原为 straight；vello（GPU）纹理输出已是
+/// straight、直通即可——双端产物统一为 straight 约定（差异实证见
+/// gpu.rs 读回注释，透明通道 docs/07 §1.3 依赖此语义）。
+#[inline]
+pub(crate) fn unpremultiply(c: u8, a: u8) -> u8 {
+    if a == 0 || a == 255 {
+        c
+    } else {
+        ((u16::from(c) * 255 + u16::from(a) / 2) / u16::from(a)) as u8
+    }
+}
+
 /// 渲染单个 Item 到 CPU 上下文（填充 + 描边两遍；图片走 fill_rect + 透明度层）。
 fn render_cpu_item(ctx: &mut vello_cpu::RenderContext, transform: kurbo::Affine, item: &Item) {
     ctx.set_transform(vello_cpu::kurbo::Affine::new(transform.as_coeffs()));

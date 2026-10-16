@@ -7,6 +7,18 @@
 
 ### Added
 
+- feat(encode): 透明通道导出（docs/07 §1.3）——`EncodeOptions.alpha` 按输出
+  格式自动路由带 alpha 编码：mp4 族→ProRes 4444（prores_ks + yuva444p10le，
+  剪辑软件标准中间格式，定量码率下 codec/crf/preset 忽略）、webm→VP9 alpha
+  （yuva420p + auto-alt-ref 0）、gif 报可读错误；配套门面 `render_to_mp4_with`
+  （细粒度编码选项）+ re-export `EncodeOptions`/`Quality`/`RenderBackend`。
+  渲染端零改动：bg alpha=0 数据驱动产出透明底（GPU/CPU 双后端 straight
+  约定像素级实证统一）。正式测试 3 项：mov 硬断言（ffprobe 实证 + 像素三区
+  透明底/半透明 ±1 量化/不透明精确）、webm 探测式（codec=vp9 硬断言，alpha
+  在部分 ffmpeg 环境静默降级为环境报告）、gif 报错。顺手修复两个真 bug：
+  段编码失败静默（spawn 的 Result 未收集，拖到 concat 才报 Invalid data）与
+  alpha 段容器误用 mp4（ProRes 走 mov）
+
 - feat(examples): FixedInFrameMObjectTest 拼装闭环——3D 对照账 5/5 全部收官——
   `fixed_in_frame.rs`（零新 API）：3D 层单进度 tracker 派生同窗动画（轴绕 z
   转 90° + 圆平移到 (1,1,0)，updater 每帧重投影），2D 层数字

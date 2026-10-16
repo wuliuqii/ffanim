@@ -31,7 +31,7 @@
 |---|------|----------|----------|--------|------|
 | 1.1 | **裁剪/蒙版原语** | `Item` 级 clip path / mask，渲染时对子树做 region 裁剪 | 局部放大透镜（画中画现在靠画布边界天然裁剪，正圆透镜无解）、只显示曲线某区间、滚动字幕窗口、聚光灯 | **P0** | 高——画中画已实证为 hack，透镜形态是数学视频高频手段；vello 原生支持 clip layer，改动集中在 DrawList→场景图映射 |
 | 1.2 | **3D 投影模拟管线** | manim 同款路线：glam f64 数学件（2.2 交付物，约定已锁）、3D 相机（可动画 orbit/zoom Tracker）、Axes3D/曲面/线框等 3D 构造件（构建期生成点云/线段表）、画家算法深度排序；每帧 `project(scene3d, camera) -> DrawList`，vello 渲染管线零改动 | 物理场演示（电磁场线、波面）、空间解析几何、分子结构 | **P1** | 高——数学物理定位下最大单块缺失；但投影产物即普通 2D Item，描边生长/fade/布尔/clip 等现有能力全部免费复用。**真 3D 光栅化管线为非目标**（出片示意性 3D 无需真光照；manim 出片同为投影模拟，真 3D 仅存在于交互用的 manim-gl） |
-| 1.3 | **透明通道导出** | alpha 通路 + prores4444 / webm-alpha 目标 | 录课视频叠加到剪辑软件、逐层合成 | P1 | 中——`EncodeOptions.codec` 已是字符串，缺 pix_fmt/alpha 参数与质量预设联动 |
+| 1.3 | **透明通道导出** | alpha 通路 + prores4444 / webm-alpha 目标 | 录课视频叠加到剪辑软件、逐层合成 | **P1 ✅ 已完成（2026-10-16）** | 中——`EncodeOptions.alpha` 按格式自动路由（ProRes 4444 / VP9 alpha），门面 `render_to_mp4_with` 细粒度控制；渲染端透明底 bg alpha=0 数据驱动零改动 |
 | 1.4 | **图层与合成序** | 显式 z-order 管理 + 基本混合模式 | 遮挡关系精细控制、高亮遮罩 | P2 | 中——DrawList 顺序已承担基本遮挡，缺显式管理；混合模式依赖 vello 合成能力 |
 | 1.5 | **后处理效果** | 阴影/辉光/模糊等强调效果 | 重点强调、氛围渲染 | P2 | 低——强调现用缩放+变色可覆盖大部分需求 |
 | 1.6 | **高分辨率一致性** | 线宽/字号按画布尺寸归一（而非 px 直映射） | 同一场景 720p/4K 一键出片 | P2 | 中——当前 px 语义清晰但换分辨率需手调数值 |
@@ -281,7 +281,7 @@ let id = tl.add(Item::circle(...));               // 原语照用
 | Phase 1（API 地基） | D2 Theme 解析前置 + D4 组动画 API + D5 速率开放 ✅ 已完成（2026-10-15） | 无 breaking 风险项先行 | 门禁 `api_coverage.sh` + 全量场景重渲染 diff 为零（D2 除外，为取色等价值） |
 | Phase 2（Stage 糖层） | D1 Stage 便捷层 + D3 落位意图 API（`to_items_at`/`Anchor`）✅ 已完成（2026-10-15，fourier.rs Stage 版验收：236→208 行，样板区 −50%，出片目检等价） | 糖层可整体绕过 | `just ci` 全绿 + fourier strip/onion 目检 |
 | Phase 3（能力 P0 批次） | 1.1 clip 原语 + 2.1 ODE + 4.1 PNG 序列 + 6.1 bench 门禁 | 与 Phase 2 并行 | 透镜拼装配方用 clip 重写简化；ODE 场景（单摆/抛体）新示例 |
-| Phase 4（P1 主线） | 2.2 线代 → 1.2 3D 投影模拟；1.3/4.2/4.3 导出参数化；5.1 命中测试；5.2 参数 schema；7.1 发布工程；7.2 迁移指南 | Phase 3 | 按里程碑逐项 |
+| Phase 4（P1 主线） | 2.2 线代 ✅ → 1.2 3D 投影模拟 ✅（2026-10-16，gallery 5/5）；1.3 透明通道 ✅（2026-10-16）；4.2/4.3 导出参数化；5.1 命中测试；5.2 参数 schema；7.1 发布工程；7.2 迁移指南 | Phase 3 | 按里程碑逐项 |
 
 文档同步：`vocabulary.md`（新增 Stage 类目）、`recipes.md`（三步曲配方改写为 Stage 一行版）、`scripts/api_coverage.sh`（Stage 纳入门禁）、CHANGELOG。
 

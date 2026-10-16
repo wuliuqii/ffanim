@@ -137,7 +137,7 @@ fn stage_装配与一步上屏() {
 
 #[test]
 fn 出片后端自动选择与强制cpu() {
-    use ffanim_render::RenderBackend as _;
+    use ffanim::RenderBackend as _;
     // auto：GPU 可用走 GPU，否则降级 CPU（本机/CI 行为不同，均须成功出片）
     let mut tl = ffanim::Timeline::new(64, 64, 30, ffanim::Color::new(0, 0, 0, 255));
     let id = tl.add(ffanim::Item::rect(ffanim::kurbo::Rect::new(
@@ -158,6 +158,33 @@ fn 出片后端自动选择与强制cpu() {
     assert_eq!(b.render(&buf).len(), 64 * 64 * 4);
     let _ = std::fs::remove_file(&out);
     let _ = std::fs::remove_file(&out_cpu);
+}
+
+#[test]
+fn 透明通道mov端到端() {
+    // 透明通道（docs/07 §1.3）：透明底 + 半透明圆 → render_to_mp4_with(alpha)
+    // → .mov 自动路由 ProRes 4444。覆盖门面新公开项 render_to_mp4_with /
+    // EncodeOptions / Quality / RenderBackend（规则 B 文本引用）。
+    use ffanim::{EncodeOptions, Quality};
+    if !has_ffmpeg() {
+        eprintln!("跳过：无 ffmpeg");
+        return;
+    }
+    let mut tl = ffanim::Timeline::new(64, 36, 30, ffanim::Color::new(0, 0, 0, 0));
+    let id = tl.add(
+        ffanim::Item::circle(ffanim::kurbo::Circle::new((32.0, 18.0), 8.0))
+            .with_fill(ffanim::Color::new(80, 160, 255, 128)),
+    );
+    tl.play(Anim::fade_in(id).during(0.5));
+    let opts = EncodeOptions {
+        alpha: true,
+        ..Default::default()
+    };
+    // Quality 为 EncodeOptions::quality 的画质预设枚举（公开面引用）
+    let _q: Option<Quality> = opts.quality;
+    let out = out_dir("alpha-mov").join("a.mov");
+    ffanim::render_to_mp4_with(&tl.compile(), &out, &opts).expect("透明通道出片应成功");
+    assert!(out.metadata().expect("产物存在").len() > 100, "产物过小");
 }
 
 #[test]

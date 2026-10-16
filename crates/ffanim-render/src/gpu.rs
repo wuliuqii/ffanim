@@ -232,7 +232,10 @@ impl RenderBackend for GpuBackend {
                 .expect("设备轮询失败");
         });
 
-        // 去除行对齐填充，得到紧凑 RGBA
+        // 去除行对齐填充，得到紧凑 RGBA。注意双端输出约定不同（实证于
+        // 透明通道验收，docs/07 §1.3）：vello（GPU）纹理输出已是 straight，
+        // 直通即为约定语义；vello_cpu 输出 premultiplied，需在 CPU 路径
+        // unpremultiply（lib.rs `unpremultiply`）——两端产物一致为 straight。
         let data = slice.get_mapped_range().expect("映射读取失败");
         let mut out = Vec::with_capacity((w * h * 4) as usize);
         for row in 0..h {

@@ -58,29 +58,21 @@ impl RenderBackend for CpuBackend {
         let mut pixmap = vello_cpu::Pixmap::new(w, h);
         ctx.render(&mut pixmap, &mut vello_cpu::Resources::new());
 
-        // vello_cpu 输出预乘 RGBA8 → 还原为非预乘（PNG 标准）
+        // vello_cpu 输出预乘 RGBA8 → 还原为非预乘（与 GPU 后端同一约定，
+        // 见 lib.rs `unpremultiply`）
         pixmap
             .data()
             .iter()
             .flat_map(|px| {
                 let (r, g, b, a) = (px.r, px.g, px.b, px.a);
-                unpremultiply(r, a)
-                    .into_iter()
-                    .chain(unpremultiply(g, a))
-                    .chain(unpremultiply(b, a))
-                    .chain([a])
+                [
+                    crate::unpremultiply(r, a),
+                    crate::unpremultiply(g, a),
+                    crate::unpremultiply(b, a),
+                    a,
+                ]
             })
             .collect()
-    }
-}
-
-/// 预乘分量还原：c = c' / a。
-#[inline]
-fn unpremultiply(c: u8, a: u8) -> [u8; 1] {
-    if a == 0 || a == 255 {
-        [c]
-    } else {
-        [((u16::from(c) * 255 + u16::from(a) / 2) / u16::from(a)) as u8]
     }
 }
 

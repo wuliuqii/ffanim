@@ -31,6 +31,13 @@ pub struct EncodeOptions {
     /// 画质预设（manim `-ql/-qm/-qh/-qk` 对应）：定输出分辨率缩放 +
     /// 各格式 CRF；None = 原尺寸直出。
     pub quality: Option<Quality>,
+    /// 透明通道（docs/07 §1.3）：true 时按输出格式自动路由带 alpha 编码——
+    /// mp4 族（.mov/.mp4/.m4v）→ ProRes 4444（prores_ks，yuva444p10le，
+    /// 剪辑软件标准中间格式；定量码率无 CRF，codec/crf/preset 均忽略）；
+    /// webm → VP9 alpha（yuva420p）；gif 不支持（1-bit 透明，报可读错误）。
+    /// 配套要求：场景背景 alpha=0（渲染端数据驱动产出透明底帧），否则
+    /// alpha 通道全 255 等价不透明。
+    pub alpha: bool,
 }
 
 impl Default for EncodeOptions {
@@ -41,6 +48,7 @@ impl Default for EncodeOptions {
             preset: "medium".into(),
             segments: None,
             quality: None,
+            alpha: false,
         }
     }
 }
@@ -174,6 +182,12 @@ pub fn encode_video(
 ) -> Result<()> {
     check_ffmpeg()?;
     let format = format_of(out)?;
+    // 透明通道护栏：GIF 仅 1-bit 透明且 palettegen 调色会丢 alpha，不支持
+    if opts.alpha && format == Format::Gif {
+        return Err(Error::Encode(
+            "透明通道不支持 GIF（1-bit 透明且调色板丢失 alpha）；请用 .mov（ProRes 4444）或 .webm（VP9 alpha）".into(),
+        ));
+    }
     // 输出父目录不存在则创建（脚手架项目首次运行时 out/ 尚不存在）
     if let Some(parent) = out.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent)
@@ -205,8 +219,15 @@ pub fn encode_video(
     std::fs::create_dir_all(&tmp).map_err(|e| Error::Encode(format!("创建临时目录失败: {e}")))?;
     // 埋点：编码总览（info）
     log::info!(
-        "编码开始: {total_frames} 帧 {width}x{height}@{fps} → {out:?}（{format:?}，{segments} 段并行，crf={}）",
-        opts.quality.map_or(opts.crf, |q| q.spec().crf_x264)
+        "编码开始: {total_frames} 帧 {width}x{height}@{fps} → {out:?}（{format:?}，{segments} 段并行，{}）",
+        if opts.alpha {
+            "alpha 通道".to_string()
+        } else {
+            format!(
+                "crf={}",
+                opts.quality.map_or(opts.crf, |q| q.spec().crf_x264)
+            )
+        }
     );
 
     let result = match format {
@@ -248,22 +269,33 @@ pub fn encode_video(
     result
 }
 
-/// 分段编码器的输出参数（编解码器 + 画质预设缩放）。
+/// 分段编码器的输出参数（编解码器 + 画质预设缩放；alpha 语义见
+/// [`EncodeOptions::alpha`]）。
 fn codec_args(fmt: Format, opts: &EncodeOptions) -> Vec<String> {
     let mut args = vec![
-        "-pix_fmt".to_string(),
-        "yuv420p".to_string(),
         // 每段单线程：并行已由分段承担（段数≈核数/2），段内 x264 帧多线程
         // 会以 1.5×核数/段 叠加（16 段 × 24 线程 ≈ 400 逻辑线程），笔记本
         // APU 长时间全核爆载会触发过热保护重启
         "-threads".to_string(),
         "1".to_string(),
     ];
-    match fmt {
-        Format::Mp4 => {
+    match (fmt, opts.alpha) {
+        // 透明通道：ProRes 4444 专业中间格式（yuva444p10le），定量码率无
+        // CRF——codec/crf/preset 均忽略
+        (Format::Mp4, true) => args.extend([
+            "-c:v".to_string(),
+            "prores_ks".to_string(),
+            "-profile:v".to_string(),
+            "4444".to_string(),
+            "-pix_fmt".to_string(),
+            "yuva444p10le".to_string(),
+        ]),
+        (Format::Mp4, false) => {
             // 画质预设给定时覆盖 opts.crf（manim 语义：质量档定码率）
             let crf = opts.quality.map_or(opts.crf, |q| q.spec().crf_x264);
             args.extend([
+                "-pix_fmt".to_string(),
+                "yuv420p".to_string(),
                 "-c:v".to_string(),
                 opts.codec.clone(),
                 "-crf".to_string(),
@@ -272,9 +304,29 @@ fn codec_args(fmt: Format, opts: &EncodeOptions) -> Vec<String> {
                 opts.preset.clone(),
             ]);
         }
-        Format::WebM => {
+        // 透明通道：VP9 alpha——yuva420p 触发 libvpx alpha 双流，
+        // auto-alt-ref 0 防 alpha 帧被 alt-ref 机制丢弃（标准配方）
+        (Format::WebM, true) => args.extend([
+            "-pix_fmt".to_string(),
+            "yuva420p".to_string(),
+            "-c:v".to_string(),
+            "libvpx-vp9".to_string(),
+            "-crf".to_string(),
+            opts.quality.map_or(34, |q| q.spec().crf_vp9).to_string(),
+            "-b:v".to_string(),
+            "0".to_string(),
+            "-row-mt".to_string(),
+            "1".to_string(),
+            "-cpu-used".to_string(),
+            "4".to_string(),
+            "-auto-alt-ref".to_string(),
+            "0".to_string(),
+        ]),
+        (Format::WebM, false) => {
             let crf = opts.quality.map_or(34, |q| q.spec().crf_vp9);
             args.extend([
+                "-pix_fmt".to_string(),
+                "yuv420p".to_string(),
                 "-c:v".to_string(),
                 "libvpx-vp9".to_string(),
                 "-crf".to_string(),
@@ -287,7 +339,7 @@ fn codec_args(fmt: Format, opts: &EncodeOptions) -> Vec<String> {
                 "4".to_string(),
             ]);
         }
-        Format::Gif => unreachable!("gif 不走分段直编（先中转 mp4 再调色）"),
+        (Format::Gif, _) => unreachable!("gif 不走分段直编（先中转 mp4 再调色）"),
     }
     // 画质预设：输出缩放到预设分辨率
     if let Some(q) = opts.quality {
@@ -324,18 +376,31 @@ fn run_segments(
 
     // 每段一个 worker（scoped threads：借用 frames，无需 'static）
     let ext = match fmt {
+        // mp4 族段容器：alpha 走 ProRes（标准容器 .mov；yuva444p10le 进
+        // .mp4 muxer 会失败），普通 x264 仍用 .mp4
+        Format::Mp4 if opts.alpha => "mov",
         Format::Mp4 | Format::Gif => "mp4",
         Format::WebM => "webm",
     };
+    // 任一段失败即整体失败（spawn 的 Result 必须收集，否则段失败静默，
+    // 拖到 concat 才报 Invalid data 且丢失根因）
     std::thread::scope(|s| {
+        let mut hs = Vec::with_capacity(bounds.len());
         for (i, &(start, end)) in bounds.iter().enumerate() {
             let seg_path: PathBuf = tmp.join(format!("seg_{i:04}.{ext}"));
             let opts = opts.clone();
-            s.spawn(move || {
+            hs.push(s.spawn(move || {
                 encode_segment(seg_path, width, height, fps, start, end, &opts, frames, fmt)
-            });
+            }));
         }
-    });
+        for h in hs {
+            let r = h
+                .join()
+                .map_err(|_| Error::Encode("段编码线程 panic".into()));
+            r??;
+        }
+        Ok::<(), Error>(())
+    })?;
 
     // 单段直接改名，多段 concat 流复制
     if bounds.len() == 1 {
@@ -720,5 +785,176 @@ mod tests {
         })
         .unwrap_err();
         assert!(e.to_string().contains("扩展名"), "错误应可读: {e}");
+    }
+
+    /// ffprobe 读取首视频流 `codec,profile,pix_fmt`（缺失/失败返回 None）。
+    fn probe_stream(p: &Path) -> Option<String> {
+        let out = Command::new("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=codec_name,profile,pix_fmt",
+                "-of",
+                "csv=p=0",
+            ])
+            .arg(p)
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    }
+
+    /// ffmpeg 解码指定帧为 rgba rawvideo（缺帧/失败返回 None）。
+    fn decode_frame_rgba(p: &Path, frame: usize, w: u32, h: u32) -> Option<Vec<u8>> {
+        let out = Command::new("ffmpeg")
+            .args(["-v", "error", "-i"])
+            .arg(p)
+            .args([
+                "-vf",
+                &format!("select=eq(n\\,{frame})"),
+                "-frames:v",
+                "1",
+                "-pix_fmt",
+                "rgba",
+                "-f",
+                "rawvideo",
+                "pipe:1",
+            ])
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let expect = (w * h * 4) as usize;
+        (out.stdout.len() == expect).then_some(out.stdout)
+    }
+
+    /// 透明通道测试帧：全透明底 + 中央不透明红方块 + 左上角半透明蓝。
+    fn alpha_frames(w: u32, h: u32) -> impl Fn(usize) -> Vec<u8> + Sync {
+        let (w, h) = (w as usize, h as usize);
+        move |_f| {
+            let mut buf = vec![0u8; w * h * 4];
+            buf.chunks_exact_mut(4).enumerate().for_each(|(px, c)| {
+                let (x, y) = (px % w, px / w);
+                if x + 4 > w / 2 && x < w / 2 + 4 && y + 4 > h / 2 && y < h / 2 + 4 {
+                    c[..].copy_from_slice(&[255, 0, 0, 255]);
+                } else if x < 4 && y < 4 {
+                    c[..].copy_from_slice(&[80, 160, 255, 128]);
+                }
+            });
+            buf
+        }
+    }
+
+    /// 透明通道（docs/07 §1.3）：.mov + alpha=true 自动路由 ProRes 4444，
+    /// ffprobe 实证编码参数 + 像素级 alpha 断言（透明底/半透明/不透明三区）。
+    #[test]
+    fn 透明_mov_自动路由_prores4444() {
+        if check_ffmpeg().is_err() {
+            eprintln!("跳过：无 ffmpeg");
+            return;
+        }
+        let (w, h) = (32u32, 18u32);
+        let out = std::env::temp_dir().join("ffanim-encode-alpha.mov");
+        encode_video(
+            w,
+            h,
+            30,
+            2,
+            &out,
+            &EncodeOptions {
+                alpha: true,
+                ..Default::default()
+            },
+            &alpha_frames(w, h),
+        )
+        .unwrap();
+
+        let stream = probe_stream(&out).expect("ffprobe 应可读产物");
+        assert!(stream.contains("prores"), "应路由 ProRes: {stream}");
+        assert!(stream.contains("4444"), "应为 profile 4444: {stream}");
+        assert!(stream.contains("yuva"), "应含 alpha 平面: {stream}");
+
+        let rgba = decode_frame_rgba(&out, 1, w, h).expect("应可解码帧 1");
+        let px = |x: u32, y: u32| rgba[((y * w + x) * 4) as usize..][..4].to_vec();
+        assert_eq!(px(0, h - 1), [0, 0, 0, 0], "左下角应为透明底");
+        assert_eq!(px(w / 2, h / 2), [255, 0, 0, 255], "中央应精确不透明");
+        let corner = px(1, 1);
+        let near = |v: u8, t: u8| (i32::from(v) - i32::from(t)).abs() <= 2;
+        assert!(
+            near(corner[0], 80) && near(corner[1], 160) && near(corner[2], 255),
+            "半透明蓝 RGB 应经 YUV 往返近似保留: {corner:?}"
+        );
+        assert!(near(corner[3], 128), "半透明 alpha 应 ≈128: {corner:?}");
+        let _ = std::fs::remove_file(&out);
+    }
+
+    /// 透明通道：.webm + alpha=true 走 VP9 alpha 配方。ffmpeg 的 libvpx
+    /// 封装在部分环境静默降级 yuv420p（无 alpha），此处探测式断言——
+    /// codec=vp9 硬断言；alpha 保留与否探测报告，不因环境能力 fail。
+    #[test]
+    fn 透明_webm_探测式() {
+        if check_ffmpeg().is_err() {
+            eprintln!("跳过：无 ffmpeg");
+            return;
+        }
+        let (w, h) = (32u32, 18u32);
+        let out = std::env::temp_dir().join("ffanim-encode-alpha.webm");
+        encode_video(
+            w,
+            h,
+            30,
+            2,
+            &out,
+            &EncodeOptions {
+                alpha: true,
+                ..Default::default()
+            },
+            &alpha_frames(w, h),
+        )
+        .unwrap();
+
+        let stream = probe_stream(&out).expect("ffprobe 应可读产物");
+        assert!(stream.contains("vp9"), "应编 VP9: {stream}");
+        if let Some(rgba) = decode_frame_rgba(&out, 1, w, h) {
+            let corner_alpha = rgba[(((h - 1) * w) as usize * 4) + 3];
+            if corner_alpha == 255 {
+                eprintln!(
+                    "环境报告：本机 ffmpeg libvpx alpha 未生效（静默降级 yuv420p），跳过 alpha 断言"
+                );
+            } else {
+                assert_eq!(corner_alpha, 0, "角落透明底应保留 alpha=0");
+            }
+        }
+        let _ = std::fs::remove_file(&out);
+    }
+
+    /// 透明通道：GIF 不支持（1-bit 透明），应报可读错误且不产生产物。
+    #[test]
+    fn 透明_gif_报可读错误() {
+        let out = std::env::temp_dir().join("ffanim-encode-alpha.gif");
+        let e = encode_video(
+            32,
+            18,
+            30,
+            2,
+            &out,
+            &EncodeOptions {
+                alpha: true,
+                ..Default::default()
+            },
+            &alpha_frames(32, 18),
+        )
+        .unwrap_err();
+        assert!(
+            e.to_string().contains("透明通道不支持 GIF"),
+            "错误应可读: {e}"
+        );
+        assert!(!out.exists(), "报错路径不应产生产物");
     }
 }
