@@ -40,7 +40,7 @@ fn scene_1080p() -> ffanim_core::CompiledTimeline {
 /// RGBA8 → RGB24 打包（ffmpeg rawvideo 管道的带宽关键步，R4 瓶颈实测）。
 fn pack_rgb24(rgba: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(rgba.len() / 4 * 3);
-    for px in rgba.chunks_exact(4) {
+    for px in rgba.as_chunks::<4>().0 {
         out.extend_from_slice(&px[..3]);
     }
     out

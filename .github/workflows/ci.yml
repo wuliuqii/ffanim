@@ -34,6 +34,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Clippy（GPU 特性）
-        run: cargo clippy --workspace --all-targets --features ffanim-cli/gpu -- -D warnings
+        run: cargo clippy --workspace --all-targets --features ffanim-render/gpu -- -D warnings
       - name: 测试（GPU 不可用时相关测试自动跳过）
         run: cargo test --workspace --features ffanim-render/gpu

@@ -189,7 +189,7 @@ mod tests {
     fn 图片渲染冒烟() {
         // 2x2 纯红图片平移到 (3,3)，画布 8x8
         let mut rgba = vec![0u8; 4 * 4];
-        for px in rgba.chunks_exact_mut(4) {
+        for px in rgba.as_chunks_mut::<4>().0 {
             px.copy_from_slice(&[255, 0, 0, 255]);
         }
         let mut draw = DrawList::new(8, 8, Color::new(0, 0, 0, 255));
@@ -215,7 +215,7 @@ mod tests {
     fn 图片透明度渲染() {
         // 2x2 纯红图片平移到 (3,3)，画布 8x8
         let mut rgba = vec![0u8; 4 * 4];
-        for px in rgba.chunks_exact_mut(4) {
+        for px in rgba.as_chunks_mut::<4>().0 {
             px.copy_from_slice(&[255, 0, 0, 255]);
         }
         let mut item = Item::from_image(rgba, 2, 2).unwrap();

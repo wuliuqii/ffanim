@@ -92,7 +92,12 @@ pub fn downsample(src: &[u8], sw: u32, sh: u32, dw: u32, dh: u32) -> Vec<u8> {
 /// ghost 叠加：目标不透明（alpha=255），按权重线性混合源帧颜色。
 fn blend_ghost(dst: &mut [u8], src: &[u8], alpha: f64) {
     assert_eq!(dst.len(), src.len(), "混合尺寸一致");
-    for (d, s) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+    for (d, s) in dst
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(src.as_chunks::<4>().0)
+    {
         // 两帧背景均不透明，只需 lerp RGB；A 恒 255
         for k in 0..3 {
             d[k] = (f64::from(s[k]) * alpha + f64::from(d[k]) * (1.0 - alpha)).round() as u8;
@@ -128,7 +133,7 @@ pub fn strip(
     let gw = cols as u32 * (tw + gap) + gap;
     let gh = rows as u32 * (th + gap) + gap;
     let mut canvas = vec![0u8; (gw * gh * 4) as usize];
-    for px in canvas.chunks_exact_mut(4) {
+    for px in canvas.as_chunks_mut::<4>().0 {
         px[..4].copy_from_slice(&[canvas_bg.r, canvas_bg.g, canvas_bg.b, 255]);
     }
 
@@ -200,7 +205,12 @@ fn annotate(font: &Font, accent: Color, w: u32, h: u32, text: &str) -> Result<Ve
 /// 非预乘 over 混合：src 叠加到 dst（同尺寸）。
 fn blend_over(dst: &mut [u8], src: &[u8]) {
     assert_eq!(dst.len(), src.len(), "混合尺寸一致");
-    for (d, s) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+    for (d, s) in dst
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(src.as_chunks::<4>().0)
+    {
         let (sr, sg, sb, sa) = (s[0], s[1], s[2], s[3]);
         if sa == 0 {
             continue;

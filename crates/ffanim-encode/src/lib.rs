@@ -592,13 +592,17 @@ mod tests {
         let (w, h) = (w as usize, h as usize);
         move |f: usize| -> Vec<u8> {
             let mut buf = vec![14u8; w * h * 4];
-            buf.chunks_exact_mut(4).enumerate().for_each(|(px, c)| {
-                let (x, y) = ((px % w) as i64, (px / w) as i64);
-                let cx = (f * 3) as i64 % w as i64;
-                if (x - cx).abs() < 8 && (y - 32).abs() < 8 {
-                    c[..].copy_from_slice(&[255, 0, 0, 255]);
-                }
-            });
+            buf.as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .enumerate()
+                .for_each(|(px, c)| {
+                    let (x, y) = ((px % w) as i64, (px / w) as i64);
+                    let cx = (f * 3) as i64 % w as i64;
+                    if (x - cx).abs() < 8 && (y - 32).abs() < 8 {
+                        c[..].copy_from_slice(&[255, 0, 0, 255]);
+                    }
+                });
             buf
         }
     }
@@ -614,13 +618,17 @@ mod tests {
         // 每帧一个移动的红色方块
         let frames = |f: usize| -> Vec<u8> {
             let mut buf = vec![14u8; w as usize * h as usize * 4];
-            buf.chunks_exact_mut(4).enumerate().for_each(|(px, c)| {
-                let (x, y) = ((px % w as usize) as i64, (px / w as usize) as i64);
-                let cx = (f * 3) as i64 % w as i64;
-                if (x - cx).abs() < 8 && (y - 32).abs() < 8 {
-                    c[..].copy_from_slice(&[255, 0, 0, 255]);
-                }
-            });
+            buf.as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .enumerate()
+                .for_each(|(px, c)| {
+                    let (x, y) = ((px % w as usize) as i64, (px / w as usize) as i64);
+                    let cx = (f * 3) as i64 % w as i64;
+                    if (x - cx).abs() < 8 && (y - 32).abs() < 8 {
+                        c[..].copy_from_slice(&[255, 0, 0, 255]);
+                    }
+                });
             buf
         };
 
@@ -839,14 +847,18 @@ mod tests {
         let (w, h) = (w as usize, h as usize);
         move |_f| {
             let mut buf = vec![0u8; w * h * 4];
-            buf.chunks_exact_mut(4).enumerate().for_each(|(px, c)| {
-                let (x, y) = (px % w, px / w);
-                if x + 4 > w / 2 && x < w / 2 + 4 && y + 4 > h / 2 && y < h / 2 + 4 {
-                    c[..].copy_from_slice(&[255, 0, 0, 255]);
-                } else if x < 4 && y < 4 {
-                    c[..].copy_from_slice(&[80, 160, 255, 128]);
-                }
-            });
+            buf.as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .enumerate()
+                .for_each(|(px, c)| {
+                    let (x, y) = (px % w, px / w);
+                    if x + 4 > w / 2 && x < w / 2 + 4 && y + 4 > h / 2 && y < h / 2 + 4 {
+                        c[..].copy_from_slice(&[255, 0, 0, 255]);
+                    } else if x < 4 && y < 4 {
+                        c[..].copy_from_slice(&[80, 160, 255, 128]);
+                    }
+                });
             buf
         }
     }

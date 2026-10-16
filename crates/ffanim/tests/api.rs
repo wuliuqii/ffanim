@@ -209,7 +209,9 @@ fn png序列导出与片段帧号对齐() {
     let (w, h, rgba) = ffanim_render::load_png(dir.join("0014.png")).unwrap();
     assert_eq!((w, h), (32, 32));
     assert!(
-        rgba.chunks_exact(4)
+        rgba.as_chunks::<4>()
+            .0
+            .iter()
             .any(|px| px[0] > 0 || px[1] > 0 || px[2] > 0),
         "末帧应存在已淡入的非背景像素"
     );
