@@ -37,6 +37,52 @@
 | 1.6 | **高分辨率一致性** | 线宽/字号按画布尺寸归一（而非 px 直映射） | 同一场景 720p/4K 一键出片 | P2 | 中——当前 px 语义清晰但换分辨率需手调数值 |
 | 1.7 | 增量渲染 | 相似帧跳过/脏区缓存 | 超长视频出片提速 | P3 | 低——分段并行已够用 |
 
+#### 1.2 API 面（由 manim 3D gallery 5 例对照倒推）
+
+官方 Example Gallery 26 例中 5 例真 3D（FixedInFrameMObjectTest /
+ThreeDLightSourcePosition / ThreeDCameraRotation / ThreeDCameraIllusionRotation /
+ThreeDSurfacePlot；MovingZoomedSceneAround 属 2D 画中画，已由 pip.rs 清账）。
+逐例归并 API 依赖后，**1.2 只需 4 件最小面，且零新动画机制**：
+
+| manim API | 出现于 | ffanim 对应 |
+|---|---|---|
+| `set_camera_orientation(phi, theta)` | 全部 5 例 | `Camera3D { phi, theta, radius, target, fov }` 纯数据 + `view_matrix()`/`proj_matrix(aspect)` |
+| `begin_ambient_camera_rotation` / `move_camera` | 2 例 | `Camera3D` 字段挂 tracker + `Anim::set_value`（现有能力，零新增） |
+| `begin_3dillusion_camera_rotation` | 1 例 | theta updater 叠 sin 振荡（现有能力） |
+| `ThreeDAxes` | 4 例 | 构造件 `axes3d(&opts) -> Vec<Prim3D>`（三轴 + 刻度 + 轴名留 2D 标注拼装） |
+| `Surface(f, u/v_range, resolution)` + checkerboard | 2 例 | 构造件 `parametric_surface(f, u, v, res, &style) -> Vec<Prim3D>`（网格面 + 棋盘配色数据驱动） |
+| `add_fixed_in_frame_mobjects` | 1 例 | **零 API**：不进投影的普通 2D Item 天然固定屏上 |
+| `camera.light_source` | 1 例 | **非目标**（投影模拟无光照；棋盘双色替代明暗） |
+
+最小 API 面（全部纯函数，`Item`/tracker/updater 零改动）：
+
+1. **`Camera3D`**——球坐标纯数据（phi/theta/radius/target/fov）+ `view_matrix()` +
+   `proj_matrix(aspect)` 两个纯函数；可动画性由字段挂 tracker 天然获得。
+2. **`Prim3D` 图元表 + `project(&prims, &cam, w, h) -> Vec<Item>`**——每帧纯函数
+   重投影：`view*proj` 变换 → `project_point3` 除 w → NDC→像素 → **画家算法**
+   （图元质心 NDC z 排序，相交面不剖分，manim 同款边界）→ 产物即普通 2D `Item`，
+   描边生长/fade/clip 全部免费复用。
+3. **3D 构造件**——`axes3d` / `parametric_surface`（构建期一次生成图元表；
+   曲线场景（螺旋线/相轨迹）直接 `polyline3` 收点，随实现按需增补）。
+4. **fixed_in_frame**——免费，无 API。
+
+关键约定：世界系 **z-up**（数学示教惯例，manim 同款：phi=与 +z 夹角、theta=xy
+方位角），`Camera3D` 内部完成 z-up → glam Y-up 视空间转换；深度仅用于排序
+（OpenGL [-1,1] 单调，与 2.2 锁定约定一致）。
+
+用法形态（ThreeDCameraRotation 的 ffanim 骨架）：
+
+```rust
+let prims = join(axes3d(&default()), polyline3(&helix_points(), &stroke));
+let theta = tl.add_tracker(-30f64.to_radians());          // 球坐标方位角
+tl.play(Anim::set_value(theta, start + 0.1 * TAU).during(8.0)); // ambient rotation
+let rig = tl.add_updater(&[theta], move |v| {             // 渲染期纯查表重投影
+    let cam = Camera3D { phi: 75f64.to_radians(), theta: v[0], ..Default::default() };
+    Item::group(project(&prims, &cam, 960.0, 540.0))
+});
+tl.play(Anim::fade_in(rig).during(0.5));
+```
+
 ### 维度 2：数学计算工具集
 
 | # | 缺口 | 能力定义 | 业务场景 | 优先级 | 影响 |

@@ -29,7 +29,7 @@
 | 片段导出 | -n 起止动画号 / sections | --section 秒区间（M9.2） | ✅ 对齐 | manim 按动画号，ffanim 按秒（各自合理） |
 | Agent 验证 | 无（需人工看片） | timeline/inspect/strip/onion/snapshot | ✅ 超越 | ffanim 核心差异化优势 |
 | 依赖 | Python + LaTeX + Pango/ffmpeg | 单二进制 + ffmpeg | ✅ 超越 | — |
-| 3D | ThreeDScene/Surface 全家桶 | 无 | 0% | P2，超出 2D 目标场景 |
+| 3D | ThreeDScene/Surface 全家桶 | 无 | 0% | 已立项 docs/07 §1.2：5 例对照倒推 API 面（Camera3D/Prim3D+project/axes3d/parametric_surface），2.2 线代件已落地 |
 | 缓存 | 动画哈希缓存 | 无 | — | ffanim 渲染快且纯函数，收益低（P2 不追） |
 
 ## 2. 差距清单（按优先级）
@@ -67,7 +67,7 @@
 
 | 功能 | 说明 |
 |---|---|
-| 3D 全家桶（ThreeDAxes/Surface/3D 相机） | 超出 2D 教学目标；工程量 L；vello 3D 需自研投影 |
+| ~~3D 全家桶（ThreeDAxes/Surface/3D 相机）~~ | 已立项（docs/07 §1.2）：投影模拟路线（vello 管线零改动），API 面由 gallery 5 例倒推 |
 | VectorField / StreamLines | 高数进阶场景，需求低频 |
 | BarChart / Heatmap / PolarPlane / ComplexPlane | 特定领域图示，可由基元+布局组合 |
 | 动画哈希缓存 | ffanim 渲染实时率 >1x，重复渲染代价低；snapshot 基线已覆盖回归需求 |

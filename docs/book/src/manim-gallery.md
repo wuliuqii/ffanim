@@ -31,8 +31,27 @@
 | OpeningManim | 公式 Write + 网格非线性形变 | 公式族 + `warp_grid_demo`（逐点形变拼装） | ✅ |
 | SineCurveUnitCircle | 单位圆展开正弦波 | `circle_sine_demo`（圆拆两半 `plot` + tracker 联动） | ✅ |
 
-> 3D 全家桶（ThreeDScene/Surface/ThreeDAxes 共 4 例）超出 2D 目标场景，
-> 已在仓库 `docs/05-manim功能差距清单.md` P2 登记，不追。
+> 3D 全家桶（ThreeDScene/Surface/ThreeDAxes 共 5 例）见下方 3D 对照账，
+> 已由对照倒推 1.2 API 面立项（docs/07 §1.2）。
+
+## 3D 对照账（官方 gallery 26 例中 5 例真 3D）
+
+对照基线：manim CE v0.19+ 官方 `examples.rst`（2026-10-16 拉取）。
+ZoomedScene（MovingZoomedSceneAround）属 2D 画中画，已由 `pip.rs` 清账。
+
+| manim 3D 示例 | 用到的 3D API | ffanim 对应 | 状态 |
+|---|---|---|---|
+| FixedInFrameMObjectTest | ThreeDScene + `set_camera_orientation(phi,theta)` + ThreeDAxes + `add_fixed_in_frame_mobjects` | `Camera3D` + `project` + `axes3d`；fixed_in_frame 零 API（不进投影的 2D Item 天然固定屏上） | 1.2 立项 |
+| ThreeDLightSourcePosition | `Surface(λ(u,v), resolution)` + checkerboard + `light_source` | `parametric_surface`（棋盘配色数据驱动）；光照非目标（投影模拟无明暗） | 1.2 立项 |
+| ThreeDCameraRotation | `begin_ambient_camera_rotation(rate)` + `move_camera(phi,theta)` | theta 挂 tracker + `Anim::set_value`（现有能力，零新 API） | 1.2 立项 |
+| ThreeDCameraIllusionRotation | `begin_3dillusion_camera_rotation(rate)` | theta updater 叠 sin 振荡（现有能力） | 1.2 立项 |
+| ThreeDSurfacePlot | `Surface(param_gauss, 24×24)` + `set_fill_by_checkerboard` | `parametric_surface` 网格面 + 画家算法排序 | 1.2 立项 |
+
+由 5 例归并出的 1.2 最小 API 面（4 件，零新动画机制）：
+**`Camera3D`**（球坐标纯数据 + view/proj 矩阵）、**`Prim3D` + `project()`**
+（每帧纯函数重投影 + 画家算法）、**构造件**（`axes3d` / `parametric_surface` /
+`polyline3`）、**fixed_in_frame**（免费）。关键约定：世界系 z-up（manim
+同款 phi/theta 语义），光照非目标。详见 docs/07 §1.2「API 面」小节。
 
 ## 缺口清单（按教学价值排序）
 
