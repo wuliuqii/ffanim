@@ -7,6 +7,19 @@
 
 ### Added
 
+- feat(core): 3D 投影模拟核心（docs/07 §1.2）——`ffanim::space3` 新模块：
+  ① `Camera3D` 球坐标相机（manim 同款语义 phi=极角/theta=方位角，默认机位
+  75°/30°/r=10/fov=45°），`eye()`/`view_matrix()`/`proj_matrix(aspect)` 纯
+  函数；phi→0/π 视线与 z 轴共线时 up 自动换轴防退化；② `Prim3D` 图元表
+  （Polyline/Polygon）+ `PrimStyle`（line/face 便捷构造）+ `polyline3`/
+  `polygon3`；③ `project(&prims, &cam, w, h) -> Vec<Item>` 每帧纯函数重投影：
+  view*proj → `mul_vec4` 齐次变换 → 手动除 w（顺带整条丢弃相机身后图元，
+  manim 同款简化不做视锥面剪裁）→ NDC→像素（y 翻转）→ 画家算法（图元质心
+  NDC z 排序，远的先画，相交面不剖分）——产物即普通 2D Item，描边生长/
+  fade/clip 全部免费复用；相机动画 = 字段挂 tracker + `Anim::set_value`，
+  零新动画机制。6 项解析解测试（眼位球坐标/光轴点落屏幕中心/z-up 映射屏幕
+  上方/画家算法远先画/身后图元丢弃/俯视退化矩阵有限）+ 门面冒烟（产物注册
+  时间轴淡入）。坑：齐次乘法是 `mul_vec4` 非 transform_point4（glam 0.34）
 - feat(core): 3D 线代件（docs/07 §2.2，glam 修正案）——引入 glam 0.34（f64
   全套：零传递依赖、仅启用 `std`+`f64` 精度特性、锁小版本对冲 API 变动），
   `ffanim::math` re-export `DVec3`/`DMat4`/`DQuat` 为稳定数学面；相机/投影

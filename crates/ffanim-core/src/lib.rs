@@ -14,6 +14,7 @@ pub mod math;
 pub mod ops;
 pub mod path_util;
 pub mod rate;
+pub mod space3;
 pub mod style;
 pub mod svg;
 pub mod table;

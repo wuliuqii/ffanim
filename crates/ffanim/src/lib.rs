@@ -5,6 +5,11 @@
 
 pub use ffanim_core::kurbo;
 pub use ffanim_core::math;
+/// 3D 投影模拟子系统（docs/07 §1.2）：Camera3D / Prim3D / project。
+///
+/// 世界系 z-up（manim 同款语义），每帧 `project(&prims, &cam, w, h) -> Vec<Item>`
+/// 纯函数重投影 + 画家算法排序；相机动画 = 字段挂 tracker + `Anim::set_value`。
+pub use ffanim_core::space3;
 pub use ffanim_core::{
     Anim, AnimKind, Axes, BoolOp, Camera, Color, CompiledTimeline, Direction, DrawList, Error,
     Font, ImageAsset, Item, ItemId, MatchPlan, PoseDelta, RateFunc, RateTable, Result, Shape,

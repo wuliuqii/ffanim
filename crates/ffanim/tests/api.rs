@@ -1039,3 +1039,43 @@ fn table_拼装与行列几何() {
     let ct = tl.compile();
     assert_eq!(ct.anims.len(), 1);
 }
+
+#[test]
+fn space3_相机与投影冒烟() {
+    // 3D 投影模拟（docs/07 §1.2）：门面 space3 模块 + math::DVec3 组合使用
+    use ffanim::space3::{Camera3D, PrimStyle, polygon3, polyline3, project};
+
+    let cam = Camera3D {
+        phi: 75f64.to_radians(),
+        theta: 30f64.to_radians(),
+        ..Camera3D::default()
+    };
+    let red = Color::new(220, 90, 90, 255);
+    let blue = Color::new(90, 140, 220, 255);
+    // 三角面 + 空间折线
+    let prims = vec![
+        polygon3(
+            [
+                ffanim::math::DVec3::new(-1.0, 0.0, 0.0),
+                ffanim::math::DVec3::new(1.0, 0.0, 0.0),
+                ffanim::math::DVec3::new(0.0, 1.0, 1.0),
+            ],
+            PrimStyle::face(blue, red, 1.0),
+        ),
+        polyline3(
+            (0..=20).map(|i| {
+                let t = i as f64 / 20.0;
+                ffanim::math::DVec3::new(2.0 * t - 1.0, 0.0, 1.5 * t * t)
+            }),
+            PrimStyle::line(red, 2.0),
+        ),
+    ];
+    let items = project(&prims, &cam, 320.0, 180.0);
+    assert_eq!(items.len(), 2, "面与折线均存活");
+    // 产物可直接注册进时间轴（普通 Item 语义，动画能力免费复用）
+    let mut tl = Timeline::new(320, 180, 30, BG);
+    let ids: Vec<_> = items.into_iter().map(|it| tl.add(it)).collect();
+    tl.play(Anim::fade_in(ids[0]).during(0.5));
+    let ct = tl.compile();
+    assert_eq!(ct.anims.len(), 1);
+}
