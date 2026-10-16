@@ -41,7 +41,7 @@ ZoomedScene（MovingZoomedSceneAround）属 2D 画中画，已由 `pip.rs` 清�
 
 | manim 3D 示例 | 用到的 3D API | ffanim 对应 | 状态 |
 |---|---|---|---|
-| FixedInFrameMObjectTest | ThreeDScene + `set_camera_orientation(phi,theta)` + ThreeDAxes + `add_fixed_in_frame_mobjects` | `Camera3D` + `project` + `axes3d`；fixed_in_frame 零 API（不进投影的 2D Item 天然固定屏上） | 1.2 立项 |
+| FixedInFrameMObjectTest | ThreeDScene + `set_camera_orientation(phi,theta)` + ThreeDAxes + `add_fixed_in_frame_mobjects` | `fixed_in_frame`（3D 层 updater 重投影；2D 层数字是不进投影的普通 updater Item，天然固定屏上——零 API） | ✅ |
 | ThreeDLightSourcePosition | `Surface(λ(u,v), resolution)` + checkerboard + `light_source` | `three_d_light`（`axes3d` + 球面 `parametric_surface` 棋盘双色派生自主题）；光照非目标（棋盘替代明暗） | ✅ |
 | ThreeDCameraRotation | `begin_ambient_camera_rotation(rate)` + `move_camera(phi,theta)` | `three_d_rotation`（theta 挂 tracker 匀速推进 + Smooth 回位，updater 纯查表重投影） | ✅ |
 | ThreeDCameraIllusionRotation | `begin_3dillusion_camera_rotation(rate)` | `three_d_illusion`（相位 tracker 匀速推进，updater 求 `theta0 + sin(phase)`，零新动画机制） | ✅ |

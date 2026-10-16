@@ -7,6 +7,12 @@
 
 ### Added
 
+- feat(examples): FixedInFrameMObjectTest 拼装闭环——3D 对照账 5/5 全部收官——
+  `fixed_in_frame.rs`（零新 API）：3D 层单进度 tracker 派生同窗动画（轴绕 z
+  转 90° + 圆平移到 (1,1,0)，updater 每帧重投影），2D 层数字
+  （`decimal_signal` 挂进度 tracker 滚动 0°→90°）是不进投影的普通 updater
+  Item，天然固定屏上无需固定层机制；105 帧出片抽帧目检通过（数字位置全程
+  固定、数值与 3D 旋转联动、轴对角翻转与圆落点正确）
 - feat(core): 3D 构造件 `axes3d` + `parametric_surface`（docs/07 §1.2）——
   `Axes3DOpts`（三轴 + z=0 方格网格，颜色/线宽显式传入零硬编码）+
   `SurfaceStyle`（棋盘双色/单色 + opacity + 描边，顶点采样缓存再拼面片）；
