@@ -5,6 +5,20 @@
 
 ## [Unreleased]
 
+### Changed
+
+- chore(docs): §4.3 GIF/WebM 导出实证收官（docs/07）——无需新代码：GIF
+  palettegen/paletteuse 两段式（stats_mode=diff + bayer_scale=5）为 M8 既有
+  实现，渐变满屏最坏场景实测首帧 MAE 0.62/255（朴素直转 18.02，颜色保真
+  29×，体积 2.2× 为最坏上界；帧数/`-loop 0` 循环均实证）；webm(vp9) codec
+  M8 已通；webm alpha 随 §1.3 收官
+- chore(docs): §4.2 字体文件显式加载实证收官（docs/07）——两侧 API 早已
+  落地（评审信息过时）：Typst 侧 `add_font(path)`/`add_font_face(path, index)`
+  与描边侧 `Font::from_path` 均收文件路径；开发期宽度对照实证注入字体真被
+  选中（等宽 vs 内嵌衬线），补端到端测试 `ffanim-typst/tests/fonts.rs`
+  转正（环境探测式：注入可排版/复排缓存一致/face 注入/描边轮廓/越界 face
+  报错五断言）；子集化留 P2
+
 ### Added
 
 - feat(encode): 透明通道导出（docs/07 §1.3）——`EncodeOptions.alpha` 按输出

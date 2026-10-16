@@ -109,8 +109,8 @@ tl.play(Anim::fade_in(rig).during(0.5));
 | # | 缺口 | 能力定义 | 业务场景 | 优先级 | 影响 |
 |---|------|----------|----------|--------|------|
 | 4.1 | **PNG 序列帧导出** | image2 管道输出 `%04d.png` | 下游剪辑/审片的标准中间格式、论文插图逐帧提取 | **P0** | 高——改动极小（ffmpeg 管道换输出目标），是「底层库」交付物完整性的一部分 |
-| 4.2 | 字体文件显式加载 | 指定 otf/ttf 路径注入 Typst 与描边管线 | 服务端容器无系统字体时的刚需；品牌字体交付 | P1 | 中——`add_font_face` 已有，缺 from-file 与子集化 |
-| 4.3 | GIF/WebM 导出 | 常见分发格式 | 社交平台分发、文档内嵌 | P1 | 中——codec 字符串已通 webm（vp9），GIF 需 palettegen 两段式 |
+| 4.2 | 字体文件显式加载 | 指定 otf/ttf 路径注入 Typst 与描边管线 | 服务端容器无系统字体时的刚需；品牌字体交付 | **P1 ✅ 已完成（2026-10-16 实证）** | 中——两侧 API 早已落地（评审信息过时）：Typst 侧 `add_font(path)`（ttc 全 face）/`add_font_face(path, index)`（fonts_gen 进 LRU 键），描边侧 `Font::from_path/from_index/from_data`；本次补端到端测试转正（环境探测式）。子集化留 P2 |
+| 4.3 | GIF/WebM 导出 | 常见分发格式 | 社交平台分发、文档内嵌 | **P1 ✅ 已完成（2026-10-16 实证）** | 中——GIF palettegen/paletteuse 两段式（stats_mode=diff + bayer_scale=5）M8 已落地，渐变最坏场景实测 MAE 0.62/255（朴素直转 18.02，保真 29×）；webm(vp9) codec 已通，webm alpha 随 1.3 收官（yuva420p 配方 + 环境边界探测式测试） |
 | 4.4 | 动图/视频导入 | GIF 多帧 / 视频帧抽取为 Item 序列 | 素材混剪、实拍对比演示 | P2 | 低 |
 | 4.5 | SVG 导出 | DrawList → SVG 直写 | 矢量交付（印刷/论文矢量图） | P2 | 中——几何结构已知，直写可行；动画帧序列导出意义有限，静态快照即可 |
 | 4.6 | 音效事件 | 短音效库/合成（beep、whoosh）与动画事件对齐 | 强调音效 | P2 | 低——BGM mux 已有，音效属内容层 |
@@ -281,7 +281,7 @@ let id = tl.add(Item::circle(...));               // 原语照用
 | Phase 1（API 地基） | D2 Theme 解析前置 + D4 组动画 API + D5 速率开放 ✅ 已完成（2026-10-15） | 无 breaking 风险项先行 | 门禁 `api_coverage.sh` + 全量场景重渲染 diff 为零（D2 除外，为取色等价值） |
 | Phase 2（Stage 糖层） | D1 Stage 便捷层 + D3 落位意图 API（`to_items_at`/`Anchor`）✅ 已完成（2026-10-15，fourier.rs Stage 版验收：236→208 行，样板区 −50%，出片目检等价） | 糖层可整体绕过 | `just ci` 全绿 + fourier strip/onion 目检 |
 | Phase 3（能力 P0 批次） | 1.1 clip 原语 + 2.1 ODE + 4.1 PNG 序列 + 6.1 bench 门禁 | 与 Phase 2 并行 | 透镜拼装配方用 clip 重写简化；ODE 场景（单摆/抛体）新示例 |
-| Phase 4（P1 主线） | 2.2 线代 ✅ → 1.2 3D 投影模拟 ✅（2026-10-16，gallery 5/5）；1.3 透明通道 ✅（2026-10-16）；4.2/4.3 导出参数化；5.1 命中测试；5.2 参数 schema；7.1 发布工程；7.2 迁移指南 | Phase 3 | 按里程碑逐项 |
+| Phase 4（P1 主线） | 2.2 线代 ✅ → 1.2 3D 投影模拟 ✅（2026-10-16，gallery 5/5）；1.3 透明通道 ✅ + 4.3 GIF/WebM ✅ + 4.2 字体加载 ✅（2026-10-16）；5.1 命中测试；5.2 参数 schema；7.1 发布工程；7.2 迁移指南 | Phase 3 | 按里程碑逐项 |
 
 文档同步：`vocabulary.md`（新增 Stage 类目）、`recipes.md`（三步曲配方改写为 Stage 一行版）、`scripts/api_coverage.sh`（Stage 纳入门禁）、CHANGELOG。
 
