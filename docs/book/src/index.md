@@ -19,7 +19,7 @@ doc 摘要 / 代码段），新增或修改场景后运行 `just book` 即可重
 ## 30 秒上手（开发者）
 
 ```bash
-git clone <repo-url> && cd ffanim
+git clone https://github.com/wuliuqii/ffanim && cd ffanim
 cargo run --release -p ffanim --example getting_started
 ```
 
@@ -59,4 +59,4 @@ just book-serve   # 热重载预览（http://localhost:3000）
 构建产物在 `docs/book/book/`，纯静态，可直接部署任意静态托管。
 
 [manim example gallery]: https://docs.manim.community/en/stable/examples.html
-[`crates/ffanim/examples/`]: https://github.com/gallon/ffanim/tree/main/crates/ffanim/examples
+[`crates/ffanim/examples/`]: https://github.com/wuliuqii/ffanim/tree/main/crates/ffanim/examples

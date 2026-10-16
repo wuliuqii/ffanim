@@ -17,7 +17,7 @@
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # 2) 拿到 ffanim 源码
-git clone <repo-url> && cd ffanim
+git clone https://github.com/wuliuqii/ffanim && cd ffanim
 ```
 
 渲染需要系统安装 [ffmpeg](https://ffmpeg.org/download.html)（出片编码用）。

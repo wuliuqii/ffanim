@@ -16,7 +16,7 @@ members = [
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/gallon/ffanim"
+repository = "https://github.com/wuliuqii/ffanim"
 
 [workspace.dependencies]
 # 内部 crate
