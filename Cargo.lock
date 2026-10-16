@@ -1055,6 +1055,7 @@ dependencies = [
  "ffanim-encode",
  "ffanim-render",
  "ffanim-typst",
+ "serde",
  "serde_json",
 ]
 

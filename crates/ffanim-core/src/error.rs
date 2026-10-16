@@ -17,6 +17,14 @@ pub enum Error {
     #[error("未知主题颜色字段: {0}")]
     UnknownColorField(String),
 
+    /// 场景参数 JSON 语法/结构/类型不合法（含未知字段与类型错）。
+    #[error("场景参数解析失败: {0}")]
+    ParamsParse(#[source] serde_json::Error),
+
+    /// 场景参数文件路径不存在或无读取权限。
+    #[error("场景参数文件读取失败: {1}")]
+    ParamsIo(#[source] std::io::Error, PathBuf),
+
     /// 字体文件路径不存在或无读取权限。
     #[error("字体文件读取失败: {1}")]
     FontIo(#[source] std::io::Error, PathBuf),

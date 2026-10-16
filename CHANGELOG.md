@@ -21,6 +21,13 @@
 
 ### Added
 
+- feat(core): 场景参数声明化（docs/07 §5.2）——serde 轻量方案：typed struct
+  即 schema（缺省值 + 类型校验 + 未知字段拦截三职责一处声明），库侧仅
+  `load_params`/`params_from_str` 两个加载入口（overlay 语义：JSON 只写要
+  覆盖的字段，缺失回退 Default）；Error 增 `ParamsParse`/`ParamsIo`（对齐
+  Theme 命名）。场景示范：pendulum.rs 参数化改造（L/g/θ₀/duration 四参数 +
+  `--params x.json` 传参 + 物理参数为正自校验），自定义 L=2.5/θ₀=20° 出片
+  与解析解 ±1px 吻合。core 单元测试 5 项 + api 冒烟 + 门禁 73 项缺失 0
 - feat(core): 命中测试（docs/07 §5.1）——`ffanim-core::hit_test` 纯几何层
   零渲染依赖：`hit_test`（返回命中 id 列表，z 序顶层在前）/`hit_test_first`
   （首个命中）。fill 面走非零环绕（kurbo `Shape::winding`），描边走分段

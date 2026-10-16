@@ -1146,3 +1146,48 @@ fn hit_test_屏幕点命中冒烟() {
     // 空旷区：无命中
     assert_eq!(hit_test_first(&items, Point::new(150.0, 150.0), 0.0), None);
 }
+
+#[test]
+fn 场景参数声明化冒烟() {
+    // 场景参数（docs/07 §5.2）：门面 load_params/params_from_str，typed struct 即 schema
+    use ffanim::{load_params, params_from_str};
+
+    #[derive(Debug, PartialEq, serde::Deserialize)]
+    #[serde(default, deny_unknown_fields)]
+    struct DemoParams {
+        /// 摆长（米）。
+        length: f64,
+        /// 时长（秒）。
+        duration: f64,
+    }
+    impl Default for DemoParams {
+        fn default() -> Self {
+            Self {
+                length: 1.0,
+                duration: 8.0,
+            }
+        }
+    }
+
+    // inline JSON：部分覆盖 + 未知字段拦截
+    let p: DemoParams = params_from_str(r#"{"duration": 4.0}"#).expect("单字段覆盖");
+    assert_eq!(
+        p,
+        DemoParams {
+            length: 1.0,
+            duration: 4.0
+        }
+    );
+    assert!(
+        params_from_str::<DemoParams>(r#"{"len": 1.0}"#).is_err(),
+        "typo 拦截"
+    );
+
+    // 文件加载：临时 JSON 走 load_params
+    let dir = out_dir("params");
+    let file = dir.join("demo_params.json");
+    std::fs::write(&file, r#"{"length": 2.5}"#).expect("写参数文件");
+    let p = load_params::<DemoParams>(&file).expect("文件加载");
+    assert_eq!(p.length, 2.5);
+    assert_eq!(p.duration, 8.0, "未覆盖字段回退缺省");
+}

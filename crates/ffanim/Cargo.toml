@@ -21,3 +21,5 @@ ffanim-typst = { path = "../ffanim-typst" }
 ffanim-render = { path = "../ffanim-render" }
 # examples 的 --json 调度表输出（与 ffanim timeline 同形状）
 serde_json = { workspace = true }
+# 场景参数声明化测试/示例（docs/07 §5.2）：参数 struct derive Deserialize
+serde = { workspace = true }

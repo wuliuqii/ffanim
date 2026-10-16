@@ -19,7 +19,7 @@ pub use ffanim_core::{
     Anim, AnimKind, Axes, BoolOp, Camera, Color, CompiledTimeline, Direction, DrawList, Error,
     Font, ImageAsset, Item, ItemId, MatchPlan, PoseDelta, RateFunc, RateTable, Result, Shape,
     Style, TableOptions, TableSpec, Theme, Timeline, arrange, from_svg_file, from_svg_str,
-    match_shapes, render_frame, table,
+    load_params, match_shapes, params_from_str, render_frame, table,
 };
 pub use ffanim_encode::{EncodeOptions, Quality};
 pub use ffanim_render::{FrameBackend, RenderBackend};

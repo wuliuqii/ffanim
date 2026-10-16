@@ -120,9 +120,82 @@ tl.play(Anim::fade_in(rig).during(0.5));
 | # | 缺口 | 能力定义 | 业务场景 | 优先级 | 影响 |
 |---|------|----------|----------|--------|------|
 | 5.1 | **命中测试** | 屏幕点 → 命中 Item（kurbo hit-test 在 DrawList 层暴露） | 上层交互工具（选择/检查器）的前置依赖 | **P1 ✅ 已完成（2026-10-16）** | 中——`ffanim-core::hit_test` 纯几何层零渲染依赖：`hit_test`（z 序顶层在前）/`hit_test_first`；fill 非零环绕（kurbo winding）+ 描边最近距离带 slack 容差，Group 递归、clip 门、透明排除、图片矩形命中；门面 `pub use ffanim_core::hit_test` |
-| 5.2 | **场景参数 schema** | 场景入参声明化（JSON schema + 校验 + 缺省值） | 批渲染/模板化（「同一动画换数据集」）；主题 JSON 已有先例，推广到场景参数 | P1 | 中——服务化的前置地基，且让示例「改个数字重出片」的练习模式更顺 |
+| 5.2 | **场景参数 schema** | 场景入参声明化（JSON schema + 校验 + 缺省值） | 批渲染/模板化（「同一动画换数据集」）；主题 JSON 已有先例，推广到场景参数 | **P1 ✅ 已完成（2026-10-16）** | 中——serde 轻量方案（设计见下节）：typed struct 即 schema，`load_params`/`params_from_str` overlay 语义（只写要覆盖的字段），`deny_unknown_fields` 防 typo；pendulum.rs 参数化示范，自定义 L/θ₀ 出片与解析解 ±1px 吻合 |
 | 5.3 | 单帧轻量渲染入口 | `render_frame` → 无需 compile 全片的单帧求值封装 | 预览缩略图、上层工具实时刷新 | P2 | 低——现有 `render_frame(tl, f)` 已接近，缺省封装 |
 | 5.4 | 输入事件抽象 | 指针/键盘 → 动作 | 交互创作 | **非目标** | 属上层产品职责；本库只保证 Item 可寻址（ItemId）与求值纯函数性 |
+
+#### 5.2 API 面（serde 轻量方案）
+
+**目标**：同一动画换数据集/「改个数字重出片」不碰场景代码——场景把数值参数
+声明为一个 typed struct，运行时从 JSON 只覆盖要改的字段。
+
+**选型**（三方案对比后定 serde 轻量）：
+
+| 方案 | 结论 |
+|---|---|
+| ✅ **serde typed struct**（选定） | `#[derive(Deserialize)] #[serde(default)]` 的参数结构体一处声明同时承担 schema、缺省值、类型校验三职责；serde/serde_json 已在依赖树，**零新依赖**，与 Theme 解析前置约定同构 |
+| ❌ schemars 生成标准 JSON Schema | +1 依赖、schema 文件与代码漂移风险；服务化对外暴露 schema 时再上（留 P2） |
+| ❌ 手写 schema 表（字段/类型/缺省三份手填） | serde 已承担全部职责，纯重复劳动 |
+
+**机制**（三职责的落点）：
+
+1. **schema = typed struct 定义**——字段名/类型/doc comment/`Default` impl 即
+   单一事实来源，不另立 schema 文件；
+2. **缺省值 = `Default::default()`**——容器级 `#[serde(default)]`：JSON 缺失
+   字段自动回退缺省，即天然「只写要覆盖的字段」overlay 语义（字段级整体
+   替换，非深合并；typed struct 字段均为叶子值，无深合并需求）；
+3. **校验 = serde 反序列化本身**——类型错（`invalid type: string, expected
+   f64`）、未知字段（`#[serde(deny_unknown_fields)]` 防 typo 静默失效）、文件
+   IO，全部在**加载点报错**（Theme 同款解析前置约定）。
+
+**库侧 API（2 函数 + 2 Error 变体）**：
+
+```rust
+// ffanim-core::params（纯泛型，场景自己声明 P）
+/// 从 JSON 文件加载场景参数（overlay 语义：只写要覆盖的字段）。
+pub fn load_params<P: DeserializeOwned + Default>(path: impl AsRef<Path>) -> Result<P>;
+/// 从 JSON 字符串加载（inline / 测试用）。
+pub fn params_from_str<P: DeserializeOwned + Default>(json: &str) -> Result<P>;
+```
+
+Error 增 `ParamsParse(#[source] serde_json::Error)` / `ParamsIo(#[source]
+std::io::Error, PathBuf)`，命名与消息风格对齐 `ThemeParse`/`ThemeIo`。
+
+**场景侧声明范式**（pendulum.rs 改造示范）：
+
+```rust
+/// 单摆场景入参（字段 doc comment + Default 即文档）。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct PendulumParams {
+    /// 摆长（米，影响周期）。
+    length: f64,
+    /// 重力加速度（米/秒²）。
+    gravity: f64,
+    /// 初始摆角（度）。
+    theta0_deg: f64,
+    /// 摆动时长（秒）。
+    duration: f64,
+}
+impl Default for PendulumParams { /* g=9.8, L=1, θ₀=40°, 8s */ }
+```
+
+传参走 examples 既有 args 薄壳（CLI 不加子命令，场景仍在 examples）：
+
+```rust
+let params: PendulumParams = match args.iter().position(|a| a == "--params") {
+    Some(i) => ffanim::load_params(&args[i + 1])?,
+    None => PendulumParams::default(),
+};
+```
+
+**边界与非目标**：不做 JSON 深合并；不生成 JSON Schema 文件；不做 CLI 通用
+渲染子命令；数值范围校验（如 g>0）不在本层——业务自校验在 build 函数开头
+自行报 `Error::Other`。
+
+**验收**：core 单元测试 5 项（空对象全缺省 / 部分覆盖 / 未知字段报错 / 类型
+错报错 / 文件缺失报错）+ pendulum.rs 参数化改造并出片验收（改 L/θ₀ 周期
+肉眼可辨）+ 门面 re-export + api 冒烟 + api_coverage 门禁。
 
 ### 维度 6：性能优化
 
@@ -281,7 +354,7 @@ let id = tl.add(Item::circle(...));               // 原语照用
 | Phase 1（API 地基） | D2 Theme 解析前置 + D4 组动画 API + D5 速率开放 ✅ 已完成（2026-10-15） | 无 breaking 风险项先行 | 门禁 `api_coverage.sh` + 全量场景重渲染 diff 为零（D2 除外，为取色等价值） |
 | Phase 2（Stage 糖层） | D1 Stage 便捷层 + D3 落位意图 API（`to_items_at`/`Anchor`）✅ 已完成（2026-10-15，fourier.rs Stage 版验收：236→208 行，样板区 −50%，出片目检等价） | 糖层可整体绕过 | `just ci` 全绿 + fourier strip/onion 目检 |
 | Phase 3（能力 P0 批次） | 1.1 clip 原语 + 2.1 ODE + 4.1 PNG 序列 + 6.1 bench 门禁 | 与 Phase 2 并行 | 透镜拼装配方用 clip 重写简化；ODE 场景（单摆/抛体）新示例 |
-| Phase 4（P1 主线） | 2.2 线代 ✅ → 1.2 3D 投影模拟 ✅（2026-10-16，gallery 5/5）；1.3 透明通道 ✅ + 4.3 GIF/WebM ✅ + 4.2 字体加载 ✅ + 5.1 命中测试 ✅（2026-10-16）；5.2 参数 schema；7.1 发布工程；7.2 迁移指南 | Phase 3 | 按里程碑逐项 |
+| Phase 4（P1 主线） | 2.2 线代 ✅ → 1.2 3D 投影模拟 ✅（2026-10-16，gallery 5/5）；1.3 透明通道 ✅ + 4.3 GIF/WebM ✅ + 4.2 字体加载 ✅ + 5.1 命中测试 ✅ + 5.2 场景参数 ✅（2026-10-16）；7.1 发布工程；7.2 迁移指南 | Phase 3 | 按里程碑逐项 |
 
 文档同步：`vocabulary.md`（新增 Stage 类目）、`recipes.md`（三步曲配方改写为 Stage 一行版）、`scripts/api_coverage.sh`（Stage 纳入门禁）、CHANGELOG。
 
