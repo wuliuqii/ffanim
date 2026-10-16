@@ -154,6 +154,150 @@ pub fn polygon3(pts: impl IntoIterator<Item = DVec3>, style: PrimStyle) -> Prim3
     }
 }
 
+/// 三维轴系构造件选项（数据驱动：几何与颜色全部显式传入，零硬编码）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct Axes3DOpts {
+    /// 三轴长度（x/y/z 各自，从原点画到 `(size.x,0,0)` 等）。
+    pub size: DVec3,
+    /// z=0 方格网格：坐标 `-n..=n`（步长 1）；0 = 无网格。
+    pub grid: i32,
+    /// 轴线色。
+    pub axis: Color,
+    /// 轴线宽（像素）。
+    pub axis_width: f64,
+    /// 网格线色。
+    pub grid_line: Color,
+    /// 网格线宽（像素）。
+    pub grid_width: f64,
+}
+
+/// 三维轴系 + z=0 方格网格（manim `ThreeDAxes` 对应件；轴名留 2D 标注由调用方拼装）。
+///
+/// 构建期一次生成图元表；深度感主要靠网格，网格线比轴线细（manim 同款观感）。
+pub fn axes3d(opts: &Axes3DOpts) -> Vec<Prim3D> {
+    let mut prims = Vec::new();
+    let axis = |end: DVec3| {
+        polyline3(
+            [DVec3::ZERO, end],
+            PrimStyle::line(opts.axis, opts.axis_width),
+        )
+    };
+    prims.push(axis(DVec3::new(opts.size.x, 0.0, 0.0)));
+    prims.push(axis(DVec3::new(0.0, opts.size.y, 0.0)));
+    prims.push(axis(DVec3::new(0.0, 0.0, opts.size.z)));
+    let n = opts.grid as f64;
+    if opts.grid > 0 {
+        for i in -opts.grid..=opts.grid {
+            let c = i as f64;
+            prims.push(polyline3(
+                [DVec3::new(c, -n, 0.0), DVec3::new(c, n, 0.0)],
+                PrimStyle::line(opts.grid_line, opts.grid_width),
+            ));
+            prims.push(polyline3(
+                [DVec3::new(-n, c, 0.0), DVec3::new(n, c, 0.0)],
+                PrimStyle::line(opts.grid_line, opts.grid_width),
+            ));
+        }
+    }
+    prims
+}
+
+/// 参数化曲面样式（manim `Surface` 对应件；光照非目标，明暗感由棋盘双色承担）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct SurfaceStyle {
+    /// 棋盘双色（`(i+j)%2` 取 a/b）；None = 单色 [`SurfaceStyle::fill`]。
+    pub checker: Option<(Color, Color)>,
+    /// 单色模式的填充色。
+    pub fill: Color,
+    /// 填充不透明度 0..1（乘到 alpha；manim `fill_opacity` 同义）。
+    pub opacity: f64,
+    /// 面片描边色；None 或宽 0 = 不描边。
+    pub stroke: Option<Color>,
+    /// 面片描边宽（像素）。
+    pub stroke_width: f64,
+}
+
+impl SurfaceStyle {
+    /// 棋盘双色面（不透明）。
+    pub fn checkerboard(a: Color, b: Color, opacity: f64) -> Self {
+        Self {
+            checker: Some((a, b)),
+            fill: a,
+            opacity,
+            stroke: None,
+            stroke_width: 0.0,
+        }
+    }
+
+    /// 单色面（不透明）。
+    pub fn solid(color: Color, opacity: f64) -> Self {
+        Self {
+            checker: None,
+            fill: color,
+            opacity,
+            stroke: None,
+            stroke_width: 0.0,
+        }
+    }
+}
+
+/// 参数化曲面网格面：`f(u,v)` 采样 → `res` 分辨率四边形面片表（棋盘配色），
+/// 深度排序交由 [`project`] 画家算法承担。
+///
+/// manim `Surface(f, u_range, v_range, resolution, checkerboard_colors)` 对应件。
+/// 顶点先采样缓存（`(nu+1)×(nv+1)` 次）再拼面片，避免每面片重复求值 4 次。
+pub fn parametric_surface(
+    f: impl Fn(f64, f64) -> DVec3,
+    u_range: (f64, f64),
+    v_range: (f64, f64),
+    resolution: (u32, u32),
+    style: &SurfaceStyle,
+) -> Vec<Prim3D> {
+    let nu = resolution.0.max(1) as usize;
+    let nv = resolution.1.max(1) as usize;
+    let alpha = (style.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
+    // 顶点表：行主序 (j, i)，j∈[0,nv] 对应 v、i∈[0,nu] 对应 u
+    let mut pts = Vec::with_capacity((nu + 1) * (nv + 1));
+    for j in 0..=nv {
+        let v = v_range.0 + (v_range.1 - v_range.0) * j as f64 / nv as f64;
+        for i in 0..=nu {
+            let u = u_range.0 + (u_range.1 - u_range.0) * i as f64 / nu as f64;
+            pts.push(f(u, v));
+        }
+    }
+    let at = |i: usize, j: usize| pts[j * (nu + 1) + i];
+    let mut prims = Vec::with_capacity(nu * nv);
+    for j in 0..nv {
+        for i in 0..nu {
+            let base = match style.checker {
+                Some((a, b)) => {
+                    if (i + j) % 2 == 0 {
+                        a
+                    } else {
+                        b
+                    }
+                }
+                None => style.fill,
+            };
+            let fill = base.with_alpha(alpha);
+            let stroke_w = if style.stroke.is_some() {
+                style.stroke_width
+            } else {
+                0.0
+            };
+            prims.push(polygon3(
+                [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)],
+                PrimStyle {
+                    stroke: style.stroke.unwrap_or(fill),
+                    stroke_width: stroke_w,
+                    fill: Some(fill),
+                },
+            ));
+        }
+    }
+    prims
+}
+
 /// 每帧纯函数重投影：3D 图元表 → 已按画家算法排序（远→近）的 2D Item 序列。
 ///
 /// 产物为屏幕像素坐标（y 向下）的普通 [`Item`]，直接 add 进 Timeline 即可；
@@ -337,5 +481,99 @@ mod tests {
         );
         let items = project(&[line], &top, 800.0, 600.0);
         assert_eq!(items.len(), 1, "俯视投影不应 panic 或丢图元");
+    }
+
+    const RED: Color = Color::new(255, 0, 0, 255);
+    const BLUE: Color = Color::new(0, 0, 255, 255);
+
+    #[test]
+    fn 轴系_图元数量与端点() {
+        let opts = Axes3DOpts {
+            size: DVec3::new(3.0, 2.0, 1.0),
+            grid: 2,
+            axis: RED,
+            axis_width: 2.5,
+            grid_line: BLUE,
+            grid_width: 1.0,
+        };
+        let prims = axes3d(&opts);
+        // 3 轴 + (2*2+1)*2 条网格线 = 13
+        assert_eq!(prims.len(), 13);
+        // x 轴端点 (3,0,0)；z 轴端点 (0,0,1)
+        let Prim3D::Polyline { pts, style } = &prims[0] else {
+            panic!("轴应为折线")
+        };
+        assert_eq!(pts[1], DVec3::new(3.0, 0.0, 0.0));
+        assert_eq!(style.stroke, RED);
+        // 网格线从第 4 条起，样式为网格色
+        let Prim3D::Polyline { pts, style } = &prims[3] else {
+            panic!("网格应为折线")
+        };
+        assert_eq!(pts[0], DVec3::new(-2.0, -2.0, 0.0));
+        assert_eq!(style.stroke, BLUE);
+    }
+
+    #[test]
+    fn 轴系_无网格() {
+        let opts = Axes3DOpts {
+            size: DVec3::ONE,
+            grid: 0,
+            axis: RED,
+            axis_width: 1.0,
+            grid_line: BLUE,
+            grid_width: 1.0,
+        };
+        assert_eq!(axes3d(&opts).len(), 3, "grid=0 仅三轴");
+    }
+
+    #[test]
+    fn 曲面_面片数与棋盘配色() {
+        let style = SurfaceStyle::checkerboard(RED, BLUE, 1.0);
+        // 平面 f(u,v)=(u,v,0)，u/v∈[0,1]，2×3 分辨率 → 6 面片
+        let prims = parametric_surface(
+            |u, v| DVec3::new(u, v, 0.0),
+            (0.0, 1.0),
+            (0.0, 1.0),
+            (2, 3),
+            &style,
+        );
+        assert_eq!(prims.len(), 6);
+        let fills: Vec<Color> = prims
+            .iter()
+            .map(|p| match p {
+                Prim3D::Polygon { style, .. } => style.fill.unwrap(),
+                _ => panic!("应为面片"),
+            })
+            .collect();
+        // (0,0) 面片取 a 色，(1,0) 取 b 色（(i+j)%2 交替）
+        assert_eq!(fills[0], RED);
+        assert_eq!(fills[1], BLUE);
+        // (1,1) 面片（第 4 个）回到 a 色
+        assert_eq!(fills[3], RED);
+    }
+
+    #[test]
+    fn 曲面_球面采样与不透明度() {
+        let style = SurfaceStyle::checkerboard(RED, BLUE, 0.5);
+        // 半径 1.5 的上半球面
+        let prims = parametric_surface(
+            |u, v| 1.5 * DVec3::new(u.cos() * v.cos(), u.sin() * v.cos(), v.sin()),
+            (0.0, std::f64::consts::TAU),
+            (0.0, std::f64::consts::FRAC_PI_2),
+            (4, 2),
+            &style,
+        );
+        assert_eq!(prims.len(), 8);
+        // 所有顶点距原点 ≈1.5（球面参数化正确）
+        let all_on_sphere = prims.iter().all(|p| match p {
+            Prim3D::Polygon { pts, .. } => pts.iter().all(|v| (v.length() - 1.5).abs() < 1e-9),
+            _ => false,
+        });
+        assert!(all_on_sphere, "球面采样点应全部落在半径 1.5 上");
+        // opacity 0.5 → alpha 128
+        let Prim3D::Polygon { style, .. } = &prims[0] else {
+            panic!("应为面片")
+        };
+        assert_eq!(style.fill.unwrap().a, 128);
     }
 }

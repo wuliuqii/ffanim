@@ -1043,7 +1043,10 @@ fn table_拼装与行列几何() {
 #[test]
 fn space3_相机与投影冒烟() {
     // 3D 投影模拟（docs/07 §1.2）：门面 space3 模块 + math::DVec3 组合使用
-    use ffanim::space3::{Camera3D, PrimStyle, polygon3, polyline3, project};
+    use ffanim::space3::{
+        Axes3DOpts, Camera3D, PrimStyle, SurfaceStyle, axes3d, parametric_surface, polygon3,
+        polyline3, project,
+    };
 
     let cam = Camera3D {
         phi: 75f64.to_radians(),
@@ -1052,26 +1055,41 @@ fn space3_相机与投影冒烟() {
     };
     let red = Color::new(220, 90, 90, 255);
     let blue = Color::new(90, 140, 220, 255);
-    // 三角面 + 空间折线
-    let prims = vec![
-        polygon3(
-            [
-                ffanim::math::DVec3::new(-1.0, 0.0, 0.0),
-                ffanim::math::DVec3::new(1.0, 0.0, 0.0),
-                ffanim::math::DVec3::new(0.0, 1.0, 1.0),
-            ],
-            PrimStyle::face(blue, red, 1.0),
-        ),
-        polyline3(
-            (0..=20).map(|i| {
-                let t = i as f64 / 20.0;
-                ffanim::math::DVec3::new(2.0 * t - 1.0, 0.0, 1.5 * t * t)
-            }),
-            PrimStyle::line(red, 2.0),
-        ),
-    ];
+    // 构造件：轴系（grid=1 → 3 轴 + 6 网格线）+ 2×2 棋盘面片
+    let mut prims = axes3d(&Axes3DOpts {
+        size: ffanim::math::DVec3::new(2.0, 2.0, 1.5),
+        grid: 1,
+        axis: red,
+        axis_width: 2.5,
+        grid_line: blue,
+        grid_width: 1.0,
+    });
+    prims.extend(parametric_surface(
+        |u, v| ffanim::math::DVec3::new(u, v, 0.3 * (u * u + v * v)),
+        (-1.0, 1.0),
+        (-1.0, 1.0),
+        (2, 2),
+        &SurfaceStyle::checkerboard(red, blue, 0.8),
+    ));
+    // 手拼图元：三角面 + 空间折线
+    prims.push(polygon3(
+        [
+            ffanim::math::DVec3::new(-1.0, 0.0, 0.0),
+            ffanim::math::DVec3::new(1.0, 0.0, 0.0),
+            ffanim::math::DVec3::new(0.0, 1.0, 1.0),
+        ],
+        PrimStyle::face(blue, red, 1.0),
+    ));
+    prims.push(polyline3(
+        (0..=20).map(|i| {
+            let t = i as f64 / 20.0;
+            ffanim::math::DVec3::new(2.0 * t - 1.0, 0.0, 1.5 * t * t)
+        }),
+        PrimStyle::line(red, 2.0),
+    ));
     let items = project(&prims, &cam, 320.0, 180.0);
-    assert_eq!(items.len(), 2, "面与折线均存活");
+    // 3 轴 + 6 网格 + 4 面片 + 三角面 + 折线 = 15（全部存活）
+    assert_eq!(items.len(), 15);
     // 产物可直接注册进时间轴（普通 Item 语义，动画能力免费复用）
     let mut tl = Timeline::new(320, 180, 30, BG);
     let ids: Vec<_> = items.into_iter().map(|it| tl.add(it)).collect();

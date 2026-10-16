@@ -7,6 +7,13 @@
 
 ### Added
 
+- feat(core): 3D 构造件 `axes3d` + `parametric_surface`（docs/07 §1.2）——
+  `Axes3DOpts`（三轴 + z=0 方格网格，颜色/线宽显式传入零硬编码）+
+  `SurfaceStyle`（棋盘双色/单色 + opacity + 描边，顶点采样缓存再拼面片）；
+  4 项单元测试 + api 冒烟扩至 15 图元。同步出片两例：`three_d_light.rs`
+  （ThreeDLightSourcePosition 对照——球面棋盘，光照非目标由棋盘替代明暗）
+  与 `surface_plot.rs`（ThreeDSurfacePlot 对照——σ=0.7 高斯面 32×32 +
+  opacity 0.8），3D 对照账 4/5 ✅
 - feat(examples): ThreeDCameraIllusionRotation 拼装闭环（docs/07 §1.2 3D 对照第二例清账）——
   `three_d_illusion.rs`：相位 tracker 匀速推进（rate=2 rad/s × 4s Linear），
   updater 纯函数求值 `theta = theta0 + sin(phase)`（幅度固定 1 rad，manim
