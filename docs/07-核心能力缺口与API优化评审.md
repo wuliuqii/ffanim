@@ -119,7 +119,7 @@ tl.play(Anim::fade_in(rig).during(0.5));
 
 | # | 缺口 | 能力定义 | 业务场景 | 优先级 | 影响 |
 |---|------|----------|----------|--------|------|
-| 5.1 | **命中测试** | 屏幕点 → 命中 Item（kurbo hit-test 在 DrawList 层暴露） | 上层交互工具（选择/检查器）的前置依赖 | P1 | 中——纯库能力，不引入任何 UI 依赖 |
+| 5.1 | **命中测试** | 屏幕点 → 命中 Item（kurbo hit-test 在 DrawList 层暴露） | 上层交互工具（选择/检查器）的前置依赖 | **P1 ✅ 已完成（2026-10-16）** | 中——`ffanim-core::hit_test` 纯几何层零渲染依赖：`hit_test`（z 序顶层在前）/`hit_test_first`；fill 非零环绕（kurbo winding）+ 描边最近距离带 slack 容差，Group 递归、clip 门、透明排除、图片矩形命中；门面 `pub use ffanim_core::hit_test` |
 | 5.2 | **场景参数 schema** | 场景入参声明化（JSON schema + 校验 + 缺省值） | 批渲染/模板化（「同一动画换数据集」）；主题 JSON 已有先例，推广到场景参数 | P1 | 中——服务化的前置地基，且让示例「改个数字重出片」的练习模式更顺 |
 | 5.3 | 单帧轻量渲染入口 | `render_frame` → 无需 compile 全片的单帧求值封装 | 预览缩略图、上层工具实时刷新 | P2 | 低——现有 `render_frame(tl, f)` 已接近，缺省封装 |
 | 5.4 | 输入事件抽象 | 指针/键盘 → 动作 | 交互创作 | **非目标** | 属上层产品职责；本库只保证 Item 可寻址（ItemId）与求值纯函数性 |
@@ -281,7 +281,7 @@ let id = tl.add(Item::circle(...));               // 原语照用
 | Phase 1（API 地基） | D2 Theme 解析前置 + D4 组动画 API + D5 速率开放 ✅ 已完成（2026-10-15） | 无 breaking 风险项先行 | 门禁 `api_coverage.sh` + 全量场景重渲染 diff 为零（D2 除外，为取色等价值） |
 | Phase 2（Stage 糖层） | D1 Stage 便捷层 + D3 落位意图 API（`to_items_at`/`Anchor`）✅ 已完成（2026-10-15，fourier.rs Stage 版验收：236→208 行，样板区 −50%，出片目检等价） | 糖层可整体绕过 | `just ci` 全绿 + fourier strip/onion 目检 |
 | Phase 3（能力 P0 批次） | 1.1 clip 原语 + 2.1 ODE + 4.1 PNG 序列 + 6.1 bench 门禁 | 与 Phase 2 并行 | 透镜拼装配方用 clip 重写简化；ODE 场景（单摆/抛体）新示例 |
-| Phase 4（P1 主线） | 2.2 线代 ✅ → 1.2 3D 投影模拟 ✅（2026-10-16，gallery 5/5）；1.3 透明通道 ✅ + 4.3 GIF/WebM ✅ + 4.2 字体加载 ✅（2026-10-16）；5.1 命中测试；5.2 参数 schema；7.1 发布工程；7.2 迁移指南 | Phase 3 | 按里程碑逐项 |
+| Phase 4（P1 主线） | 2.2 线代 ✅ → 1.2 3D 投影模拟 ✅（2026-10-16，gallery 5/5）；1.3 透明通道 ✅ + 4.3 GIF/WebM ✅ + 4.2 字体加载 ✅ + 5.1 命中测试 ✅（2026-10-16）；5.2 参数 schema；7.1 发布工程；7.2 迁移指南 | Phase 3 | 按里程碑逐项 |
 
 文档同步：`vocabulary.md`（新增 Stage 类目）、`recipes.md`（三步曲配方改写为 Stage 一行版）、`scripts/api_coverage.sh`（Stage 纳入门禁）、CHANGELOG。
 

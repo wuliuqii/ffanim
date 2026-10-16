@@ -1124,3 +1124,25 @@ fn space3_相机与投影冒烟() {
     let ct = tl.compile();
     assert_eq!(ct.anims.len(), 1);
 }
+
+#[test]
+fn hit_test_屏幕点命中冒烟() {
+    // 命中测试（docs/07 §5.1）：门面 hit_test 模块，z 序顶层在前 + slack 容差
+    use ffanim::hit_test::{hit_test, hit_test_first};
+    use ffanim::kurbo::{Point, Rect};
+
+    let bottom = Item::rect(Rect::new(0.0, 0.0, 100.0, 100.0))
+        .with_id(1)
+        .with_fill(BG);
+    let top = Item::rect(Rect::new(40.0, 40.0, 60.0, 60.0))
+        .with_id(2)
+        .with_fill(FG);
+    let items = vec![bottom, top];
+    // 重叠点：顶层在前，两件全命中
+    assert_eq!(hit_test(&items, Point::new(50.0, 50.0), 0.0), vec![2, 1]);
+    assert_eq!(hit_test_first(&items, Point::new(50.0, 50.0), 0.0), Some(2));
+    // 底层独占区：只命中 bottom
+    assert_eq!(hit_test_first(&items, Point::new(10.0, 10.0), 0.0), Some(1));
+    // 空旷区：无命中
+    assert_eq!(hit_test_first(&items, Point::new(150.0, 150.0), 0.0), None);
+}

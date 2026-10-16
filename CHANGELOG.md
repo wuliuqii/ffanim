@@ -21,6 +21,13 @@
 
 ### Added
 
+- feat(core): 命中测试（docs/07 §5.1）——`ffanim-core::hit_test` 纯几何层
+  零渲染依赖：`hit_test`（返回命中 id 列表，z 序顶层在前）/`hit_test_first`
+  （首个命中）。fill 面走非零环绕（kurbo `Shape::winding`），描边走分段
+  最近距离带 `slack` 容差（粗指针/小目标放大命中区）；Group 递归（子件更
+  具体在前、组 id 收尾）、clip 门（命中点须落裁剪路径内）、透明排除
+  （alpha=0 不命中）、图片矩形命中、退化变换判废。8 项单元测试 + 门面
+  re-export + api 冒烟（71 项门禁缺失 0）
 - feat(encode): 透明通道导出（docs/07 §1.3）——`EncodeOptions.alpha` 按输出
   格式自动路由带 alpha 编码：mp4 族→ProRes 4444（prores_ks + yuva444p10le，
   剪辑软件标准中间格式，定量码率下 codec/crf/preset 忽略）、webm→VP9 alpha

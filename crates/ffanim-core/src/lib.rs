@@ -7,6 +7,7 @@ pub mod camera;
 pub mod coords;
 pub mod error;
 pub mod eval;
+pub mod hit_test;
 pub mod item;
 pub mod layout;
 pub mod match_shape;

@@ -3,6 +3,11 @@
 //! 用户只依赖 `ffanim`，不直接依赖内部 crate。
 //! 最小出片路径：[`Timeline`] 描述动画 → [`render_to_mp4`] 一步出片。
 
+/// 命中测试（docs/07 §5.1）：屏幕点 → 命中 Item。
+///
+/// 纯几何层 `hit_test` / `hit_test_first`：z 序顶层在前，fill 走非零环绕、
+/// 描边走最近距离带 slack 容差；Group 递归、clip 门、透明排除。
+pub use ffanim_core::hit_test;
 pub use ffanim_core::kurbo;
 pub use ffanim_core::math;
 /// 3D 投影模拟子系统（docs/07 §1.2）：Camera3D / Prim3D / project。
