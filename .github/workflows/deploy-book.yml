@@ -1,0 +1,58 @@
+# 示例书 → GitHub Pages 部署流水线（docs/book）。
+#
+# 站点源（手写页 + gally 生成页 + SUMMARY + media 视频）全部入库，
+# CI 只做 mdbook build，无需 Rust 工具链与场景渲染。
+# 首次运行由 configure-pages enablement 自动开启仓库 Pages（来源 = GitHub Actions）。
+name: Deploy book to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install mdbook (v0.5.4，与本机构建环境一致)
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSL \
+            https://github.com/rust-lang/mdBook/releases/download/v0.5.4/mdbook-v0.5.4-x86_64-unknown-linux-gnu.tar.gz \
+            | tar -xz -C "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build book
+        run: mdbook build docs/book
+
+      - name: Setup Pages（自动开启仓库 Pages，来源 = GitHub Actions）
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/book/book
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

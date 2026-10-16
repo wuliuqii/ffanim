@@ -4,20 +4,12 @@ target/
 out/
 Cargo.lock.orig
 *.mp4
+!docs/book/src/media/*.mp4
 frames/*
 !frames/baseline/
 *.diff.png
 
-# mdBook 示例书：生成物不入库（book.toml 与手写页 index/effect-gallery/
-# first-animation/manim-gallery 除外）
+# mdBook 示例书：仅构建产物不入库。站点源（手写页 + gally 生成页 +
+# SUMMARY + 视频）全部入库——GitHub Pages CI 直接 mdbook build。
 .trae/
 docs/book/book/
-docs/book/src/SUMMARY.md
-docs/book/src/basic.md
-docs/book/src/typography.md
-docs/book/src/assemblies.md
-docs/book/src/tables.md
-docs/book/src/fourier.md
-docs/book/src/media.md
-docs/book/src/pip.md
-docs/book/src/media/
