@@ -7,6 +7,11 @@
 
 ### Added
 
+- feat(examples): ThreeDCameraIllusionRotation 拼装闭环（docs/07 §1.2 3D 对照第二例清账）——
+  `three_d_illusion.rs`：相位 tracker 匀速推进（rate=2 rad/s × 4s Linear），
+  updater 纯函数求值 `theta = theta0 + sin(phase)`（幅度固定 1 rad，manim
+  `begin_3dillusion_camera_rotation` 同款语义），零新动画机制；150 帧出片抽帧
+  目检通过（起始 −45°/右摆峰 +12°/左摆谷 −102°/回摆中，峰谷差 114° 合理论）
 - feat(examples): ThreeDCameraRotation 验收示例（docs/07 §1.2 对照首例清账）——
   `three_d_rotation.rs`：三轴 + z=0 方格网格 + 单位圆 `polyline3` 拼图元表，
   相机方位角挂 tracker，ambient rotation（0.1 圈/s×3s Linear）+ move_camera
