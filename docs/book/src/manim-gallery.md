@@ -43,7 +43,7 @@ ZoomedScene（MovingZoomedSceneAround）属 2D 画中画，已由 `pip.rs` 清�
 |---|---|---|---|
 | FixedInFrameMObjectTest | ThreeDScene + `set_camera_orientation(phi,theta)` + ThreeDAxes + `add_fixed_in_frame_mobjects` | `Camera3D` + `project` + `axes3d`；fixed_in_frame 零 API（不进投影的 2D Item 天然固定屏上） | 1.2 立项 |
 | ThreeDLightSourcePosition | `Surface(λ(u,v), resolution)` + checkerboard + `light_source` | `parametric_surface`（棋盘配色数据驱动）；光照非目标（投影模拟无明暗） | 1.2 立项 |
-| ThreeDCameraRotation | `begin_ambient_camera_rotation(rate)` + `move_camera(phi,theta)` | theta 挂 tracker + `Anim::set_value`（现有能力，零新 API） | 1.2 立项 |
+| ThreeDCameraRotation | `begin_ambient_camera_rotation(rate)` + `move_camera(phi,theta)` | `three_d_rotation`（theta 挂 tracker 匀速推进 + Smooth 回位，updater 纯查表重投影） | ✅ |
 | ThreeDCameraIllusionRotation | `begin_3dillusion_camera_rotation(rate)` | theta updater 叠 sin 振荡（现有能力） | 1.2 立项 |
 | ThreeDSurfacePlot | `Surface(param_gauss, 24×24)` + `set_fill_by_checkerboard` | `parametric_surface` 网格面 + 画家算法排序 | 1.2 立项 |
 

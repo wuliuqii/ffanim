@@ -7,6 +7,11 @@
 
 ### Added
 
+- feat(examples): ThreeDCameraRotation 验收示例（docs/07 §1.2 对照首例清账）——
+  `three_d_rotation.rs`：三轴 + z=0 方格网格 + 单位圆 `polyline3` 拼图元表，
+  相机方位角挂 tracker，ambient rotation（0.1 圈/s×3s Linear）+ move_camera
+  （Smooth 回位）+ 尾停，updater 每帧 `project` 纯查表重投影；150 帧出片
+  抽帧目检通过（起步机位/绕 z 自转 72°/回位一致），相机动画零新机制
 - feat(core): 3D 投影模拟核心（docs/07 §1.2）——`ffanim::space3` 新模块：
   ① `Camera3D` 球坐标相机（manim 同款语义 phi=极角/theta=方位角，默认机位
   75°/30°/r=10/fov=45°），`eye()`/`view_matrix()`/`proj_matrix(aspect)` 纯
