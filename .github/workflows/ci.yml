@@ -21,10 +21,12 @@ jobs:
         run: cargo fmt --all --check
       - name: Clippy（无 GPU 特性，覆盖 CPU 兜底路径）
         run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: 测试
-        run: cargo test --workspace
       - name: rustdoc 零警告（missing_docs 门禁）
         run: cargo doc --workspace --no-deps
+      - name: 安装 ffmpeg（runner 镜像未预装，出片测试依赖）
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: 测试
+        run: cargo test --workspace
 
   # GPU 特性编译验证（无 GPU 硬件，运行时测试自动跳过）
   build-gpu:
@@ -35,5 +37,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Clippy（GPU 特性）
         run: cargo clippy --workspace --all-targets --features ffanim-render/gpu -- -D warnings
+      - name: 安装 ffmpeg（runner 镜像未预装，出片测试依赖）
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: 测试（GPU 不可用时相关测试自动跳过）
         run: cargo test --workspace --features ffanim-render/gpu
